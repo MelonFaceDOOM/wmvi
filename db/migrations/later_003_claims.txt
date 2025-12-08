@@ -1,0 +1,91 @@
+-- create claims tables...
+
+
+-- since the claims extractor will need to look at filtered text of all posts,
+-- this handy view will make it easy to get that column from each sm table
+
+CREATE OR REPLACE VIEW sm.post_filtered AS
+    -- Tweets
+    SELECT
+        pr.id        AS post_id,
+        pr.platform  AS platform,
+        pr.key1      AS key1,
+        pr.key2      AS key2,
+        t.filtered_text
+    FROM sm.post_registry pr
+    JOIN sm.tweet t
+      ON pr.platform = 'tweet'
+     AND pr.key1 = t.id::text
+
+    UNION ALL
+
+    -- Reddit submissions
+    SELECT
+        pr.id        AS post_id,
+        pr.platform  AS platform,
+        pr.key1      AS key1,
+        pr.key2      AS key2,
+        rs.filtered_text
+    FROM sm.post_registry pr
+    JOIN sm.reddit_submission rs
+      ON pr.platform = 'reddit_submission'
+     AND pr.key1 = rs.id
+
+    UNION ALL
+
+    -- Reddit comments
+    SELECT
+        pr.id        AS post_id,
+        pr.platform  AS platform,
+        pr.key1      AS key1,
+        pr.key2      AS key2,
+        rc.filtered_text
+    FROM sm.post_registry pr
+    JOIN sm.reddit_comment rc
+      ON pr.platform = 'reddit_comment'
+     AND pr.key1 = rc.id
+
+    UNION ALL
+
+    -- YouTube videos
+    SELECT
+        pr.id        AS post_id,
+        pr.platform  AS platform,
+        pr.key1      AS key1,
+        pr.key2      AS key2,
+        yv.filtered_text
+    FROM sm.post_registry pr
+    JOIN sm.youtube_video yv
+      ON pr.platform = 'youtube_video'
+     AND pr.key1 = yv.video_id
+
+    UNION ALL
+
+    -- YouTube comments
+    SELECT
+        pr.id        AS post_id,
+        pr.platform  AS platform,
+        pr.key1      AS key1,
+        pr.key2      AS key2,
+        yc.filtered_text
+    FROM sm.post_registry pr
+    JOIN sm.youtube_comment yc
+      ON pr.platform = 'youtube_comment'
+     AND pr.key1 = yc.video_id
+     AND pr.key2 = yc.comment_id
+
+    UNION ALL
+
+    -- Telegram posts
+    SELECT
+        pr.id        AS post_id,
+        pr.platform  AS platform,
+        pr.key1      AS key1,
+        pr.key2      AS key2,
+        tp.filtered_text
+    FROM sm.post_registry pr
+    JOIN sm.telegram_post tp
+      ON pr.platform = 'telegram_post'
+     AND pr.key1 = tp.channel_id::text
+     AND pr.key2 = tp.message_id::text
+;

@@ -1,0 +1,12 @@
+.env
+plan.txt
+
+logs/
+db/snapshots/
+
+__pycache__/
+venv/
+.idea/
+.pytest_cache/
+
+*.pyc
