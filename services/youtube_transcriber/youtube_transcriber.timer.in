@@ -1,0 +1,10 @@
+[Unit]
+Description=youtube_transcriber Periodic Youtuber video transciber
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

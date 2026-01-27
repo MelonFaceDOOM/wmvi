@@ -4,7 +4,6 @@ import csv
 import heapq
 import os
 import logging
-import math
 import threading
 import time
 from datetime import datetime, timezone
@@ -109,6 +108,8 @@ class ScrapeScheduler:
         self.term_rates: Dict[str, float] = {}      # term -> scrapes_per_day
         self.term_intervals: Dict[str, float] = {}  # term -> interval_seconds
 
+        self._fatal_error = False  # guard against 2 threads trying to crash at once
+
         self._setup_initial_schedule()
 
     # --------- scheduling primitives ---------
@@ -135,7 +136,8 @@ class ScrapeScheduler:
 
         Returns the new interval in seconds.
         """
-        rate = max(MIN_SCRAPES_PER_DAY, min(MAX_SCRAPES_PER_DAY, scrapes_per_day))
+        rate = max(MIN_SCRAPES_PER_DAY, min(
+            MAX_SCRAPES_PER_DAY, scrapes_per_day))
         interval = SECONDS_PER_DAY / rate
 
         with self.lock:
@@ -199,6 +201,12 @@ class ScrapeScheduler:
             self._add_task(term, next_scrape_time)
 
     # --------- main loop ---------
+    def _handle_worker_result(self, future):
+        exc = future.exception()
+        if exc and not self._fatal_error:
+            self._fatal_error = True
+            logging.error("Worker crashed", exc_info=exc)
+            os._exit(1)
 
     def scrape_loop(self) -> None:
         """
@@ -220,7 +228,8 @@ class ScrapeScheduler:
             now = time.time()
             if next_time <= now:
                 # Due now: run scrape in worker pool
-                self.executor.submit(self._scrape_and_reschedule, term)
+                f = self.executor.submit(self._scrape_and_reschedule, term)
+                f.add_done_callback(self._handle_worker_result)
             else:
                 # Not yet due; reinsert and sleep until it's time.
                 self._add_task(term, next_time)
@@ -233,7 +242,7 @@ class ScrapeScheduler:
                 time.sleep(sleep_duration)
 
     # --------- per-term scrape ---------
-    
+
     def _scrape_and_reschedule(self, term: str) -> None:
         """
         Perform a reddit scrape for `term`, update its scrape rate based on
@@ -311,6 +320,7 @@ class ScrapeScheduler:
         )
 
         self._add_task(term, next_scrape)
+
 
 def _setup_logging() -> None:
     os.makedirs("logs", exist_ok=True)

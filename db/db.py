@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os, atexit
+import os
+import atexit
 from contextlib import contextmanager
 from typing import Optional
 from psycopg2.pool import ThreadedConnectionPool
@@ -15,6 +16,7 @@ _POOL: Optional[ThreadedConnectionPool] = None
 _TUNNEL: Optional[SSHTunnelForwarder] = None
 _DEFAULT_DB: Str = os.environ.get("DEFAULT_DB", "DEV")
 
+
 def _base_creds(prefix: str = ""):
     return dict(
         host=os.environ[f"{prefix}_PGHOST"],
@@ -27,6 +29,7 @@ def _base_creds(prefix: str = ""):
         keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
     )
 
+
 def close_pool():
     global _POOL
     if _POOL:
@@ -34,12 +37,14 @@ def close_pool():
         _POOL.closeall()
         _POOL = None
 
+
 def close_tunnel():
     global _TUNNEL
     if _TUNNEL:
         logger.info("Stopping SSH tunnel to DB.")
         _TUNNEL.stop()
         _TUNNEL = None
+
 
 def init_pool(
     prefix: str = _DEFAULT_DB,
@@ -49,6 +54,7 @@ def init_pool(
     recreate: bool = False
 ):
     """Initialize (or reinitialize) the global pool; optionally via SSH tunnel."""
+    prefix = prefix.upper()
     global _POOL, _TUNNEL
     if _POOL and not recreate:
         logger.info(
@@ -56,7 +62,7 @@ def init_pool(
             prefix,
         )
         return _POOL
-        
+
     if recreate:
         logger.info("Recreating DB pool (prefix=%s).", prefix)
         close_pool()
@@ -86,7 +92,7 @@ def init_pool(
             creds["host"],
             creds["port"],
         )
-        
+
     logger.info(
         "Initializing DB pool (prefix=%s, db=%s, host=%s, minconn=%d, maxconn=%d, tunnel=%s).",
         prefix,
@@ -100,16 +106,19 @@ def init_pool(
     _POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, **creds)
     return _POOL
 
+
 def getconn():
     assert _POOL is not None, "Pool not initialized"
     return _POOL.getconn()
+
 
 def putconn(conn):
     if _POOL is not None and conn is not None:
         _POOL.putconn(conn)
 
+
 @contextmanager
-def getcursor(commit: bool=True, cursor_factory=None):
+def getcursor(commit: bool = True, cursor_factory=None):
     """
     Borrow a conn from pool, yield a cursor.
     On success -> commit (if commit=True).
@@ -144,6 +153,7 @@ def getcursor(commit: bool=True, cursor_factory=None):
                 pass
     finally:
         putconn(conn)
+
 
 @atexit.register
 def _cleanup():

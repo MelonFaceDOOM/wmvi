@@ -1,7 +1,10 @@
 from __future__ import annotations
-import hashlib, os, glob
+import hashlib
+import os
+import glob
 from typing import Dict, List
 from db.db import getcursor
+
 
 def _sha256(path: str) -> str:
     h = hashlib.sha256()
@@ -9,6 +12,7 @@ def _sha256(path: str) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
 
 def ensure_migrations_table() -> None:
     with getcursor() as cur:
@@ -20,15 +24,18 @@ def ensure_migrations_table() -> None:
             );
         """)
 
+
 def applied_migrations() -> Dict[str, str]:
     with getcursor() as cur:
         cur.execute("SELECT version, checksum FROM schema_migrations")
         return {v: c for (v, c) in cur.fetchall()}
 
+
 def apply_sql_file(path: str) -> None:
     sql_text = open(path, "r", encoding="utf-8").read()
-    with getcursor() as cur:
+    with getcursor(commit=True) as cur:
         cur.execute(sql_text)
+
 
 def record_migration(version: str, checksum: str) -> None:
     with getcursor() as cur:
@@ -36,6 +43,7 @@ def record_migration(version: str, checksum: str) -> None:
             "INSERT INTO schema_migrations(version, checksum) VALUES (%s, %s)",
             (version, checksum),
         )
+
 
 def run_migrations(migrations_dir: str = "db/migrations") -> List[str]:
     """

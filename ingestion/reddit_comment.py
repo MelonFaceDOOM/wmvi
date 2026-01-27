@@ -8,7 +8,7 @@ REDDIT_COMMENT_COLS = [
     "parent_comment_id",
     "link_id",
     "body",
-    "permalink","created_at_ts",
+    "permalink", "created_at_ts",
     "filtered_text",
     "subreddit_id",
     "subreddit_type",
@@ -20,7 +20,6 @@ REDDIT_COMMENT_COLS = [
     "is_submitter",
     "gildings",
     "all_awardings",
-    "is_en",
 ]
 
 REDDIT_COMMENT_INSERT_SQL = """
@@ -72,7 +71,7 @@ def flush_reddit_comment_batch(rows: list[dict], job_id: int) -> tuple[int, int]
         # and therefore didn't get entered in step 1,
         # they will still be linked to the scrape job here,
         # which is desired (1 post can be linked to multiple scrape jobs)
-        
+
         comment_ids = [str(d["id"]) for d in rows]
         bulk_link_single_key(
             job_id=job_id,
@@ -81,8 +80,8 @@ def flush_reddit_comment_batch(rows: list[dict], job_id: int) -> tuple[int, int]
             cur=cur,
         )
         return inserted, skipped
-        
-        
+
+
 # ------- some parsing helpers. dunno if they will go somewhere else later ------
 
 def parse_link_id(raw: str | None) -> str:

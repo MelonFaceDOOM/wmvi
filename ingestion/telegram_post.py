@@ -17,7 +17,6 @@ TELEGRAM_COLS = [
     "is_pinned",
     "has_media",
     "raw_type",
-    "is_en",
 ]
 
 TELEGRAM_INSERT_SQL = """
@@ -31,6 +30,7 @@ TELEGRAM_INSERT_SQL = """
     cols=", ".join(TELEGRAM_COLS),
     vals=", ".join(f"%({c})s" for c in TELEGRAM_COLS),
 )
+
 
 def flush_telegram_batch(rows: list[dict], job_id: int) -> tuple[int, int]:
     """
@@ -79,7 +79,7 @@ def flush_telegram_batch(rows: list[dict], job_id: int) -> tuple[int, int]:
 
         if not key1_list:
             return inserted, skipped
-            
+
         bulk_link_dual_key(
             job_id=job_id,
             platform="telegram_post",

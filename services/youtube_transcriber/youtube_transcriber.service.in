@@ -1,0 +1,12 @@
+[Unit]
+Description=youtube_transcriber Youtube video transcribing service
+
+[Service]
+Type=oneshot
+WorkingDirectory={{PROJECT_ROOT}}
+ExecStart={{PYTHON}} -m {{SERVICE_MODULE}}
+EnvironmentFile={{ENV_FILE}}
+
+[Install]
+WantedBy=default.target
+

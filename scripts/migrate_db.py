@@ -1,23 +1,34 @@
-from db.db import init_pool, close_pool, getcursor
+import argparse
+from db.db import init_pool, close_pool
 from db.migrations_runner import run_migrations
 
-init_pool()
 
-# the checksum of the 001 sql file changed
-# because i added some comments to items
-# i'll delete this code after i've applied the new
-# checksum value to prod and dev permanently
-with getcursor(commit=True) as cur:
-    cur.execute("""
-        UPDATE schema_migrations
-        SET checksum = %s
-        WHERE version = %s
-        """,
-       ("27f89496ea0b419ea274eaf98c31fcb48596f951672cb2bb3da68486517e1b47",
-        "001_base.sql")
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--prod",
+        action="store_true",
+        help="Apply migrations to PROD (will prompt for confirmation).",
     )
-   
-    
-applied = run_migrations(migrations_dir="db/migrations")
-print("Applied migrations:", applied)
-close_pool()
+    args = ap.parse_args()
+
+    if args.prod:
+        resp = input(
+            "WARNING -- apply migrations to PROD? (y/n): ").strip().lower()
+        if resp not in {"y", "yes"}:
+            print("Aborted.")
+            return
+
+        init_pool(prefix="PROD")
+    else:
+        init_pool()
+
+    try:
+        applied = run_migrations(migrations_dir="db/migrations")
+        print("Applied migrations:", applied)
+    finally:
+        close_pool()
+
+
+if __name__ == "__main__":
+    main()

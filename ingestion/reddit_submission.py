@@ -28,7 +28,6 @@ REDDIT_SUB_COLS = [
     "media",
     "gildings",
     "all_awardings",
-    "is_en",
 ]
 
 REDDIT_SUB_INSERT_SQL = """
@@ -79,7 +78,7 @@ def flush_reddit_submission_batch(rows: list[dict], job_id: int) -> tuple[int, i
         # and therefore didn't get entered in step 1,
         # they will still be linked to the scrape job here,
         # which is desired (1 post can be linked to multiple scrape jobs)
-        
+
         submission_ids = [str(d["id"]) for d in rows]
         bulk_link_single_key(
             job_id=job_id,

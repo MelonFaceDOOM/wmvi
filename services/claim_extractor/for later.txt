@@ -1,0 +1,9 @@
+Other potential entities:
+ - "population": string or null (e.g. "healthy people", "children", "people with heart conditions")
+ - "actor": string or null (org/person e.g. "CDC", "Pfizer", "rheumatologists")
+ - "location": string or null (e.g. "Florida")
+ - "quantity": string or null (numbers, e.g. "2300", "five thousand studies")
+ - "timeframe": string or null (if present)
+ - "specificity": one of ["general","more_specific","anecdotal"]
+ - "confidence": number between 0 and 1 (your confidence this is a real vaccine-related claim, not noise)
+

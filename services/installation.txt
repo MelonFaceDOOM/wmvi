@@ -1,0 +1,3 @@
+sudo python scripts/install_service.py label_en --timer
+sudo python scripts/install_service.py term_matcher --timer
+sudo python scripts/install_service.py reddit_monitor

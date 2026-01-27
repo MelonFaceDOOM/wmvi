@@ -1,0 +1,21 @@
+[Unit]
+Description=reddit_monitor long-running ingestion service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={{PROJECT_ROOT}}
+ExecStart={{PYTHON}} -m services.{{SERVICE_MODULE}}
+EnvironmentFile={{ENV_FILE}}
+
+# Restart behavior
+Restart=on-failure
+RestartSec=10
+
+# Hard safety limits (optional but recommended)
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

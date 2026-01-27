@@ -1,0 +1,17 @@
+# Core transcription
+faster-whisper==1.2.1
+ctranslate2==4.6.3
+yt-dlp==2025.12.8
+# Audio handling
+ffmpeg-python==0.2.0
+soundfile==0.12.1
+
+# Utilities
+numpy>=1.23
+deepmultilingualpunctuation==1.0.1
+python-dotenv>=1.0
+numpy==2.4.1
+psycopg2==2.9.11
+python-dotenv==1.2.1
+requests==2.32.5
+

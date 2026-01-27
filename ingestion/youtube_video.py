@@ -4,7 +4,6 @@ from db.db import getcursor
 from ingestion.ingestion import insert_batch, bulk_link_single_key
 
 
-
 YOUTUBE_VIDEO_COLS = [
     "video_id",
     "url",
@@ -18,11 +17,10 @@ YOUTUBE_VIDEO_COLS = [
     "view_count",
     "like_count",
     "comment_count",
-    "is_en",
 ]
 
 YOUTUBE_VIDEO_INSERT_SQL = """
-    INSERT INTO sm.youtube_video (
+    INSERT INTO youtube.video (
         {cols}
     ) VALUES (
         {vals}
@@ -68,7 +66,7 @@ def flush_youtube_video_batch(rows: list[dict], job_id: int) -> tuple[int, int]:
         # and therefore didn't get entered in step 1,
         # they will still be linked to the scrape job here,
         # which is desired (1 post can be linked to multiple scrape jobs)
-        
+
         video_ids = [str(d["video_id"]) for d in rows]
         bulk_link_single_key(
             job_id=job_id,

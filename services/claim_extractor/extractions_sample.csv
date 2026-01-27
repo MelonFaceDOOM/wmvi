@@ -1,0 +1,1856 @@
+post_id,platform,key1,key2,filtered_text,ok,response,error_type,latency_s,model
+454,reddit_submission,t3_82aypl,,Slicer Ranks every post Nicaragua one timer by how much he'd like to see them return,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,2.834,gpt-5-mini
+476,reddit_submission,t3_8g1twa,,Which HPV/Cervical cancer vaccine did you get? Cervarix or Gardasil or Gardasil 9? And why chose that one among three?,True,"{""claims"": [], ""notes"": ""No vaccine-related claims — the post is a question asking which HPV vaccine someone received and why.""}",,4.575,gpt-5-mini
+163,reddit_submission,t3_33h5ik,,"Anyone know where they got the name for Ixiaro, the [REDACTED] encephalitis vaccine?",True,"{
+  ""claims"": [],
+  ""notes"": ""Question about the origin of a vaccine name (Ixiaro); no vaccine-related claim asserted.""
+}",,5.137,gpt-5-mini
+607,reddit_submission,t3_acxjzi,,A Comprehensive List of Cases Solved in 2018 (Part 3),True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.333,gpt-5-mini
+307,reddit_submission,t3_61zirt,,Is it possible to get Gardasil 9 if I already had Cervarix?,True,"{""claims"": [], ""notes"": ""Question asking if one can receive Gardasil 9 after having had Cervarix; no assertive vaccine claim present to extract.""}",,8.448,gpt-5-mini
+8,reddit_submission,t3_cih66,,Rotavirus Vaccine Contaminated.. Am I right to be worried?,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is contaminated."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_unsafe_general"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Rotavirus vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,9.719,gpt-5-mini
+654,reddit_submission,t3_b3fq5e,,United States Vaccines Market 2015 - 2025 Top 21 Vaccines Analysis Deal Trends Players and Forecasts,True,"{
+  ""claims"": [],
+  ""notes"": ""No substantive vaccine-related claims—this is a market analysis/report title.""
+}",,5.846,gpt-5-mini
+703,reddit_submission,t3_bt4r38,,LLR Presents World Cup 2019 Round 2,True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,4.488,gpt-5-mini
+813,reddit_submission,t3_dbx8au,,I’m dealing with sick babies who aren’t even my own *CW*,True,"{""claims"": [], ""notes"": ""No vaccine-related claims present in post.""}",,3.986,gpt-5-mini
+843,reddit_submission,t3_dsh2ll,,"[OC] The Midseason “Coach Draft”, rounds 2 and 3",True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,4.246,gpt-5-mini
+665,reddit_submission,t3_bah4ad,,"If Truth Be Told About Death, Disability & Vaccine Ineffectiveness: Megathread with Peer Review Journals, Demographic Charts & Graphs",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] causes death and disability."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_causes_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""general vaccine""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""death""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""disability""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] is ineffective."",
+      ""facet"": ""effectiveness"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_ineffective_or_negative_efficacy"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""general vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,16.911,gpt-5-mini
+54,reddit_submission,t3_1i0x6o,,Developer of RotaTeq Dr. Paul Offit is offering a free course on vaccines via Coursera,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Dr. Paul Offit offers a free course on vaccines via Coursera."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    }
+  ],
+  ""notes"": null
+}",,22.697,gpt-5-mini
+838,reddit_submission,t3_dpmb3l,,22F Reaction to flu vaccine - should I be concerned?,True,"{
+  ""claims"": [],
+  ""notes"": ""Post is a question about one individual's reaction to a flu vaccine and contains no explicit vaccine-related claim to extract.""
+}",,12.298,gpt-5-mini
+864,reddit_submission,t3_eabhm2,,MySaskHealth .. seems to be a bust?,True,"{""claims"": [], ""notes"": ""No vaccine-related claim; post only comments that the MySaskHealth portal 'seems to be a bust'.""}",,5.182,gpt-5-mini
+1154,reddit_submission,t3_lgqqkx,,New Ship Machinery are Now Available from Vessel - YM Green IMO - 9224491,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,4.192,gpt-5-mini
+967,reddit_submission,t3_hemup4,,MUST SEE: [REDACTED] newspaper from 1996 is talking about virus from Wuhan,True,"{""claims"": [], ""notes"": ""No vaccine-related claims in post; mentions a virus location but nothing about vaccines or vaccination.""}",,4.643,gpt-5-mini
+1115,reddit_submission,t3_keme0c,,Best course of rabies vaccine if someone gets bit in the middle of treatment?,True,"{""claims"": [], ""notes"": ""Question asking for clinical guidance about rabies vaccination; no assertive vaccine claims present.""}",,6.267,gpt-5-mini
+1565,reddit_submission,t3_prsjpg,,With apologies to Mr. Gase: An analysis of how much head coaches affect fantasy points,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.635,gpt-5-mini
+1767,reddit_submission,t3_qr7wnq,,"Covid-19 Update for November 10: 484 new cases (4.33% tests positive), 561 recoveries, 5 deaths",True,"{""claims"": [], ""notes"": ""No vaccine-related claims — post only reports COVID-19 case counts, recoveries, and deaths.""}",,4.448,gpt-5-mini
+915,reddit_submission,t3_ffwk5n,,"Tips on what to do to prepare, from Seattle family in public health field. Advice: stock up, older adults get [REDACTED] vaccine",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Older adults should get [vaccine]."",
+      ""facet"": ""policy"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""experts_or_orgs_recommend_vaccine"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""[REDACTED] vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,17.185,gpt-5-mini
+1183,reddit_submission,t3_m06kmb,,"A&M seeks participants in a COVID study, using tuberculosis vaccine",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is being tested in a study for [disease]."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""tuberculosis vaccine""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""COVID-19""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,15.266,gpt-5-mini
+792,reddit_submission,t3_cwbn0x,,Do you guys think its fraudy or kosher to give someone HepA and HepB vaccines instead of twinrix to boost imz numbers?,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Giving [vaccine] and [vaccine] instead of [vaccine] to boost immunization numbers is fraudulent or unethical."",
+      ""facet"": ""ethics"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""HepA vaccines""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""HepB vaccines""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Twinrix""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,34.694,gpt-5-mini
+1608,reddit_submission,t3_pyuy13,,"Covid-19 Update for September 30: 1,706 new cases (9.66% tests positive), 1,737 recoveries, 20 deaths + Aid from Across Canada + Mandatory Vaccines for Alberta Public Services",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] are mandatory for Alberta public services."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,17.220,gpt-5-mini
+818,reddit_submission,t3_ddsx5b,,Vaccinegate: MRC-5 contained in Priorix Tetra - Complete genome sequencing,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] contains MRC-5 cell line."",
+      ""facet"": ""mechanism"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Priorix Tetra""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""MRC-5 cell line""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""Complete genome sequencing shows that [vaccine] contains MRC-5 cell line."",
+      ""facet"": ""evidence"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Priorix Tetra""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""MRC-5 cell line""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,45.003,gpt-5-mini
+2188,reddit_submission,t3_sjh8dk,,Novavax COVID-19 vaccine Nuvaxovid approved by MHRA,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is approved by the MHRA."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Novavax COVID-19 vaccine Nuvaxovid""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,9.953,gpt-5-mini
+1972,reddit_submission,t3_rq9v1p,,[IN] - Covid-19: Govt approves emergency use of Corbevax and Covovax vaccines and anti-viral pill Molnupiravir | Times of India,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] received emergency use approval from the government."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Corbevax""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Covovax""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,21.077,gpt-5-mini
+2029,reddit_submission,t3_rvr7p1,,"A patent-free, traditional, vaccine has been developed by Huston, Texas based Children’s Hospital as a “gift to the world.” Will the unvaxxed be willing to be vaccinated if this were to be available in the US?",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is patent-free and traditional and was developed by Houston Children's Hospital."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""patent-free traditional vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,17.742,gpt-5-mini
+2112,reddit_submission,t3_s892or,,"CORBEVAX, a new patent-free COVID-19 vaccine, could be a pandemic game changer globally",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] could be a pandemic game changer for [disease] globally."",
+      ""facet"": ""effectiveness"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""vaccine_is_effective_general"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""CORBEVAX""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""COVID-19""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,15.445,gpt-5-mini
+2040,reddit_submission,t3_rxrc9l,,Royalty free vaccine created by Baylor College will let poor countries produce their own vaccine.,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Royalty-free [vaccine] created by Baylor College allows poor countries to produce it locally."",
+      ""facet"": ""policy"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""royalty-free vaccine created by Baylor College""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,24.197,gpt-5-mini
+2780,reddit_submission,t3_vt2jys,,"Covid-19 (Mini)-Update for July 6 (7 day total): Hospitalized: 568 (-21 over last week), ICU: 21 (+8), 1,035 reported cases (14.46% tests positive), 15 deaths",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found in the post.""
+}",,3.140,gpt-5-mini
+2439,reddit_submission,t3_u6ljpt,,"Merck won a lawsuit over the shingles vaccine Zostavax. Meanwhile, the company faces more than 2,000 other lawsuits.",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Merck won a lawsuit over [vaccine]."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Zostavax (shingles vaccine)""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""Merck faces more than 2,000 lawsuits related to [vaccine]."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Zostavax (shingles vaccine)""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,17.033,gpt-5-mini
+2290,reddit_submission,t3_szd0hi,,10 cases of serious adverse events reported in children aged 5 to 11 after COVID-19 vaccine jab,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""10 cases of [adverse_effect] were reported in children aged 5 to 11 after [vaccine]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""serious adverse events""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,20.189,gpt-5-mini
+2962,reddit_submission,t3_wuhkfv,,Booster recommendations!!,True,"{
+  ""claims"": [],
+  ""notes"": ""No specific vaccine-related claim; post only says 'Booster recommendations' without asserting anything.""
+}",,6.826,gpt-5-mini
+2288,reddit_submission,t3_syyk36,,[IN] - 230 kids aged 2-6 become youngest to get Covid jabs in Covovax trial,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] for [disease] were given to 230 children aged 2-6 as the youngest participants in the Covovax trial."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Covovax""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""COVID-19""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,21.378,gpt-5-mini
+2560,reddit_submission,t3_uonauj,,Those eligible can start booking appointments for first recommended non-mRNA vaccine Nuvaxovid,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Eligible people can book appointments for the first recommended non-mRNA [vaccine]."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Nuvaxovid""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] is a non-mRNA vaccine."",
+      ""facet"": ""mechanism"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Nuvaxovid""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,23.784,gpt-5-mini
+2967,reddit_submission,t3_wvphjl,,Sorrento Announces Significant Positive Pivotal Trial Results as Assessed by an Independent Review Committee (IRC) With Matured Long-Term (Over Three Years) Follow-Up Data of Abivertinib for the Treatment of Advanced Non-Small Cell Lung Cancer (NSCLC),True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content found in the post.""
+}",,9.391,gpt-5-mini
+3274,reddit_submission,t3_z5fxza,,[Capitalists] Is there any reason why the government shouldn't compete with private business?,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,4.835,gpt-5-mini
+3136,reddit_submission,t3_y1kvet,,[News] - Oxford-AstraZeneca Nasal COVID-19 Vaccine Falters in Clinical Trial,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] falters in clinical trial."",
+      ""facet"": ""effectiveness"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""vaccine_is_ineffective_or_negative_efficacy"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Oxford-AstraZeneca nasal COVID-19 vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,15.923,gpt-5-mini
+2451,reddit_submission,t3_u7zpx6,,Co-creator of AstraZeneca COVID shot defends safety amid clot concerns,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is safe despite concerns about [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""AstraZeneca COVID-19 vaccine""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""blood clots""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] is linked to concerns about [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""AstraZeneca COVID-19 vaccine""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""blood clots""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,36.419,gpt-5-mini
+3063,reddit_submission,t3_xdaqgx,,It must be bat season with all of the rabies vaccines we’ve been sending up to the ED,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Bat season is causing increased administration of [vaccine] to the emergency department."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""rabies vaccines""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,18.966,gpt-5-mini
+3202,reddit_submission,t3_ykrh5e,,Sweden advises against Covid-19 vaccine Nuvaxovid (NOVAVAX) for people under 30 yrs,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""People under 30 are advised against receiving [vaccine]."",
+      ""facet"": ""policy"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_unnecessary_for_population"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Nuvaxovid (Novavax)""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,19.596,gpt-5-mini
+3577,reddit_submission,t3_11gfhiy,,“The greatest perpetrator of misinformation during the pandemic has been the United States government.”,True,"{""claims"": [], ""notes"": ""No explicit vaccine-related claim; statement alleges government misinformation during the pandemic but does not mention vaccines or vaccination.""}",,3.766,gpt-5-mini
+3286,reddit_submission,t3_z7xr7y,,Vaccination was voluntary,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Vaccination was voluntary."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    }
+  ],
+  ""notes"": null
+}",,17.365,gpt-5-mini
+3605,reddit_submission,t3_11o4eyn,,Synagis Vaccine Coding for Pediatrics,True,"{""claims"": [], ""notes"": ""No assertive vaccine-related claim; appears to be a topic/title about Synagis coding for pediatrics.""}",,4.681,gpt-5-mini
+3363,reddit_submission,t3_ztct1x,,Adaptive immune responses and cytokine immune profiles in humans following prime and boost vaccination with the SARS-CoV-2 CoronaVac vaccine,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Prime and boost [vaccine] induce adaptive immune responses and cytokine immune profiles in humans."",
+      ""facet"": ""mechanism"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""SARS-CoV-2 CoronaVac vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,14.443,gpt-5-mini
+3687,reddit_submission,t3_12jkg0e,,INOVIO Announces Acceptance of Abstract,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims present; this is only a company announcement headline with insufficient information.""
+}",,6.805,gpt-5-mini
+3721,reddit_submission,t3_12v4zxk,,Need Covishield Vaccine in mumbai,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is needed in Mumbai."",
+      ""facet"": ""policy"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Covishield vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,10.485,gpt-5-mini
+3427,reddit_submission,t3_107d5vg,,Childhood shots? does anyone have great sources regarding dangers of shots for newborn children? I'm concerned mRNA shots will be secretly instead into common vaccines am and looking for some great sources of information on the truth.,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] are dangerous for newborn children."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_unsafe_general"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""vaccines for newborn children""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] will be secretly added into routine childhood [vaccine]."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""mRNA vaccines""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""routine childhood vaccines""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,25.384,gpt-5-mini
+3876,reddit_submission,t3_14h1ghb,,More Data on Vaccine Safety Amid New Outbreaks,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""There is more data on [vaccine] safety amid new outbreaks."",
+      ""facet"": ""evidence"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""general vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": ""Headline-style post; unspecified which vaccines or outbreaks are referenced.""
+}",,15.468,gpt-5-mini
+3644,reddit_submission,t3_122ixfa,,"1953, Dr. Jonas Salk announced his Polio Vaccine",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] was announced in 1953."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Polio vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,23.200,gpt-5-mini
+3615,reddit_submission,t3_11rj5k9,,"Martin Kulldorff: “To have university presidents require vaccines for people who have had COVID, that is de facto denial of infection-acquired immunity...as absurd as denying the earth is round.” Scott Atlas: “We have a new generation of Flat Earthers.”",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] requirements for people who had [disease] deny infection-acquired immunity."",
+      ""facet"": ""policy"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_unnecessary_for_population"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""COVID-19""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,25.233,gpt-5-mini
+3949,reddit_submission,t3_15cjupp,,"Anyone have success with pneumovax 23 after tests showed IgA, IgM, and IgG levels low?",True,"{
+  ""claims"": [],
+  ""notes"": ""This is a request for personal experiences with Pneumovax 23 after low IgA/IgM/IgG; it does not assert any vaccine-related claim.""
+}",,6.313,gpt-5-mini
+4050,reddit_submission,t3_166glb1,,Managed to rescue these 3 Hazet Assistants today..,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,2.998,gpt-5-mini
+3962,reddit_submission,t3_15exrpw,,(Urgent) possible rabies exposure and questions about treatment,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims — post is an urgent request about possible rabies exposure and treatment, not asserting anything about vaccines.""
+}",,5.304,gpt-5-mini
+4051,reddit_submission,t3_166kilg,,Subject doubt: Immunology,True,"{""claims"":[],""notes"":""Post does not contain any vaccine-related claims.""}",,4.830,gpt-5-mini
+4221,reddit_submission,t3_17cuerj,,Can BC doctors prescribe travel prescription?,True,"{
+  ""claims"": [],
+  ""notes"": ""Not vaccine-related: question about whether BC doctors can prescribe travel prescriptions (ambiguous whether this refers to travel vaccines).""
+}",,6.459,gpt-5-mini
+4261,reddit_submission,t3_17hp97h,,I need to vent about nirsevimab.,True,"{""claims"":[],""notes"":""No vaccine-related claims found; the post only expresses intent to vent about nirsevimab without asserting anything about safety, effectiveness, policy, or other vaccine-related matters.""}",,6.839,gpt-5-mini
+3335,reddit_submission,t3_zmz64z,,"Guillain–Barré syndrome (GBS) was temporally associated with adenovirus-vector COVID-19 vaccines. 41 total cases of GBS were reported following Vaxzevria (n = 38), Comirnaty (n = 3), or Spikevax (n = 0) between February and November 2021. Only Vaxzevria exceeded the expected rate of GBS.",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] was temporally associated with [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""adenovirus-vector COVID-19 vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""Guillain–Barré syndrome (GBS)""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""41 cases of [adverse_effect] were reported following [vaccine] between February and November 2021."",
+      ""facet"": ""evidence"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""Guillain–Barré syndrome (GBS)""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Vaxzevria""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Comirnaty""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Spikevax""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] exceeded the expected rate of [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""vaccine_increases_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Vaxzevria""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""Guillain–Barré syndrome (GBS)""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,46.250,gpt-5-mini
+4378,reddit_submission,t3_17sax8c,,A murder of anthropogenic fantasy crows. Game: Zoontalis: Battle Royale Printer: Epax e10 Layer Height: 0.04mm STL Source: Dice Heads,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,4.472,gpt-5-mini
+4498,reddit_submission,t3_189e5x5,,"Elmo still not taking responsibility for his mistakes and continues to blame those pesky [REDACTED]. You know, the ones who buy his shitty cars.",True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,4.051,gpt-5-mini
+4579,reddit_submission,t3_18k87fh,,"Anthropomorphic, fantasy pandas Game: Zoontalis: Battle Royale Printer: Epax e10 Layer Height: 0.04mm STL Source: Dice Heads",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.743,gpt-5-mini
+4326,reddit_submission,t3_17qo9mi,,My doctor offered my baby to get the RSV medication - Beyfortus (nirsevimab-alip)- has anyone else’s baby got this? how did your LO do?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found. The post is a question asking for experiences with the RSV prophylactic medication Beyfortus (nirsevimab-alip), not asserting claims about vaccines.""
+}",,12.086,gpt-5-mini
+4700,reddit_submission,t3_191jhmp,,How many covid vaccines should i get?,True,"{
+  ""claims"": [],
+  ""notes"": ""No explicit vaccine-related claim — user asks a question about how many COVID vaccines to get.""
+}",,4.765,gpt-5-mini
+4573,reddit_submission,t3_18jxf5q,,Does anyone know if the updated Novavax COVID vaccine (Nuvaxovid XBB.1.5) is given anywhere yet?,True,"{""claims"": [], ""notes"": ""No assertive vaccine claims — the post is a question about availability of the updated Novavax COVID vaccine (Nuvaxovid XBB.1.5) and makes no factual assertions.""}",,9.855,gpt-5-mini
+4773,reddit_submission,t3_19ee071,,Why are people shipping Shiraori and wrath?,True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,4.054,gpt-5-mini
+4803,reddit_submission,t3_1afc9vw,,"Antibody Drug Conjugates Industry Analysis, Future Demand and Forecast 2024-2033",True,"{""claims"": [], ""notes"": ""No vaccine-related content; post is about antibody drug conjugates industry analysis.""}",,3.854,gpt-5-mini
+4872,reddit_submission,t3_1atg98t,,This just means it's working,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,2.875,gpt-5-mini
+4347,reddit_submission,t3_17qzh72,,"[World] - Oxford AstraZeneca Covid jab was ‘defective’, claims landmark legal case",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] is defective."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_unsafe_general"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Oxford–AstraZeneca COVID-19 vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,17.831,gpt-5-mini
+4798,reddit_submission,t3_1aeuemu,,"RSV after beyfortus, any experiences?",True,"{""claims"": [], ""notes"": ""No vaccine-related claims; the post asks for experiences of RSV after Beyfortus (a prophylactic antibody) rather than asserting anything about vaccines.""}",,7.242,gpt-5-mini
+4920,reddit_submission,t3_1b3h40t,,Thoughts? MRI LIVER W/ CONTRAST,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,3.281,gpt-5-mini
+5110,reddit_submission,t3_1cbpycf,,🌅 Apr 24 - 76 new Mid Level Software Engineer Jobs,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,3.010,gpt-5-mini
+4827,reddit_submission,t3_1akgbig,,Does ABRYSVO contain aluminum?,True,"{""claims"": [], ""notes"": ""Question asking whether the vaccine ABRYSVO contains aluminum; no assertive vaccine-related claim to extract.""}",,7.264,gpt-5-mini
+3889,reddit_submission,t3_14n1652,,"New hexavalent vaccines are coming: What impact could they have? | diphtheria, tetanus, pertussis, polio, haemophilus influenza B and hepatitis B",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] are being introduced."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""hexavalent vaccines""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] target [disease], [disease], [disease], [disease], [disease], and [disease]."",
+      ""facet"": ""mechanism"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""hexavalent vaccines""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""diphtheria""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""tetanus""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""pertussis""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""polio""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""Haemophilus influenzae type b""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""hepatitis B""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,33.687,gpt-5-mini
+5374,reddit_submission,t3_1cz0y9m,,Kylie Kaboom! (Edgerunner proxy) Game: Cyberpunk Red: Combat Zone Printer: Epax e10 Layer Height: 0.04mm STL Source: Heroes Infinite,True,"{""claims"":[],""notes"":""No vaccine-related content in the post.""}",,3.189,gpt-5-mini
+5300,reddit_submission,t3_1crj3uo,,Do you feel like an idiot now ?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,4.353,gpt-5-mini
+5437,reddit_submission,t3_1d5qlcf,,Inquiry of the name of a fillm,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,3.793,gpt-5-mini
+5905,reddit_submission,t3_1febm71,,Was this shade at whitney. Did anyone else have a RSV commercial in between the show??? ,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims — the post only asks whether others saw an RSV commercial.""
+}",,3.483,gpt-5-mini
+4998,reddit_submission,t3_1bmhoo7,,UK Update: Private Novavax availability delayed till end of April,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] private availability is delayed until the end of April."",
+      ""facet"": ""other"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Novavax COVID-19 vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,12.602,gpt-5-mini
+6072,reddit_submission,t3_1frs64b,,My 2 month old accidentally got vaccinated against HPV this week… oops!,True,"{
+  ""claims"": [],
+  ""notes"": ""Personal report that the author's infant was (accidentally) vaccinated — this is vaccination status/anecdote only and contains no extractable claim about vaccine effects, safety, policy, or evidence.""
+}",,5.321,gpt-5-mini
+6478,reddit_submission,t3_1gsxktu,,BMPCC 6k VMOUNT DIRECTLY???,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,3.483,gpt-5-mini
+5685,reddit_submission,t3_1eqahvp,,Pfizer Announces Top-Line Results of ABRYSVO® for RSV in Immunocompromised Adults,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Top-line results for [vaccine] against [disease] were announced."",
+      ""facet"": ""evidence"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""ABRYSVO""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""RSV""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,14.385,gpt-5-mini
+5889,reddit_submission,t3_1fcmyqw,,CureVac to Present First CVGBM Glioblastoma Cancer Vaccine Clinical Data at ESMO 2024 Congress,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Clinical data for [vaccine] for [disease] will be presented at ESMO 2024 Congress."",
+      ""facet"": ""evidence"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""CVGBM glioblastoma cancer vaccine""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""glioblastoma""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,14.621,gpt-5-mini
+5262,reddit_submission,t3_1cn4uxt,,"""AstraZeneca pulls their own COVID vaccines""",True,"{""claims"":[{""claim_text"":""[vaccine] are withdrawn by their manufacturer."",""facet"":""policy"",""stance"":""neutral_or_unclear"",""template"":""other"",""entities"":[{""type"":""vaccine_concept"",""value"":""AstraZeneca COVID vaccines""}]}],""notes"":null}",,20.206,gpt-5-mini
+6548,reddit_submission,t3_1gzs5o4,,Gonorrhoea and the origins of oral sex,True,"{""claims"":[],""notes"":""No vaccine-related claims present in the post.""}",,3.238,gpt-5-mini
+6644,reddit_submission,t3_1h87p73,,6k Pro USB-C issues: Freezing/Drop frames/SSD not detected,True,"{""claims"": [], ""notes"": ""No vaccine-related content; post discusses USB-C/technical issues.""}",,5.474,gpt-5-mini
+6936,reddit_submission,t3_1hunagz,,Are vaccination schedules flexible? [ca],True,"{""claims"": [], ""notes"": ""Question asking whether vaccination schedules are flexible; no assertive vaccine-related claims to extract.""}",,4.400,gpt-5-mini
+6989,reddit_submission,t3_1hwrr0h,,Wastewater viral load: smaller end-of-the-year surge,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; post discusses wastewater viral load/surge.""
+}",,3.629,gpt-5-mini
+6994,reddit_submission,t3_1hwv4tv,,WHO African Region Mpox Bulletin #17 - 15 December 2024,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found (title only)""
+}",,4.976,gpt-5-mini
+7037,reddit_submission,t3_1hz2wc3,,[TOMT] [Reddit Post] Women’s mother purposely gives a baby monkeypox with a blanket,True,"{""claims"": [], ""notes"": ""No vaccine-related claims found; the post alleges deliberate transmission of monkeypox via a blanket.""}",,7.073,gpt-5-mini
+7068,reddit_submission,t3_1i125w8,,"Though the risk of avian flu to the general public remains low, people on social media seem to be concerned about the timing of global media reports (right as a certain someone prepares to take office), expressing their attitudes towards practices that cause economies to collapse. ",True,"{""claims"":[],""notes"":""No vaccine-related claims: mentions avian flu risk and public concern/media timing but does not assert anything about vaccines or vaccination.""}",,8.747,gpt-5-mini
+7160,reddit_submission,t3_1i6rh5a,,"Reaction to Shingrix, anyone?",True,"{
+  ""claims"": [],
+  ""notes"": ""Post is a question asking for personal experiences with Shingrix (shingles vaccine); it does not assert any vaccine-related claim.""
+}",,4.807,gpt-5-mini
+7109,reddit_submission,t3_1i3qwo0,,"CDS gifted me a 13 year old lady, a course of antibiotics, and a tetanus shot!",True,"{
+  ""claims"": [],
+  ""notes"": ""Post only states the author's personal vaccination status (received a tetanus shot); no extractable vaccine-related claims.""
+}",,7.365,gpt-5-mini
+5221,reddit_submission,t3_1cj5148,,What is up with this panic about the Astrazeneca vaccine? Doesn't every vaccine have a small chance that is could cause a deadly disease? Why is there suddenly so much panic about how everybody is going to die? Why are many people blaming that on the [REDACTED] government when that vaccine is from UK?,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] can cause a deadly disease in a small number of people."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_causes_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""general vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""deadly disease""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""Some people believe [vaccine] will cause [adverse_effect] for everybody."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""vaccine_causes_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""AstraZeneca vaccine""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""death""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""Many people blame the [REDACTED] government for the [vaccine] despite the vaccine being from the UK."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""AstraZeneca vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,42.893,gpt-5-mini
+7283,reddit_submission,t3_1ick8s8,,"I have 5 missing childhood shots, is it a big deal?",True,"{
+  ""claims"": [],
+  ""notes"": ""User asks whether missing childhood vaccinations is a big deal (question, no assertive claim to extract).""
+}",,5.155,gpt-5-mini
+6905,reddit_submission,t3_1hsx63k,,This subreddit should be sponsored by shingrix - I got my shot thanks to y’all. ,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""This subreddit should be sponsored by [vaccine]."",
+      ""facet"": ""policy"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Shingrix""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,24.074,gpt-5-mini
+7206,reddit_submission,t3_1i8yerg,,Sabbatean Frankist Futurist Ray Kurzweil told NDT we're all gonna have nanobots in our blood (graphene neural lace) connected to Starlink WiFi by 2030. Ghislaine Maxwell BFF Sabbatean Frankist Virologist Nathan Wolfe literally created COVID-19. Same ilk Albert Bourla is Pfizer CEO,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found. The post makes conspiracy assertions about COVID-19 origin, nanobots/neural lace, and mentions the Pfizer CEO but does not assert anything about vaccines or vaccination.""
+}",,11.188,gpt-5-mini
+7373,reddit_submission,t3_1igaqng,,This Is What I Think About Every Day,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.145,gpt-5-mini
+7288,reddit_submission,t3_1icu1e3,,"As RFK Jr. faces U.S. Senate, questions linger about a measles outbreak in Samoa, half a world away",True,"{""claims"": [], ""notes"": ""No vaccine-related claims present; mentions a measles outbreak but does not assert anything about vaccines or vaccination.""}",,6.148,gpt-5-mini
+7409,reddit_submission,t3_1ihs3bn,,"Breaking: Elon Musk devil's reject tried to sacrifice his ex-nanny Shalom Girl to the devil, but Jesus Christ saved her",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found.""
+}",,4.362,gpt-5-mini
+7362,reddit_submission,t3_1ifzwio,,Dr Chia finds enterovirus ME/CFS patients given the antiviral remdesivir for several days remain in remission for up to 9 months,True,"{""claims"":[],""notes"":""No vaccine-related claims — the post discusses antiviral treatment (remdesivir) for enterovirus-associated ME/CFS, not vaccination.""}",,7.886,gpt-5-mini
+7563,reddit_submission,t3_1iotw7d,,This BS is not gonna fly anymore,True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,2.927,gpt-5-mini
+7651,reddit_submission,t3_1is8fwn,,"This is Demonic DARPA ultimate goal and Elon Musk is helping them achieve it by launching their Blackjack satellites and blanketing the Earth. But this stuff is far above the heads of [REDACTED] like Sean Hannity, Alex Jones, and Donald Trump. So nothing will be done. Antichrist Beast System",True,"{""claims"": [], ""notes"": ""No vaccine-related claims present in post.""}",,4.799,gpt-5-mini
+7689,reddit_submission,t3_1itpwmu,,This little one put up a mighty fight during her short life,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,4.380,gpt-5-mini
+7830,reddit_submission,t3_1j0iw6i,,theory that would explain everything,True,"{""claims"":[],""notes"":""No vaccine-related claims in post.""}",,3.098,gpt-5-mini
+6152,reddit_submission,t3_1fyzio7,,"[REDACTED]: ""Freedom and Democracy means women can crush the skull and rip apart the limbs of babies in the womb until birth for any reason, and healthy men under 40 with zero COVID risk must take an injection that increases their overall death risk and infection/spread rate by 2-3x to kill granny too",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] increases overall death risk by 2-3x in healthy men under 40."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_increases_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""death""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] increases infection and spread rates by 2-3x."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_increases_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""infection and spread rate""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] causes deaths among older people."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_causes_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""death among elderly""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""Healthy men under 40 with negligible COVID risk are required to take [vaccine]."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,48.028,gpt-5-mini
+7883,reddit_submission,t3_1j3b80y,,Post-Vaccine Symptoms Expectations (NOT A POLITICAL POST),True,"{
+  ""claims"": [],
+  ""notes"": ""Title/heading only — no explicit vaccine-related claim present to extract.""
+}",,4.625,gpt-5-mini
+7419,reddit_submission,t3_1ihzyi6,,"Will Trump, Musk, RFK Jr. ask Dr. Fraud-See's NIAID to show the world the PILES of evidence it has of the so-called ""virus""?",True,"{""claims"": [], ""notes"": ""No vaccine-related claims—post questions existence of the virus and NIAID evidence but does not assert anything about vaccines or vaccination policy/safety/effectiveness.""}",,14.139,gpt-5-mini
+7946,reddit_submission,t3_1j6m08g,,3 easy ways YOU can increase immersion at your own table in your very next session,True,"{
+  ""claims"": [],
+  ""notes"": ""no vaccine-related content""
+}",,4.061,gpt-5-mini
+7949,reddit_submission,t3_1j6s4a7,,How Often Does Spasm Occur,True,"{""claims"": [], ""notes"": ""No vaccine-related content — single question about spasm occurrence.""}",,6.356,gpt-5-mini
+8133,reddit_submission,t3_1jfxc5h,,Hot Take on the Vaccines-causing-autism debate,True,"{
+  ""claims"": [],
+  ""notes"": ""No explicit vaccine-related claim present; text is just a headline referencing the debate.""
+}",,4.659,gpt-5-mini
+8154,reddit_submission,t3_1jgqloo,,Varicella Titers for nursing school .. please help!!,True,"{""claims"":[],""notes"":""No extractable vaccine-related claim; user asks for help about varicella titers (a question/request).""}",,5.642,gpt-5-mini
+8158,reddit_submission,t3_1jgznls,,Cysts? Endo? Scar tissue? Oh my! Should I pick surgery or BC pill/Mirena/Orilissa?,True,"{""claims"": [], ""notes"": ""No vaccine-related claims — post discusses gynecologic treatments (surgery, birth control, Mirena, Orilissa).""}",,4.011,gpt-5-mini
+8191,reddit_submission,t3_1jihh9c,,requiring masks to meet newborn,True,"{""claims"": [], ""notes"": ""No vaccine-related content; post mentions mask requirement for meeting a newborn.""}",,4.637,gpt-5-mini
+8212,reddit_submission,t3_1jj3tc7,,Watery poop in dove! Could it be rota virus?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; post asks whether a dove has rotavirus (disease in an animal).""
+}",,5.119,gpt-5-mini
+8264,reddit_submission,t3_1jl47gy,,Found possible HPV while preparing for IVF,True,"{""claims"": [], ""notes"": ""No vaccine-related claims — the post mentions HPV diagnosis in IVF preparation but says nothing about vaccines.""}",,4.117,gpt-5-mini
+7897,reddit_submission,t3_1j3ssmw,,Panacea Biotech - A global vaccine powerhouse in making,True,"{""claims"":[{""claim_text"":""Panacea Biotech is becoming a global [vaccine] powerhouse."",""facet"":""other"",""stance"":""neutral_or_unclear"",""template"":""other"",""entities"":[{""type"":""vaccine_concept"",""value"":""general vaccine""}]}],""notes"":null}",,20.175,gpt-5-mini
+8516,reddit_submission,t3_1jt5v3j,,"Pertussis in adults aged 50 and older costs UK about $290 million yearly, study estimates | CIDRAP",True,"{""claims"": [], ""notes"": ""No vaccine-related claims — headline reports economic cost of pertussis in older adults, no mention of vaccination.""}",,5.765,gpt-5-mini
+8583,reddit_submission,t3_1juryoc,,Who should I be starting and what is next upgrade?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claim found — the post is an ambiguous general question and does not assert anything about vaccines.""
+}",,4.334,gpt-5-mini
+8603,reddit_submission,t3_1jva2eo,,Newborn and visitors from measles outbreak state,True,"{""claims"": [], ""notes"": ""No vaccine-related claims found; text is a fragment about a measles outbreak but makes no assertion about vaccines.""}",,5.963,gpt-5-mini
+8519,reddit_submission,t3_1jt80ir,,Spinal cord injury after covid vaccines,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] causes [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_causes_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""spinal cord injury""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,11.880,gpt-5-mini
+8679,reddit_submission,t3_1jxrtj4,,Scared of unvaccinated relatives,True,"{""claims"": [], ""notes"": ""Personal expression of fear about unvaccinated relatives; no explicit vaccine-related claim to extract.""}",,6.723,gpt-5-mini
+8805,reddit_submission,t3_1k1raw1,,Full list of Tony-eligible shows and performers,True,"{""claims"": [], ""notes"": ""No vaccine-related content (post about Tony-eligible shows and performers).""}",,4.153,gpt-5-mini
+7267,reddit_submission,t3_1ibpc9a,,"Breaking: Mentally challenged scientists are baffled at seeing record heart attacks, especially in young people. Even though this sub has been pointing out for years, the literal actual Pfizer trial showed 24% more death in vaxx group, 250% more cardiac arrests and increased spread/infection rate 2x",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] increases deaths by 24%."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_increases_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Pfizer COVID-19 vaccine""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""deaths""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] increases cardiac arrests by 250%."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_increases_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Pfizer COVID-19 vaccine""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""cardiac arrests""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] doubles [disease] infection or spread rates."",
+      ""facet"": ""effectiveness"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_is_ineffective_or_negative_efficacy"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Pfizer COVID-19 vaccine""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""COVID-19""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] causes increased [adverse_effect], especially in young people."",
+      ""facet"": ""safety"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""vaccine_increases_adverse_effect"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""COVID-19 vaccines""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""heart attacks""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,52.301,gpt-5-mini
+8823,reddit_submission,t3_1k2685w,,First time with GW married 9 years,True,"{""claims"": [], ""notes"": ""Post does not contain any vaccine-related claims.""}",,4.310,gpt-5-mini
+8881,reddit_submission,t3_1k3wl8c,,"After Robert Osborne, Alicia Malone is the hottest TCM host.  I’d giver her 35mm.",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.430,gpt-5-mini
+9080,reddit_submission,t3_1k8x9b3,,Are The Other Cans Contaminated?,True,"{""claims"":[],""notes"":""No explicit vaccine-related claim — single ambiguous question about 'cans' with no reference to vaccines.""}",,4.674,gpt-5-mini
+9043,reddit_submission,t3_1k7tgnd,,[REDACTED] countries see payoff from ramped-up mpox strategies,True,"{
+  ""claims"": [],
+  ""notes"": ""No explicit vaccine-related claim — 'mpox strategies' is ambiguous (could include vaccination) but does not specifically mention vaccines.""
+}",,6.098,gpt-5-mini
+9297,reddit_submission,t3_1kdgbzl,,A link between endometriosis and auto immune conditions,True,"{""claims"": [], ""notes"": ""No vaccine-related claims: the post discusses a link between endometriosis and autoimmune conditions.""}",,5.606,gpt-5-mini
+9337,reddit_submission,t3_1keh2y8,,How do you find a doctor who will listen and put in the effort to figure things out and get you the right treatment?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content; general question about finding a doctor.""
+}",,4.127,gpt-5-mini
+9411,reddit_submission,t3_1kg2tic,,Nearly 1 million [REDACTED] face losing health insurance as Aetna exits ACA marketplace,True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,3.863,gpt-5-mini
+9436,reddit_submission,t3_1kgi1d6,,"She’s going to drive me insane ([REDACTED]: Parent issues, abuse(?), medical themes)",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in post.""
+}",,3.204,gpt-5-mini
+8385,reddit_submission,t3_1jp29nh,,"Mailing Campaign Feasible, Effective in Improving Pneumococcal Vaccine Rates",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""A mailing campaign is feasible to improve [vaccine] uptake."",
+      ""facet"": ""other"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""pneumococcal vaccine""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""A mailing campaign is effective in improving [vaccine] rates."",
+      ""facet"": ""effectiveness"",
+      ""stance"": ""pro_vaccine"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""pneumococcal vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,30.870,gpt-5-mini
+9492,reddit_submission,t3_1khebqd,,Top 100 nba players of all time (pt 2 after a little over a year),True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.619,gpt-5-mini
+9511,reddit_submission,t3_1khmrfr,,[Article] The epidemiological evaluation of a non-cellular pertussis antigen,True,"{""claims"": [], ""notes"": ""No extractable vaccine claims; only an article title referencing a pertussis antigen.""}",,4.911,gpt-5-mini
+9596,reddit_submission,t3_1kivd64,,Engineered Discontent: Blueprint for a Technocratic World Order,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.749,gpt-5-mini
+9560,reddit_submission,t3_1kibjn8,,Is  whooping cough a classism punishment? I'd say yes,True,"{""claims"": [], ""notes"": ""Post discusses whooping cough as a classism punishment but contains no claim about vaccines or vaccination.""}",,5.534,gpt-5-mini
+8903,reddit_submission,t3_1k4fpry,,"Booked a vaccination in Quebec, pharmacist called to ask whether I have relations with men as it affects which vaccine I get?",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Pharmacists ask about sexual relations with men because it affects which [vaccine] a person receives."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""vaccines""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,18.604,gpt-5-mini
+9758,reddit_submission,t3_1kl2nci,,[OC] Smallpox Deaths in London,True,"{""claims"":[],""notes"":""No vaccine-related claims present in the post.""}",,3.705,gpt-5-mini
+7698,reddit_submission,t3_1iu2r80,,"2016 DARPA made Elon Neuralink front man, and had Elon join CureVac mRNA with Bill Gates. July 2020 Elon: ""We’ve been working on this for about 4 years. Originally meant for rabies vaccine, but it can make pretty much anything that’s an RNA sequence. Critical path is completing human trials.""",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] was originally developed for [disease]."",
+      ""facet"": ""mechanism"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""CureVac mRNA""
+        },
+        {
+          ""type"": ""disease"",
+          ""value"": ""rabies""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""[vaccine] can be designed to encode almost any RNA sequence."",
+      ""facet"": ""mechanism"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""CureVac mRNA""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""The critical path for [vaccine] development is completing human trials."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""CureVac mRNA""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""DARPA and Bill Gates recruited Elon Musk to join [vaccine]."",
+      ""facet"": ""ethics"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""experts_or_orgs_are_corrupt_or_misleading"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""CureVac mRNA""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,62.104,gpt-5-mini
+9737,reddit_submission,t3_1kkukq3,,Is it safe to get chicken pox vaccine more than once?,True,"{
+  ""claims"": [],
+  ""notes"": ""Question asking whether receiving the chickenpox (varicella) vaccine more than once is safe; no assertive vaccine-related claim to extract.""
+}",,7.688,gpt-5-mini
+9702,reddit_submission,t3_1kkcg2k,,Pregnancy without rubella imunity,True,"{""claims"": [], ""notes"": ""Text is a fragment mentioning rubella immunity but makes no explicit claim about vaccines or vaccination.""}",,8.131,gpt-5-mini
+9771,reddit_submission,t3_1kl8o2e,,Anthem BCBS IVIG successes?,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; post asks about IVIG (intravenous immunoglobulin) and Anthem BCBS insurance coverage.""}",,6.830,gpt-5-mini
+9856,reddit_submission,t3_1km8qgi,,How Long Should I Take Probiotics for?,True,"{""claims"": [], ""notes"": ""No vaccine-related content; question about probiotics rather than vaccination.""}",,3.953,gpt-5-mini
+9937,reddit_submission,t3_1kmwx0s,,Call the Midwife: Shadows of the Workhouse (Part 1),True,"{""claims"": [], ""notes"": ""No vaccine-related content; post is a TV episode title.""}",,2.943,gpt-5-mini
+9944,reddit_submission,t3_1kmy2m9,,"An Imperfect, Unnecessary yet Essential List of Nicknames, Labels & Insults: PART 1 of 2",True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,3.102,gpt-5-mini
+10018,reddit_submission,t3_1knm2g8,,I ingested the liquid of this expired pickled garlic,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,2.852,gpt-5-mini
+10029,reddit_submission,t3_1knr6mv,,I'm sorry... a REALITY SHOW!!!???!?!?!???!,True,"{""claims"": [], ""notes"": ""No vaccine-related content""}",,3.613,gpt-5-mini
+10275,reddit_submission,t3_1kq7cwm,,My head is on fire please help,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,3.228,gpt-5-mini
+10508,reddit_submission,t3_1ks2eoy,,Sale Recs based on current collection,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in the post.""
+}",,2.875,gpt-5-mini
+9506,reddit_submission,t3_1khk695,,"Merck rigged Gardasil trials to conceal harms, court documents reveal",True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""The manufacturer of [vaccine] rigged trials to conceal [adverse_effect]."",
+      ""facet"": ""ethics"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""experts_or_orgs_are_corrupt_or_misleading"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""Gardasil""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""harms""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,22.928,gpt-5-mini
+10337,reddit_submission,t3_1kqjy35,,Seeking Participants: Malaria Vaccine Challenge Trial,True,"{
+  ""claims"": [],
+  ""notes"": ""No extractable vaccine-related claims — this is a recruitment announcement for a malaria vaccine challenge trial.""
+}",,5.596,gpt-5-mini
+10509,reddit_submission,t3_1ks2unw,,Here are the Vinegar Syndrome and partner label limited editions with less than 500 copies heading into the Halfway to Black Friday 2025 Sale,True,"{""claims"":[],""notes"":""No vaccine-related content in the post.""}",,3.951,gpt-5-mini
+10555,reddit_submission,t3_1kseolk,,Anthrax - Got The Time Cover - guitar and lefty bass アンスラックス,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post""}",,4.359,gpt-5-mini
+10685,reddit_submission,t3_1kt6xui,,I know I can't be alone - Pancreatitis Perspective/Input,True,"{""claims"": [], ""notes"": ""No vaccine-related claims present in the post.""}",,3.559,gpt-5-mini
+10790,reddit_submission,t3_1ktsm63,,"Virginia Wastewater Curve for the past 45 days posted May 23, 2025",True,"{""claims"": [], ""notes"": ""No vaccine-related content present.""}",,3.231,gpt-5-mini
+10941,reddit_submission,t3_1kv0xwr,,Just really upset w/ them and needing to vent,True,"{""claims"": [], ""notes"":""No vaccine-related content in post.""}",,3.026,gpt-5-mini
+10922,reddit_submission,t3_1kuwlo0,,"Diagnosed with Autoimmune Encephalitis 10 years ago at 12 years old, recovered and lived a completely normal life for several years - possibly relapsing now and scared sh*tless.",True,"{""claims"":[],""notes"":""No vaccine-related claims found; the post describes personal medical history and fear of relapse.""}",,4.290,gpt-5-mini
+10835,reddit_submission,t3_1ku855i,,$ATYR Development Timeline Super Drop,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; post mentions a stock ticker and development timeline but does not reference vaccines or vaccination.""
+}",,6.334,gpt-5-mini
+11015,reddit_submission,t3_1kviwu9,,My pickups from the last couple months.,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,2.972,gpt-5-mini
+10949,reddit_submission,t3_1kv21eb,,How Long Does It Take to Get STD Test Results? – 40 Common Questions Answered,True,"{""claims"": [], ""notes"": ""No vaccine-related content; the post is about STD testing results.""}",,3.861,gpt-5-mini
+11030,reddit_submission,t3_1kvq8my,,"Sierra Leone reports more than 3,000 cases of mpox, and 14 deaths (orig.: La Sierra Leone recense plus de 3 000 cas de mpox, et 14 décès) #Sierra #LeoneSierra Leone reports more than 3,000 cases of mpox, and 14 deaths (orig.: La Sierra Leone recense plus de 3 000 cas de mpox, et 14 décès) #WORLDNE",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post""
+}",,3.468,gpt-5-mini
+10486,reddit_submission,t3_1krw3hm,,People with HIV Show Significantly Low Pneumococcal Vaccination Rates,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""People with [disease] have significantly low [vaccine] vaccination rates."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""disease"",
+          ""value"": ""HIV""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""pneumococcal vaccination""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,18.868,gpt-5-mini
+11038,reddit_submission,t3_1kvtey0,,April 2025 ACIP Recommendations and Other Updates,True,"{
+  ""claims"": [],
+  ""notes"": ""Title/heading only — no substantive vaccine-related claims to extract.""
+}",,4.101,gpt-5-mini
+11175,reddit_submission,t3_1kwuxf4,,Foolproof pressure canning directions?,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,3.027,gpt-5-mini
+11069,reddit_submission,t3_1kw0ndc,,Does my symptoms sound like myo?,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; the post asks whether symptoms indicate myocarditis (myo).""}",,5.611,gpt-5-mini
+11177,reddit_submission,t3_1kwvazo,,Three Cracks in the Foundation of Clinical Medicine That Remain Unaddressed and Simple Solution part 2 of 4,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post title""
+}",,4.711,gpt-5-mini
+11242,reddit_submission,t3_1kx6yvp,,Help with this result please,True,"{""claims"":[],""notes"":""No vaccine-related claims found in the provided post.""}",,3.333,gpt-5-mini
+11277,reddit_submission,t3_1kxfl5r,,MSC Research Project Question Regarding neurological condition management software for neurological conditions,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,3.672,gpt-5-mini
+11477,reddit_submission,t3_1kydu9j,,What program is this guy using?,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,2.403,gpt-5-mini
+11330,reddit_submission,t3_1kxqfax,,Health department warns of severe symptoms as whooping cough outbreak spreads in Oscoda County ([REDACTED] area),True,"{""claims"": [], ""notes"": ""No vaccine-related claims in post; headline reports a whooping cough outbreak and warning but does not mention vaccines.""}",,4.698,gpt-5-mini
+11371,reddit_submission,t3_1kxxj1n,,Mom with cancer in bad relationship,True,"{""claims"": [], ""notes"": ""Post contains no vaccine-related claims.""}",,3.961,gpt-5-mini
+11490,reddit_submission,t3_1kyhs1s,,"6 markers in Geography - Help, please!",True,"{""claims"":[],""notes"":""No vaccine-related content in post.""}",,2.698,gpt-5-mini
+11648,reddit_submission,t3_1kzb6u0,,"Weekly CDC report links for May 30, 2025",True,"{""claims"": [], ""notes"": ""no vaccine-related claims""}",,2.807,gpt-5-mini
+11535,reddit_submission,t3_1kytmpo,,i think i have been cursed and it is ruining my entire life. what do i do?? please help,True,"{""claims"":[],""notes"":""No vaccine-related content in post.""}",,3.867,gpt-5-mini
+11752,reddit_submission,t3_1kzxu2l,,"Infections for Measles, Bird Flu, and Pertussis Increase in 2025",True,"{""claims"":[],""notes"":""Post reports increased infections for diseases (measles, bird flu, pertussis) but makes no claims about vaccines or vaccination.""}",,5.465,gpt-5-mini
+11875,reddit_submission,t3_1l0n9ih,,"Earlier this month, Secretary of State Marco Rubio confirmed that after a six-week purge, 83% of USAID's programs had been permanently cut.",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; post discusses USAID program cuts.""
+}",,3.822,gpt-5-mini
+12055,reddit_submission,t3_1l1nukf,,Cheaper AHCC- where to find?,True,"{""claims"": [], ""notes"": ""No vaccine-related claims found; post asks about purchasing AHCC (a supplement).""}",,4.469,gpt-5-mini
+12179,reddit_submission,t3_1l29ksf,,Kids this is why you don’t be greedy 😭,True,"{""claims"":[],""notes"":""No vaccine-related claims; post does not mention vaccines.""}",,3.417,gpt-5-mini
+12163,reddit_submission,t3_1l26rit,,Negative STI tests but ongoing symptoms,True,"{""claims"": [], ""notes"": ""No vaccine-related claims found in post.""}",,4.720,gpt-5-mini
+11651,reddit_submission,t3_1kzbeos,,Dr Vipin M. Vashishtha: A new study from Germany found that intravenous administration of the SARS-CoV-2 spike protein in mice led to neuroinflammation and accumulation of alpha-synuclein in brain regions associated with Parkinson’s disease.,True,"{
+  ""claims"": [],
+  ""notes"": ""Reports a mouse study about intravenous SARS-CoV-2 spike protein causing neuroinflammation and alpha-synuclein accumulation; does not explicitly claim anything about vaccines or vaccination.""
+}",,10.962,gpt-5-mini
+12160,reddit_submission,t3_1l26b45,,Would have thought we'd learnt from Covid: Foreign aid scheme that contained ebola outbreak faces cuts,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; post mentions COVID and an Ebola outbreak and aid cuts but does not assert anything about vaccines or vaccination.""}",,6.767,gpt-5-mini
+12181,reddit_submission,t3_1l2a2z5,,"“The Tariff.” from the March 22, 1883 Door County Advocate",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,4.053,gpt-5-mini
+12356,reddit_submission,t3_1l35hqn,,After pride month - HIV cases went 📈,True,"{""claims"": [], ""notes"": ""Post mentions an increase in HIV cases after Pride Month but contains no vaccine-related claims.""}",,4.827,gpt-5-mini
+12508,reddit_submission,t3_1l3u1q5,,Another microbe shipping,True,"{""claims"": [], ""notes"": ""No vaccine-related content or insufficient context to extract any claims.""}",,5.592,gpt-5-mini
+12546,reddit_submission,t3_1l3z8zg,,Adult children of anti-vaxxers,True,"{""claims"":[],""notes"":""No explicit vaccine-related claim; the text is an identity/status phrase ('adult children of anti-vaxxers').""}",,4.611,gpt-5-mini
+12621,reddit_submission,t3_1l4bv4t,,Am I tripping or did I have a bad vet experience?,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post""}",,3.332,gpt-5-mini
+10089,reddit_submission,t3_1ko8i97,,My 50 day old LO got the rotavirus vaccine (1st dose)on Monday. She pooped slightly green poop on Tuesday and now it’s been 3 days and she hasn’t pooped at all. She is gassy and fussy and farts are really stinky. Is this normal or something that I should be concerned ?,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""[vaccine] was followed by [adverse_effect], [adverse_effect], and [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""rotavirus vaccine (1st dose)""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""green stool""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""no bowel movements for 3 days""
+        },
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""gassiness and fussiness (stinky gas)""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,51.796,gpt-5-mini
+12194,reddit_submission,t3_1l2cqaa,,Common Barriers Inhibit Pneumococcal Vaccine Uptake Among Older Adults,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Common barriers inhibit [vaccine] uptake among older adults."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""pneumococcal vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,12.244,gpt-5-mini
+10672,reddit_submission,t3_1kt4yhp,,Stop aspirin to avoid vaccine complication vs risk clot?,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Stopping aspirin reduces [adverse_effect] from [vaccine]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""vaccine complications""
+        },
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""general vaccine""
+        }
+      ]
+    },
+    {
+      ""claim_text"": ""Stopping aspirin increases risk of [adverse_effect]."",
+      ""facet"": ""safety"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": [
+        {
+          ""type"": ""adverse_effect"",
+          ""value"": ""blood clots""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,45.453,gpt-5-mini
+12812,reddit_submission,t3_1l5fcof,,"My Progress? From April to tonight, June 2025",True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,5.542,gpt-5-mini
+12953,reddit_submission,t3_1l64ahb,,My crazy abduction story. (And TI/gangstalking),True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,4.908,gpt-5-mini
+13081,reddit_submission,t3_1l6nynl,,"16yr old got a tattoo, with out permission.",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content.""
+}",,3.708,gpt-5-mini
+13343,reddit_submission,t3_1l7lbyy,,Possible idea for an alternate ending to the RDR saga,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.782,gpt-5-mini
+13300,reddit_submission,t3_1l7gr94,,"Canada, any info about this set of heavy, metallic platter set from unknown country from my great aunt, suffragette dr Mary McNeill",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,4.918,gpt-5-mini
+13139,reddit_submission,t3_1l6wf2d,,Shortness of Breath 7 Months PTB Treatment,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; post mentions shortness of breath after TB treatment.""}",,6.671,gpt-5-mini
+13152,reddit_submission,t3_1l6xy7e,,"Kitten bit me, should I get rabies shots?",True,"{""claims"": [], ""notes"": ""No assertive vaccine-related claims — this is a question asking whether rabies vaccination is needed after a kitten bite.""}",,7.180,gpt-5-mini
+13057,reddit_submission,t3_1l6j5yq,,Scared to take the Gardasil 9 vaccine. The offer to take it for free will end in a couple weeks and I have so far turned it down out of fear. Please help,True,"{
+  ""claims"": [],
+  ""notes"": ""Personal expression of fear/hesitancy about Gardasil 9 and refusal to take it; no factual vaccine-related claim to extract.""
+}",,11.881,gpt-5-mini
+13351,reddit_submission,t3_1l7m3jk,,Natural Tips for Vaccine Healing,True,"{
+  ""claims"": [],
+  ""notes"": ""No explicit vaccine-related claim. The phrase appears to be a title offering tips for recovery after vaccination but does not assert a specific claim about vaccines.""
+}",,6.444,gpt-5-mini
+13469,reddit_submission,t3_1l80az9,,Favorite theories/conspiracy theories,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post.""
+}",,4.245,gpt-5-mini
+13845,reddit_submission,t3_1l937mt,,Should I ditch my 13 year-long friendship?,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,3.386,gpt-5-mini
+13757,reddit_submission,t3_1l8tedu,,"At Planet Ant we're performing Harold's Big Break, an original show satirizing commercials and corporations. We run this weekend and next!",True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,4.567,gpt-5-mini
+13397,reddit_submission,t3_1l7s08m,,Yellow Fever Vaccine Strictness,True,"{""claims"": [], ""notes"": ""Ambiguous/insufficient content — only a short phrase/headline without a clear vaccine-related claim.""}",,6.942,gpt-5-mini
+14151,reddit_submission,t3_1l9vgl8,,Michael Beasley revealed on stream with Adin Ross and Neon that he blew out LeBron James in a 1v1 basketball game 👀,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.375,gpt-5-mini
+13986,reddit_submission,t3_1l9i2w4,,Tuberculosis: When Dying Became Fashionable,True,"{""claims"":[],""notes"":""No vaccine-related claims found; post is a short title about tuberculosis.""}",,3.755,gpt-5-mini
+14162,reddit_submission,t3_1l9wnc0,,MRI with general anesthesia in stable 16-month-old — is it worth the risk,True,"{""claims"": [], ""notes"": ""No vaccine-related claims found in the post.""}",,5.449,gpt-5-mini
+14223,reddit_submission,t3_1la1edm,,[r/Fitness_India] Anyone else got summer flu(enterovirus) ?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post.""
+}",,5.071,gpt-5-mini
+14414,reddit_submission,t3_1lai06b,,Construction Safety on Demolition Essay,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.344,gpt-5-mini
+14226,reddit_submission,t3_1la1l0r,,"As a skeptic myself, I think that RationalWiki is quite cocky with their claims",True,"{""claims"": [], ""notes"": ""No vaccine-related claims.""}",,5.380,gpt-5-mini
+14417,reddit_submission,t3_1laias2,,"A deadly virus outbreak, likely a version of smallpox, wiped out the [REDACTED] military between 165 AD and 180 AD. It was called the Antonine Plague and killed between 5 and 10 million people throughout Europe.",True,"{""claims"": [], ""notes"": ""No vaccine-related claims; post is historical description of a disease outbreak.""}",,4.463,gpt-5-mini
+14513,reddit_submission,t3_1laqan3,,Whoa things heating up and coming together,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post.""
+}",,3.903,gpt-5-mini
+14483,reddit_submission,t3_1lanx3z,,Pro-vaxxers: Can you solve this riddle?,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims present; the post only addresses 'Pro-vaxxers' and asks a riddle.""
+}",,4.745,gpt-5-mini
+14470,reddit_submission,t3_1lan5rc,,God didn't make Lyme disease! Man did!!,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; post asserts that Lyme disease was created by humans.""
+}",,5.253,gpt-5-mini
+14443,reddit_submission,t3_1lakrl2,,Why copper detox is uncomfortable and why we crave copper when we are coppertoxic,True,"{""claims"":[],""notes"":""No vaccine-related claims; post discusses copper detox and copper toxicity (non-vaccine topic).""}",,5.394,gpt-5-mini
+14623,reddit_submission,t3_1laye2e,,My villagers are screwed,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,3.162,gpt-5-mini
+14622,reddit_submission,t3_1lay8bw,,"Chronicles of the Iron Tiger, Entry 2",True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,3.901,gpt-5-mini
+13899,reddit_submission,t3_1l98ad5,,RFK Jr empanels vaccine committee including Great Barrington Declaration scientist,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""RFK Jr forms a vaccine committee that includes a Great Barrington Declaration scientist."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    }
+  ],
+  ""notes"": null
+}",,17.711,gpt-5-mini
+14578,reddit_submission,t3_1lauz7i,,Here is every US politician in Congress who currently holds stock positions in aerospace and defense companies that benefit from a war in the Middle East: ...,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; the post discusses politicians' stock holdings in aerospace/defense companies and conflicts of interest related to war.""
+}",,6.069,gpt-5-mini
+14650,reddit_submission,t3_1lb1q5u,,"[REDACTED] role model Michael Tait (DC Talk, Newsboys) just confessed on IG to 20+ years of cocaine & alcohol abuse and said the recent reports of him sexually assaulting boys “are sadly largely true”.",True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,5.097,gpt-5-mini
+14718,reddit_submission,t3_1lb96iw,,Rampant measles spread in northern Alberta prompts another standing exposure advisory | Globalnews.ca,True,"{""claims"": [], ""notes"": ""No vaccine-related claims found; headline reports measles spread and an exposure advisory but says nothing about vaccines.""}",,4.006,gpt-5-mini
+14661,reddit_submission,t3_1lb2xbu,,I'm looking for a hospital where Covishield is available,True,"{""claims"": [], ""notes"": ""Request for availability of Covishield (no assertive vaccine-related claims present).""}",,8.207,gpt-5-mini
+14726,reddit_submission,t3_1lb9zhf,,Thats à lot of disease 💀☠️,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in post""
+}",,3.894,gpt-5-mini
+14631,reddit_submission,t3_1laz6xp,,41F wife has been living like a stranger. It’s worse than having a roommate. Is it fair that I(45M)ask her to pay her half of the living expenses?,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,10.327,gpt-5-mini
+14736,reddit_submission,t3_1lbaxdf,,The TES score: A Threshold for Emergent Sentience,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.909,gpt-5-mini
+14780,reddit_submission,t3_1lbesqh,,The Invitation That Can't be Taken Back,True,"{""claims"": [], ""notes"": ""No vaccine-related content or claims in the post.""}",,3.599,gpt-5-mini
+14870,reddit_submission,t3_1lbo795,,Had unprotected sex two weeks ago. Anus feels irritated but I didn’t have anal. No bumps from what I can see. Please read,True,"{""claims"": [], ""notes"": ""No vaccine-related claims in the post.""}",,3.079,gpt-5-mini
+14915,reddit_submission,t3_1lbruf8,,Improved Cylinder for trap,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in post""
+}",,3.099,gpt-5-mini
+14885,reddit_submission,t3_1lbpjy6,,Michael Beasley revealed on stream with Adin Ross and Neon that he blew out LeBron James in a 1v1 basketball game 👀,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found in the post.""
+}",,4.389,gpt-5-mini
+14992,reddit_submission,t3_1lbysal,,"[TOMT] Long running conspiracy youtuber couple ""think beyond the tv""???",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in the post.""
+}",,4.809,gpt-5-mini
+15058,reddit_submission,t3_1lc4xy5,,I went on a trip with Lyme Group…,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in the post.""
+}",,4.153,gpt-5-mini
+15159,reddit_submission,t3_1lcfceu,,Veterinarians Share Common Signs Of Lyme Disease In Dogs | HuffPost Life,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in the post.""
+}",,3.093,gpt-5-mini
+15184,reddit_submission,t3_1lci734,,Whats the worst part of raising a [REDACTED] garou from infancy to maturity?,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,4.098,gpt-5-mini
+15240,reddit_submission,t3_1lcocjf,,Michael Beasley revealed on stream with Adin Ross and Neon that he blew out LeBron James in a 1v1 basketball game 👀,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,4.380,gpt-5-mini
+15440,reddit_submission,t3_1ld4qee,,Scientists genetically engineer a lethal mosquito STD to combat malaria,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims: the post discusses genetically engineered mosquitoes as a control method for malaria, not vaccines or vaccination.""
+}",,4.062,gpt-5-mini
+15228,reddit_submission,t3_1lcnmo6,,"Red burning face, red joints, weird leg pain after flu anyone else gone through this and recovered?",True,"{""claims"": [], ""notes"": ""No explicit vaccine-related claims; 'after flu' is ambiguous between influenza illness and flu vaccination.""}",,8.725,gpt-5-mini
+15295,reddit_submission,t3_1lctb18,,"Tick Season 2025 in Delaware: Prevention Tips, Species to Know & Lyme Disease Risk",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims found; post is about tick season and Lyme disease risk.""
+}",,5.370,gpt-5-mini
+14520,reddit_submission,t3_1laqrbk,,RFK Jr. Re-Staffs ACIP With Half As Many Experts But Infinitely More Anti-Vaxx Crackpots,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""RFK Jr. reduced the number of experts on ACIP by half."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    },
+    {
+      ""claim_text"": ""RFK Jr. replaced ACIP members with many anti-vaccine individuals."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    }
+  ],
+  ""notes"": null
+}",,35.287,gpt-5-mini
+15589,reddit_submission,t3_1ldhlvo,,"""Don't let good grammar spoil good writing"" by Philip Yaffe (Wall Street Journal reporter/feature writer, book author, and university lecturer in Brussels, Belgium)",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,4.262,gpt-5-mini
+15649,reddit_submission,t3_1ldmmqi,,My mom sent this to me? What does it even mean???,True,"{""claims"": [], ""notes"": ""No vaccine-related claims in the post.""}",,4.502,gpt-5-mini
+14530,reddit_submission,t3_1lar8lw,,Medical experts flood Twitter with SCRIPTED Big Pharma propaganda after Secretary Kennedy purges ACIP,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Medical experts spread scripted propaganda from pharmaceutical companies on Twitter."",
+      ""facet"": ""ethics"",
+      ""stance"": ""anti_vaccine"",
+      ""template"": ""experts_or_orgs_are_corrupt_or_misleading"",
+      ""entities"": []
+    },
+    {
+      ""claim_text"": ""Secretary Kennedy purges ACIP."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    }
+  ],
+  ""notes"": null
+}",,35.451,gpt-5-mini
+15697,reddit_submission,t3_1ldpjyz,,Experience with schizophrenia-like symptoms?,True,"{""claims"": [], ""notes"": ""No vaccine-related content; the post is a general question about symptoms, not vaccines.""}",,3.778,gpt-5-mini
+15864,reddit_submission,t3_1le3j0u,,"The Mimic/Glitchtrap IS William Afton, and his own Grandpa!…. Sort of.{Slight Spoilers for Secret of The Mimic and speculation for the franchise going forward}",True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.504,gpt-5-mini
+15553,reddit_submission,t3_1ldei06,,"Roommate gets Covid… work says, “no worries, come on in!”",True,"{""claims"": [], ""notes"": ""No vaccine-related claims — mentions COVID exposure and workplace policy but says nothing about vaccines.""}",,8.081,gpt-5-mini
+16082,reddit_submission,t3_1lejvns,,Neighbour’s Trees Encroaching,True,"{""claims"": [], ""notes"": ""No vaccine-related content; post unrelated to vaccination.""}",,3.742,gpt-5-mini
+15880,reddit_submission,t3_1le4j93,,"Welp, ticks are here now and I dont know what to do.",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content.""
+}",,5.441,gpt-5-mini
+16092,reddit_submission,t3_1lek5hb,,"'I Don't Want To Leave My Home': Tehran, Jerusalem Residents Speak As War Escalates || Tone-deaf [REDACTED] residents whine about having a miniscule taste of what [REDACTED] have been through",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,7.979,gpt-5-mini
+16430,reddit_submission,t3_1lerw1t,,Sixth measles case reported. Now matching the total number reported in 2024.,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims; post only reports measles case counts.""
+}",,5.121,gpt-5-mini
+16454,reddit_submission,t3_1let1rc,,1 week after H. Pylori treatment - need some advice,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,3.995,gpt-5-mini
+16424,reddit_submission,t3_1lersc7,,Any of y'all LCs long time smokers/vapers?,True,"{""claims"": [], ""notes"": ""No vaccine-related content; the post asks about long-time smokers/vapers and does not make vaccination claims.""}",,8.306,gpt-5-mini
+16166,reddit_submission,t3_1lelscc,,HHS canceled grants for biotechs with non-U.S. funding,True,"{
+  ""claims"": [],
+  ""notes"": ""No explicit vaccine-related claim — post refers to HHS cancelling grants for biotechs generally, not vaccines.""
+}",,9.594,gpt-5-mini
+16484,reddit_submission,t3_1leuks9,,"If Universal wants to expand to the extent they want to (4 theme parks, possibly a second water park, more resorts), they NEED a monorail.",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,5.132,gpt-5-mini
+16534,reddit_submission,t3_1lewst4,,Ghosted by “boss” after asking for payment.,True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,4.816,gpt-5-mini
+16679,reddit_submission,t3_1lf5t58,,Is it normal for a hedgehog bite to still hurt after half a day?,True,"{""claims"":[],""notes"":""No vaccine-related content in the post.""}",,5.877,gpt-5-mini
+16816,reddit_submission,t3_1lfbksq,,"Daily Discussion - June 19, 2025",True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,4.599,gpt-5-mini
+16546,reddit_submission,t3_1lexb3c,,Kristi Noem Credits Speedy Allergy Recovery To RFK Jr.'s Recommended Leech Bloodletting And Refreshing Dip In E. Coli Rich Duwamish River,True,"{""claims"":[],""notes"":""No vaccine-related claims found — post refers to leech bloodletting and river dip, not vaccines or vaccination.""}",,9.505,gpt-5-mini
+16536,reddit_submission,t3_1leww4e,,'A Lot Of Americans Are Going To Die': Vaccine Expert Speaks Out After Resigning From CDC,True,"{""claims"":[],""notes"":""Headline quotes an expert saying 'A lot of Americans are going to die' but does not state any explicit vaccine-related claim or link deaths to vaccination or vaccine policy, so no extractable vaccine claims.""}",,11.264,gpt-5-mini
+16867,reddit_submission,t3_1lfdark,,Bad players camping heroes. Heroes should only be available to the best in the lobby. CMV,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; post is about gaming (heroes in a lobby).""}",,7.449,gpt-5-mini
+14993,reddit_submission,t3_1lbytdg,,Secretary of Health and Human Services Robert F. Kennedy Jr. made a series of inaccurate claims about vaccines during a Fox News appearance Thursday.,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Robert F. Kennedy Jr. made inaccurate claims about [vaccine]."",
+      ""facet"": ""evidence"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""experts_or_orgs_are_corrupt_or_misleading"",
+      ""entities"": [
+        {
+          ""type"": ""vaccine_concept"",
+          ""value"": ""general vaccine""
+        }
+      ]
+    }
+  ],
+  ""notes"": null
+}",,41.623,gpt-5-mini
+16905,reddit_submission,t3_1lff90l,,Water vapor sealing existing house if re-doing siding,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,4.837,gpt-5-mini
+16902,reddit_submission,t3_1lff2y9,,CMV: There's nothing wrong with white pride,True,"{""claims"":[],""notes"":""No vaccine-related content in the post.""}",,5.082,gpt-5-mini
+16964,reddit_submission,t3_1lfigfr,,question about contractual write-off in medical bill,True,"{
+  ""claims"": [],
+  ""notes"": ""Post does not mention vaccines or vaccination.""
+}",,3.619,gpt-5-mini
+17246,reddit_submission,t3_1lfuita,,"Please help. Cat is clearly sick, but the vet didn’t find anything wrong. Need advice on how to proceed.",True,"{""claims"":[],""notes"":""No vaccine-related content in post.""}",,3.739,gpt-5-mini
+17128,reddit_submission,t3_1lfpe31,,"Rabies symptoms manifest in a [REDACTED] soldier. The disease induces severe throat spasms, both when trying to swallow and even at the thought of swallowing.",True,"{
+  ""claims"": [],
+  ""notes"": ""Post describes rabies symptoms and contains no vaccine-related claims.""
+}",,5.514,gpt-5-mini
+17313,reddit_submission,t3_1lfxudw,,Here's how I think a Total War 40k title could work,True,"{""claims"":[],""notes"":""No vaccine-related content in post.""}",,3.551,gpt-5-mini
+17332,reddit_submission,t3_1lfytx0,,Figures of Speech AI Response,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.606,gpt-5-mini
+17351,reddit_submission,t3_1lfzy2g,,This will make her head explode,True,"{""claims"": [], ""notes"": ""No vaccine-related claims in post.""}",,2.871,gpt-5-mini
+17347,reddit_submission,t3_1lfzp5p,,Top 5 Progressive Delivery Consulting Companies in 2025,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.854,gpt-5-mini
+17381,reddit_submission,t3_1lg163f,,Fired federal workers struggle to get new jobs in private sector,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,3.496,gpt-5-mini
+17681,reddit_submission,t3_1lgcp33,,"Deltas awarded in ""CMV: Future of AI is built on fluff and greed""",True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,3.705,gpt-5-mini
+17796,reddit_submission,t3_1lgfuvw,,CMV: Not enough [REDACTED] understand that the IAS/Indian Civil Services is the single biggest roadblock to India's development,True,"{""claims"": [], ""notes"": ""No vaccine-related claims in the post.""}",,4.447,gpt-5-mini
+17337,reddit_submission,t3_1lfzkg1,,What is wrong with my resume,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,10.186,gpt-5-mini
+17939,reddit_submission,t3_1lgkstt,,"CMV: Darth Vader is the most overrated sw character, strenght wise.",True,"{""claims"":[],""notes"":""No vaccine-related content.""}",,2.693,gpt-5-mini
+17992,reddit_submission,t3_1lgmj4u,,Tumor Transcriptome Profiling Using Bulk RNA-seq and Clinical Metadata,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.651,gpt-5-mini
+18241,reddit_submission,t3_1lgufmy,,"CMV: If certain [REDACTED] really believe what they say about [REDACTED], then political violence against the left is the logical— and moral — conclusion, and it surprises it doesn't happen more often.",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post""
+}",,3.383,gpt-5-mini
+17524,reddit_submission,t3_1lg73mq,,Peripherally targeted analgesia via AAV-mediated sensory neuron–specific inhibition of multiple pronociceptive sodium channels,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims present.""
+}",,10.112,gpt-5-mini
+18315,reddit_submission,t3_1lgwjnh,,We could all take a lesson from Charlie,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,2.684,gpt-5-mini
+17894,reddit_submission,t3_1lgjbse,,Some thrash bands I ranked,True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,8.993,gpt-5-mini
+18327,reddit_submission,t3_1lgwre7,,FEMA: You're on your own disaster guidelines,True,"{""claims"":[],""notes"":""Post contains no vaccine-related claims.""}",,3.142,gpt-5-mini
+18418,reddit_submission,t3_1lgyyly,,Is Mitolyn the Key to Better Wellness? In-Depth Supplement Review,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post.""
+}",,3.513,gpt-5-mini
+18337,reddit_submission,t3_1lgwzlp,,"Excessive drinking​ linked to jump in high blood pressure deaths during COVID pandemic, CDC report says",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims in post.""
+}",,4.147,gpt-5-mini
+18381,reddit_submission,t3_1lgy8qz,,"The COVID-19 hoax, brought to you by [REDACTED]",True,"{""claims"": [], ""notes"": ""Post asserts COVID-19 is a hoax but contains no claim about vaccines.""}",,5.137,gpt-5-mini
+18503,reddit_submission,t3_1lh0bb3,,Mitolyn Reviews:~ (We Tried It 365) My Honest Review!,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post""
+}",,3.897,gpt-5-mini
+18580,reddit_submission,t3_1lh1nz2,,Plastic vs Stainless Steel Dishwasher Tub? Best 2025 Guide,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content.""
+}",,3.298,gpt-5-mini
+18619,reddit_submission,t3_1lh2e49,,Smart Lockers Australia: Revolutionizing Secure Storage and Parcel Delivery,True,"{""claims"": [], ""notes"": ""No vaccine-related content in the post.""}",,2.845,gpt-5-mini
+18633,reddit_submission,t3_1lh2og3,,Inflammatory Modulation in Severe COVID-19,True,"{""claims"":[],""notes"":""No vaccine-related content: title about inflammatory modulation in severe COVID-19 only.""}",,2.494,gpt-5-mini
+18979,reddit_submission,t3_1lh9yng,,Prodentim Complaints Investigated: 2025 User Reviews Tested & Verified,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.240,gpt-5-mini
+18999,reddit_submission,t3_1lha4jg,,The Prostavive Reviews (I Tried It 90) My Honest Review 2025,True,"{""claims"":[],""notes"":""No vaccine-related content in post.""}",,3.298,gpt-5-mini
+18793,reddit_submission,t3_1lh5vgo,,"Canada has a measles outbreak, ""it a murica's fault""",True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claims present; post mentions a measles outbreak and assigns blame but says nothing about vaccines.""
+}",,5.127,gpt-5-mini
+19078,reddit_submission,t3_1lhbaqe,,Aqua Sculpt Reviews 2025:~ (We Tried It 365) My Honest Review 2025,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,4.173,gpt-5-mini
+19068,reddit_submission,t3_1lhb6vr,,"Alberta babies have been born with measles due to outbreaks, worrying doctors",True,"{
+  ""claims"": [],
+  ""notes"": ""No explicit vaccine-related claim — post reports measles outbreaks causing newborn infections but does not mention vaccines, vaccination, safety, effectiveness, or policy.""
+}",,6.721,gpt-5-mini
+19467,reddit_submission,t3_1lhipdq,,"[10 YOE] | Resume Review | Mechanical Design Engineer | US, WA state, seeking level III engineering or higher position.",True,"{""claims"": [], ""notes"": ""No vaccine-related content in post.""}",,2.672,gpt-5-mini
+19302,reddit_submission,t3_1lhfg58,,Bedridden with 4 kids… anyone have any ideas or suggestions?,True,"{""claims"": [], ""notes"": ""No vaccine-related content.""}",,4.428,gpt-5-mini
+19213,reddit_submission,t3_1lhduf3,,I am doing it rigjt or is to early to tell?,True,"{""claims"":[],""notes"":""No vaccine-related claims in the post.""}",,6.289,gpt-5-mini
+19433,reddit_submission,t3_1lhhx8n,,Feels like mumps in front of my worst ear?,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; the post reports a symptom (possible mumps) only.""}",,5.266,gpt-5-mini
+19594,reddit_submission,t3_1lhl6xe,,AI is still so bad at adding unrealistic wargoals,True,"{""claims"": [], ""notes"": ""no vaccine-related content""}",,3.036,gpt-5-mini
+19759,reddit_submission,t3_1lhnql9,,The voices are getting louder in my head,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.154,gpt-5-mini
+19492,reddit_submission,t3_1lhj6vz,,CMV: MRI *should* be developed as a preventative screening tool,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related claim — recommends developing MRI as a preventative screening tool for CMV (not about vaccines).""
+}",,5.526,gpt-5-mini
+19798,reddit_submission,t3_1lho49f,,does anyone know why i don’t have mystic lighting as an option,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content in the post.""
+}",,3.980,gpt-5-mini
+19809,reddit_submission,t3_1lho8dk,,The River’s Flow: Why We Face the Nearest River in Our Rites,True,"{
+  ""claims"": [],
+  ""notes"": ""No vaccine-related content""
+}",,4.055,gpt-5-mini
+17422,reddit_submission,t3_1lg33nw,,Vaccine advisers to review ingredient RFK Jr. has long wanted banned,True,"{
+  ""claims"": [
+    {
+      ""claim_text"": ""Vaccine advisers will review a vaccine ingredient that RFK Jr. has long wanted banned."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    },
+    {
+      ""claim_text"": ""RFK Jr. has long wanted a vaccine ingredient banned."",
+      ""facet"": ""policy"",
+      ""stance"": ""neutral_or_unclear"",
+      ""template"": ""other"",
+      ""entities"": []
+    }
+  ],
+  ""notes"": null
+}",,30.614,gpt-5-mini
+19876,reddit_submission,t3_1lhp42h,,New Orleans police want broad approval to use facial recognition tech,True,"{""claims"": [], ""notes"": ""No vaccine-related claims; post is about police use of facial recognition technology.""}",,4.627,gpt-5-mini

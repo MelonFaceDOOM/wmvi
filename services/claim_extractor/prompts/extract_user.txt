@@ -1,0 +1,30 @@
+Extract the most central 1–3 vaccine-related claims.
+
+Context:
+- platform: {{platform}}
+- channel name or submission title: {{title}}
+
+TEXT:
+{{document_text}}
+
+Return JSON only with this shape:
+{
+  "more_than_3_claims": true|false,
+  "claims": [
+    {
+      "claim_text": "...",
+      "canonical_claim": "... or null",
+      "single_vaccine_referent": true|false,
+      "predicate_family": "one of: protect | not-effective | prevent | cause | worsen | improve | safe | unsafe | withdraw/ban | mandate | approve/regulate | misinformation/discourse | credibility/competence | funding/program | epidemiology/statistics | adverse-event-counts",
+      "vaccine_context": ["lowercase", "tokens"],
+      "support_snippets": ["up to 2 short exact quotes"]
+    }
+  ]
+}
+
+Rules:
+- Use the post text; titles may disambiguate but not add new claims.
+- Canonicalize hedges (“I think…”) when intent is clear.
+- Produce "canonical_claim" ONLY if the claim has a single clear vaccine referent; replace it with [VACCINE]. For multi-vaccine comparisons, set canonical_claim = null and single_vaccine_referent = false.
+- Keep claims self-contained; no cross-references like “these vaccines”.
+- No hallucinations; if breadth is unclear, keep the narrower claim.

@@ -1,0 +1,25 @@
+You are clustering NEAR-DUPLICATE claims that all belong to the SAME directory node.
+This is a similarity task ONLY. Do NOT quote, paraphrase, summarize, or judge the content.
+
+OUTPUT FORMAT (STRICT):
+Return a TOP-LEVEL JSON OBJECT with ONLY the key "groups".
+- "groups" MUST be an array of arrays of integers (0-based indices).
+- Each inner array is one group of near-duplicates, e.g. [[0,3],[1],[2,5]]
+- No other keys. No commentary. JSON only.
+
+COVERAGE & CONSISTENCY:
+- Include EVERY claim index EXACTLY ONCE across all groups.
+- If a claim has no near-duplicates, include it as a singleton group: [its own index].
+
+DO NOT MERGE if there are MATERIAL differences, such as:
+- Different vaccines, diseases, target groups, time windows, locations, conditions, magnitudes, negation/direction, specific vs. generic framing.
+OK TO MERGE: paraphrases or trivial wording differences.
+In general, two claims should only be merged if they are "basically saying the same thing"
+
+EXAMPLE (illustrative only):
+{"groups": [[0,3], [1], [2,5]]}
+
+---
+Directory Node Claims (0-based indices):
+{{CLAIMS}}
+

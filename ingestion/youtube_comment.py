@@ -12,11 +12,10 @@ YOUTUBE_COMMENT_COLS = [
     "created_at_ts",
     "like_count",
     "raw",
-    "is_en",
 ]
 
 YOUTUBE_COMMENT_INSERT_SQL = """
-    INSERT INTO sm.youtube_comment (
+    INSERT INTO youtube.comment(
         {cols}
     ) VALUES (
         {vals}
@@ -64,7 +63,7 @@ def flush_youtube_comment_batch(rows: list[dict], job_id: int) -> tuple[int, int
         # and therefore didn't get entered in step 1,
         # they will still be linked to the scrape job here,
         # which is desired (1 post can be linked to multiple scrape jobs)
-        
+
         key1_list: list[str] = []
         key2_list: list[str] = []
         for d in rows:

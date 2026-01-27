@@ -1,0 +1,62 @@
+what's next?
+One big area for improvement would be better context around post objects. not all of that can be done at once.
+Another area would be to improve the claim browser app. or rather, to rewrite it into what will be the actual app.
+Run extraction on more posts
+change app to use db
+extend analytics of app to get all the stuff i want (metrics over time)
+
+big future changes:
+add more context to posts (1-n parent posts, article title/summary)
+image transcription/interpretation
+video/podcast transcription/summary
+linked post title/body summary
+
+browsing tool changes:
+should be able to mark posts into relevant categories so they can be watched in the future.
+can't expect identical claims to be extracted.
+but can say "it should have no claim," "it should have 1 claim in category A, one in category B"
+
+filtering: default view should show all claims and they fields. Then there should be filters at the top
+ - template
+ - vaccine objects
+ - has...
+
+--===NULL RESULTS===---
+ - MAJOR NOTES -
+ 
+
+content of post should be looked at, not just title:
+post_id: 8133
+Hot Take on the Vaccines-causing-autism debate 
+ 
+ 
+should epi data/case counts be captured?
+post_id: 1767
+Covid-19 Update for November 10: 484 new cases (4.33% tests positive), 561 recoveries, 5 deaths
+
+post_id: 2780
+Covid-19 (Mini)-Update for July 6 (7 day total): Hospitalized: 568 (-21 over last week), ICU: 21 (+8), 1,035 reported cases (14.46% tests positive), 15 death
+
+general misinfo claim:
+post_id: 3577
+“The greatest perpetrator of misinformation during the pandemic has been the United States government.”
+
+Sometimes questions contain asserstions (not necessarily in this case, but keep an eye on this):}
+post_id: 4798
+RSV after beyfortus, any experiences?
+
+Convoluted vague conspiracy claim
+post_id: 7068
+Though the risk of avian flu to the general public remains low, people on social media seem to be concerned about the timing of global media reports (right as a certain someone prepares to take office), expressing their attitudes towards practices that cause economies to collapse. 
+
+Disease conspiracy claims should be considered as they are directly relevant to vaccine usage.
+post_id: 7206
+Sabbatean Frankist Futurist Ray Kurzweil told NDT we're all gonna have nanobots in our blood (graphene neural lace) connected to Starlink WiFi by 2030. Ghislaine Maxwell BFF Sabbatean Frankist Virologist Nathan Wolfe literally created COVID-19. Same ilk Albert Bourla is Pfizer CEO
+
+ - MINOR NOTES-
+no claim, but would possibly want to capture in an AEFI detection system:
+post_id: 838
+22F Reaction to flu vaccine - should I be concerned?
+
+post_id: 7160
+Reaction to Shingrix, anyone?

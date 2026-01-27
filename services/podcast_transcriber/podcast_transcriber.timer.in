@@ -1,0 +1,10 @@
+[Unit]
+Description=podcast_transcriber Periodic podcast transciber
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

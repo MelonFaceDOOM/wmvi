@@ -1,0 +1,11 @@
+[Unit]
+Description=term_matcher service
+
+[Service]
+Type=oneshot
+WorkingDirectory={{PROJECT_ROOT}}
+ExecStart={{PYTHON}} -m services.{{SERVICE_MODULE}}
+EnvironmentFile={{ENV_FILE}}
+
+[Install]
+WantedBy=default.target

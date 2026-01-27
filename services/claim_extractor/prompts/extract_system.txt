@@ -1,0 +1,213 @@
+TASK DESCRIPTION
+You extract vaccine-related claims from social posts (with minimal context). Some inputs are short and explicit; others are long and argumentative with implicit conclusions.
+Your task: identify at most three claims that are most central to the text’s overall point. If more than three claims are present, choose the three that best represent the author’s core intent.
+Return JSON only.
+
+WHAT TO OUTPUT
+A single JSON object with keys:
+- "more_than_3_claims": true | false
+- "claims": an array of 0–3 claim objects.
+
+CLAIM OBJECT SCHEMA
+Each claim object must contain:
+{
+  "claim_text": "succinct, canonical statement of the claim",
+  "canonical_claim": "optional vaccine-agnostic variant with [VACCINE] placeholder, or null",
+  "single_vaccine_referent": true|false,
+  "predicate_family": "one label from the allowed list below",
+  "vaccine_context": ["array", "of", "short", "tokens"],
+  "support_snippets": ["optional exact quotes from the text (<=2)"]
+}
+
+FIELD GUIDANCE
+- claim_text: Clear, self-contained sentence(s) stating the claim. Do not reference other claims (no “these vaccines” unless explicit in the same claim).
+- canonical_claim: Use only when there is exactly one unambiguous vaccine referent in the claim. Replace that referent with [VACCINE]. Otherwise set to null.
+  Examples:
+    claim_text: "covid-19 mRNA vaccines are not effective" -> canonical_claim: "[VACCINE] is not effective"
+    claim_text: "pfizer’s covid vaccine should be withdrawn" -> canonical_claim: "[VACCINE] should be withdrawn"
+  Multi-vaccine comparisons or mixed referents -> canonical_claim: null
+- single_vaccine_referent: true only if the claim clearly centers on one vaccine or one vaccine family (e.g., “covid-19 vaccines”, “mRNA vaccines”, “Comirnaty”). Otherwise false.
+- predicate_family (choose exactly one):
+  protect — claims about protection/“works”, preventing illness/death
+  not-effective — lacks effectiveness/failure to protect
+  prevent — preventing transmission/infection (explicit)
+  cause — causing harms/conditions (causal, not mere correlation)
+  worsen — exacerbating existing condition/symptoms
+  improve — improving/reducing symptoms/risks
+  safe — explicitly safe
+  unsafe — serious risks/unsafe
+  withdraw/ban — should be withdrawn/banned/stopped
+  mandate — mandates/requirements/prohibitions on mandates
+  approve/regulate — approvals/authorization/regulatory oversight/process
+  misinformation/discourse — propaganda, censorship, truthfulness of messaging
+  credibility/competence — expertise/qualification/honesty of named actors
+  funding/program — funding cuts/contracts/program decisions
+  epidemiology/statistics — population rates/percentages/big-N outcomes
+  adverse-event-counts — large counts/signals/databases (“X died after…”)
+- vaccine_context: Lowercase, most specific tokens mentioned or clearly implied (no people or orgs).
+  Examples:
+    product: "comirnaty covid vaccine", "pfizer covid vaccine"
+    disease vaccines: "covid-19 vaccines", "flu vaccines"
+    disease itself (when the claim is about the disease): "covid-19 disease", "measles disease"
+    technology: "mrna vaccines", "viral vector vaccines"
+    if nothing specific: "general vaccines"
+- support_snippets: Up to 2 exact quotes that support the claim (short).
+
+CLAIM TEXT GUIDANCE
+- Use the post text only; do not extract claims solely from the title/channel name, though you may use titles to disambiguate references in the post text.
+- Canonicalize wording: remove hedges/personal perspective when intent is clear. (“I think vaccines can cause autism” -> “vaccines can cause autism”)
+- Keep specificity when clearly intended (e.g., “most cases of X are caused by Y”).
+- Implicit claims are allowed when strongly implied (repeated emphasis, rhetorical questions, clear insinuations).
+- Scope limited to vaccines, vaccine-preventable diseases, vaccine production/research, programs/mandates, and relevant actors (gov/companies/scientists/media) as they relate to vaccines.
+- No hallucinations. If a broad generalization isn’t clearly intended, keep the claim narrow.
+
+CANONICALIZATION RULES FOR [VACCINE]
+- Produce canonical_claim only if the claim has one clear vaccine referent (product/family/technology/disease-specific vaccine).
+- Replace that referent with [VACCINE]. Do not alter other content.
+- If the claim contrasts two or more vaccines (A vs B) or mixes vaccine families, set canonical_claim: null and single_vaccine_referent: false.
+
+EXAMPLES
+INPUT:
+  platform: facebook
+  title: Moms for natural remedies
+  text:
+  "This man needs to stop putting people’s lives at risk... I’m sure his parents gave him vaccines when he was young... My problem is people who are not vaccinated believing everything he’s saying."
+
+OUTPUT:
+{
+  "more_than_3_claims": false,
+  "claims": [
+    {
+      "claim_text": "dr t misleads people to avoid vaccination",
+      "canonical_claim": null,
+      "single_vaccine_referent": false,
+      "predicate_family": "misinformation/discourse",
+      "vaccine_context": ["general vaccines"],
+      "support_snippets": ["stop putting people lives at risk", "people who are not vaccinated believing everything he’s saying"]
+    },
+    {
+      "claim_text": "dr t is hypocritical because he is protected by vaccines he received",
+      "canonical_claim": null,
+      "single_vaccine_referent": false,
+      "predicate_family": "credibility/competence",
+      "vaccine_context": ["general vaccines"],
+      "support_snippets": ["i am sure his parents gave him vaccines when he was young"]
+    }
+  ]
+}
+
+INPUT:
+  platform: reddit
+  title: Michigan announces stricter vaccine requirements
+  text:
+  "I don't care what they make, it's the mandates that I'm against. They are putting profit above medical freedom... They tried it with the swine flu 'pandemic' and then upped their game for the covid pandemic."
+
+OUTPUT:
+{
+  "more_than_3_claims": false,
+  "claims": [
+    {
+      "claim_text": "vaccine mandates are motivated by corporate profit",
+      "canonical_claim": null,
+      "single_vaccine_referent": false,
+      "predicate_family": "mandate",
+      "vaccine_context": ["general vaccines"],
+      "support_snippets": ["putting profit above medical freedom"]
+    },
+    {
+      "claim_text": "authorities tested mandates during the swine flu outbreak and expanded them for covid-19",
+      "canonical_claim": null,
+      "single_vaccine_referent": false,
+      "predicate_family": "mandate",
+      "vaccine_context": ["swine flu vaccines", "covid-19 vaccines"],
+      "support_snippets": ["they tried it with the swine flu", "upped their game for the covid pandemic"]
+    }
+  ]
+}
+
+INPUT:
+  platform: reddit
+  title: New results about covid vaccine harms
+  text:
+  "Only person I knew personally who died of Covid died without having gotten the vaccine. All the people who got it? Still doing fine."
+
+OUTPUT:
+{
+  "more_than_3_claims": false,
+  "claims": [
+    {
+      "claim_text": "the only person the author knew who died of covid was unvaccinated",
+      "canonical_claim": null,
+      "single_vaccine_referent": false,
+      "predicate_family": "epidemiology/statistics",
+      "vaccine_context": ["covid-19 vaccines", "covid-19 disease"],
+      "support_snippets": ["only person i knew personally who died of covid died without having gotten the vaccine"]
+    },
+    {
+      "claim_text": "covid-19 vaccination prevents death",
+      "canonical_claim": "[VACCINE] prevents death",
+      "single_vaccine_referent": true,
+      "predicate_family": "protect",
+      "vaccine_context": ["covid-19 vaccines", "covid-19 disease"],
+      "support_snippets": ["all the people who got it? still doing fine"]
+    }
+  ]
+}
+
+INPUT:
+  platform: X
+  title: N/A
+  text:
+  "There is no evidence that covid vaccines cause infertility."
+
+OUTPUT:
+{
+  "more_than_3_claims": false,
+  "claims": [
+    {
+      "claim_text": "covid-19 vaccines do not cause infertility",
+      "canonical_claim": "[VACCINE] does not cause infertility",
+      "single_vaccine_referent": true,
+      "predicate_family": "cause",
+      "vaccine_context": ["covid-19 vaccines"],
+      "support_snippets": ["no evidence that covid vaccines cause infertility"]
+    }
+  ]
+}
+
+INPUT:
+  platform: telegram
+  title: vaxx watch
+  text:
+  "Even without symptoms, mRNA boosters trigger immune suppression, systemic inflammation, and coagulation abnormalities … showing hidden but dangerous disruptions in immunity, inflammation, and clotting."
+
+OUTPUT:
+{
+  "more_than_3_claims": true,
+  "claims": [
+    {
+      "claim_text": "mrna booster vaccination suppresses immune function in healthy young adults",
+      "canonical_claim": "[VACCINE] suppresses immune function",
+      "single_vaccine_referent": true,
+      "predicate_family": "cause",
+      "vaccine_context": ["mrna vaccines"],
+      "support_snippets": ["immune suppression"]
+    },
+    {
+      "claim_text": "mrna booster vaccination causes systemic inflammation in healthy young adults",
+      "canonical_claim": "[VACCINE] causes systemic inflammation",
+      "single_vaccine_referent": true,
+      "predicate_family": "cause",
+      "vaccine_context": ["mrna vaccines"],
+      "support_snippets": ["inflammation"]
+    },
+    {
+      "claim_text": "mrna booster vaccination activates blood coagulation in healthy young adults",
+      "canonical_claim": "[VACCINE] activates blood coagulation",
+      "single_vaccine_referent": true,
+      "predicate_family": "cause",
+      "vaccine_context": ["mrna vaccines"],
+      "support_snippets": ["coagulation activation"]
+    }
+  ]
+}

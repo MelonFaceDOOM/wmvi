@@ -6,10 +6,15 @@ from db.db import getcursor
 from ingestion.ingestion import insert_batch
 
 """
-unlike other ingestion modules,
-podcasts do not end up in post_registry
-and they are not linked to scrape job
-podcasts are just podcasts
+podcasts are entered into shows/episodes tables
+but they are not entered into post_registry until transcription is done
+the transcription service should enter them into post_registry
+
+the transcription service will fill the following cols:
+ - transcript
+ - tsv_en
+
+then later is_en will be set by the label_en service
 """
 
 # -------------------------

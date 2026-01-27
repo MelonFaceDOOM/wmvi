@@ -1,0 +1,78 @@
+- id: 101
+  name: "Effectiveness - Protection"
+  description: "Clinical/real-world protection; does it prevent illness/death?"
+- id: 102
+  name: "Effectiveness - Effectiveness against variants"
+  description: "Performance vs. variants (e.g., Delta/Omicron/H5N1)"
+- id: 103
+  name: "Effectiveness - Duration of immunity"
+  description: "How long protection lasts; waning over time"
+- id: 104
+  name: "Effectiveness - Breakthrough cases"
+  description: "Infections/hospitalizations despite vaccination"
+- id: 105
+  name: "Effectiveness - Effectiveness by group"
+  description: "Subgroups: age, comorbidity, pregnancy, etc."
+- id: 106
+  name: "Effectiveness - Epidemiology & statistics"
+  description: "Population rates, % vaccinated/unvaccinated outcomes, big-N stats"
+
+- id: 201
+  name: "Safety - Minor side effects"
+  description: "Typical short-lived effects (fever, soreness, fatigue)"
+- id: 202
+  name: "Safety - Serious adverse effects"
+  description: "Severe outcomes (myocarditis, stroke, death, severe disability)"
+- id: 203
+  name: "Safety - Long-term concerns"
+  description: "Potential long-term risks; unknown future harms"
+- id: 204
+  name: "Safety - Safety among specific groups"
+  description: "Risk in subgroups (children, elderly, pregnancy, immunocompromised)"
+- id: 205
+  name: "Safety - Comparisons with other vaccine types"
+  description: "Safety compared across platforms/types"
+- id: 206
+  name: "Safety - Deliberate or planned harms"
+  description: "Alleged intentional harm, malice, population control"
+- id: 207
+  name: "Safety - Unknown side effects"
+  description: "Unspecified, vague, or alluded harms without detail"
+- id: 208
+  name: "Safety - Adverse event counts & signals"
+  description: "Databases, large counts, ‘X died after…’, signal claims"
+
+- id: 301
+  name: "Ethics - Informed consent and transparency"
+  description: "Disclosure, consent, truthful communication"
+- id: 302
+  name: "Ethics - Research and testing"
+  description: "Study design, adequacy of trials, methodology"
+- id: 303
+  name: "Ethics - Autonomy"
+  description: "Mandates, freedom to choose/refuse"
+- id: 304
+  name: "Ethics - Justice"
+  description: "Fairness, access, burden distribution"
+- id: 305
+  name: "Ethics - Misinformation & public discourse"
+  description: "Propaganda, censorship, media/online discourse"
+
+- id: 401
+  name: "Governance - Regulatory oversight and approvals"
+  description: "FDA/EMA/WHO oversight, approvals, surveillance"
+- id: 402
+  name: "Governance - Manufacturing and distribution strategies"
+  description: "Scale-up, supply chains, rollout decisions"
+- id: 403
+  name: "Governance - Approval processes and emergency use"
+  description: "EUA/conditional approvals, processes"
+- id: 404
+  name: "Governance - Funding & program decisions"
+  description: "Funding cuts/contracts/cancellations; who funds/defunds"
+- id: 405
+  name: "Governance - Leadership & qualifications"
+  description: "Who’s in charge, credentials, suitability of decision-makers"
+- id: 406
+  name: "Governance - Commercial practices & IP"
+  description: "Patents, royalties, pricing, tariffs, middlemen"

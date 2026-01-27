@@ -1,0 +1,10 @@
+1) install requirements-transcription.txt to a new venv (python 3.11)
+2) install the following:
+
+sudo apt install ffmpeg
+pip install yt-dlp
+sudo apt install firefox
+sudo apt install nodejs npm
+
+run firefox once to get cookies:
+firefox https://www.youtube.com
