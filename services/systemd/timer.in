@@ -1,0 +1,30 @@
+[Unit]
+Description={{DESCRIPTION}} (timer)
+
+
+# Other time vars to consider:
+# OnUnitActiveSec -- wait this long after the script STARTS before
+#    trying to start it a second time.
+#    If the first still running after this time,
+#    2nd will start as soon as 1st finishes
+#    (alternative to OnUnitInactiveSec)
+
+[Timer]
+OnBootSec={{ON_BOOT_SEC}}
+
+# Initial delay after boot before first run
+
+# Delay after the service unit becomes inactive (i.e., after it finishes)
+OnUnitInactiveSec={{ON_UNIT_INACTIVE_SEC}}
+
+# If a run should have occurred, but didn't
+#    auto-schedule one to occur immediatel after next boot.
+# I think should be false every time?
+Persistent={{PERSISTENT}}
+
+# reduce simultaneous wakeups / add jitter since there are many timers 
+AccuracySec=1min
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

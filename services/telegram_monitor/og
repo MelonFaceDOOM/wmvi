@@ -1,0 +1,234 @@
+# -----------------------------------------------------------
+# Telegram scraper (Telethon) that:
+#  • takes ONE "since" datetime (UTC) and a LIST of channels
+#  • appends posts to a JSONL file
+#  • dedupes by (channel, message_id) against existing lines
+#
+# Usage:
+#   export API_ID=... ; export API_HASH=...
+#   python tg_scrape.py data/telegram.jsonl 2025-05-31 @mrn_death @another
+#
+# Notes:
+#   - "since" can be YYYY-MM-DD or full ISO (UTC). Date-only = 00:00:00Z.
+#   - Channels can be usernames (with/without @) or t.me links.
+#   - Stores basic metrics: views, forwards, replies, reactions_total.
+# -----------------------------------------------------------
+
+import os
+import sys
+import json
+import asyncio
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from datetime import datetime, timezone, timedelta
+
+from dotenv import load_dotenv
+from telethon import TelegramClient, errors
+from telethon.tl.types import Message
+
+load_dotenv()
+
+API_ID = os.getenv("TELEGRAM_API_ID")
+API_HASH = os.getenv("TELEGRAM_API_HASH")
+SESSION = os.getenv("TG_SESSION", "tg_scrape.session")
+
+
+# ---------- small utils ----------
+
+def parse_since_utc(s: str) -> datetime:
+    """Parse 'YYYY-MM-DD' or ISO; return aware UTC datetime."""
+    s = s.strip()
+    if "T" not in s:
+        dt = datetime.strptime(s, "%Y-%m-%d")
+        return dt.replace(tzinfo=timezone.utc)
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt
+
+
+def norm_channel(s: str) -> str:
+    s = s.strip()
+    s = s.replace("https://", "").replace("http://", "")
+    s = s.replace("t.me/s/", "").replace("t.me/", "")
+    if s.startswith("@"):
+        s = s[1:]
+    return s
+
+
+def ensure_dir(path: str) -> None:
+    if path:
+        os.makedirs(path, exist_ok=True)
+
+
+def iter_jsonl(path: str) -> Iterable[Dict[str, Any]]:
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except Exception:
+                continue
+
+
+def load_seen_keys(out_path: str) -> Set[Tuple[str, int]]:
+    """Unique key = (channel_username_or_id, message_id)."""
+    seen: Set[Tuple[str, int]] = set()
+    for row in iter_jsonl(out_path):
+        chan = row.get("channel_username") or str(row.get("channel_id"))
+        mid = row.get("message_id")
+        if chan and isinstance(mid, int):
+            seen.add((chan, mid))
+    return seen
+
+
+def ensure_ascii(s: Optional[str], limit: int = 4000) -> Optional[str]:
+    if s is None:
+        return None
+    s = s.replace("\r", " ").strip()
+    return (s[:limit] + "…") if len(s) > limit else s
+
+
+def normalize_message(msg: Message, chan_username: Optional[str], chan_id: int) -> Dict[str, Any]:
+    # Telethon gives naive UTC; make it explicit
+    dt = msg.date.replace(tzinfo=timezone.utc) if msg.date else None
+
+    # metrics (may be None)
+    views = getattr(msg, "views", None)
+    forwards = getattr(msg, "forwards", None)
+
+    replies = None
+    try:
+        if msg.replies and hasattr(msg.replies, "replies"):
+            replies = msg.replies.replies
+    except Exception:
+        pass
+
+    reactions_total = None
+    try:
+        if msg.reactions and getattr(msg.reactions, "results", None):
+            reactions_total = sum((r.count or 0)
+                                  for r in msg.reactions.results)
+    except Exception:
+        pass
+
+    link = f"https://t.me/{chan_username}/{msg.id}" if chan_username else None
+
+    return {
+        "platform": "telegram",
+        "channel_username": chan_username,
+        "channel_id": chan_id,
+        "message_id": msg.id,
+        "date": dt.isoformat() if dt else None,
+        "text": ensure_ascii(msg.message),
+        "views": views,
+        "forwards": forwards,
+        "replies": replies,
+        "reactions_total": reactions_total,
+        "link": link,
+        "is_pinned": bool(getattr(msg, "pinned", False)),
+        "has_media": bool(msg.media),
+        "raw_type": type(msg).__name__,
+    }
+
+
+# ---------- core ----------
+
+async def scrape_channels(out_path: str, since_iso: str, channels: List[str]) -> None:
+    if not API_ID or not API_HASH:
+        print(
+            "Set API_ID and API_HASH (env or .env). Get them from https://my.telegram.org")
+        sys.exit(1)
+
+    since_dt = parse_since_utc(since_iso)
+
+    ensure_dir(os.path.dirname(out_path))
+    seen = load_seen_keys(out_path)
+
+    client = TelegramClient(SESSION, int(API_ID), API_HASH)
+    await client.start()
+
+    total_new = 0
+    with open(out_path, "a", encoding="utf-8") as f:
+        for raw in channels:
+            chan = norm_channel(raw)
+            try:
+                entity = await client.get_entity(chan)
+            except errors.UsernameInvalidError:
+                print(f"[warn] invalid username: {raw} (skip)")
+                continue
+            except errors.FloodWaitError as e:
+                print(f"[rate] flood wait {
+                      e.seconds}s resolving {raw}; sleeping…")
+                await asyncio.sleep(e.seconds + 1)
+                entity = await client.get_entity(chan)
+            except Exception as e:
+                print(f"[warn] could not resolve {raw}: {e} (skip)")
+                continue
+
+            username = getattr(entity, "username", None)
+            chan_id = getattr(entity, "id", None)
+            added = 0
+
+            # newest → oldest; stop once we cross the since_dt
+            try:
+                async for msg in client.iter_messages(entity, limit=None):
+                    if msg.date is None:
+                        continue
+                    msg_dt = msg.date.replace(tzinfo=timezone.utc)
+                    if msg_dt < since_dt:
+                        break
+
+                    key = (username or str(chan_id), msg.id)
+                    if key in seen:
+                        continue
+
+                    row = normalize_message(msg, username, chan_id)
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    seen.add(key)
+                    added += 1
+                    total_new += 1
+
+                    # light pacing
+                    if added % 500 == 0:
+                        await asyncio.sleep(0.3)
+
+            except errors.FloodWaitError as e:
+                print(f"[rate] flood wait {e.seconds}s reading {
+                      raw}; partial saved.")
+                await asyncio.sleep(e.seconds + 1)
+            except errors.RPCError as e:
+                print(f"[warn] RPC error for {raw}: {e} (continuing)")
+            except Exception as e:
+                print(f"[warn] unexpected error for {raw}: {e} (continuing)")
+
+            print(
+                f"[done] @{username or chan_id}: +{added} since {since_dt.date().isoformat()}")
+
+    await client.disconnect()
+    print(f"[ok] appended {total_new} new posts → {out_path}")
+
+
+def main():
+    if len(sys.argv) < 3:
+        print(
+            "Usage: python tg_scrape.py OUT_JSONL SINCE_ISO CHANNEL1 [CHANNEL2 ...]")
+        print("Example: python tg_scrape.py data/telegram.jsonl 2025-05-31 @mrn_death")
+        sys.exit(2)
+
+    out_path = sys.argv[1].strip()
+    since_iso = sys.argv[2].strip()
+    channels = [c for c in (s.strip() for s in sys.argv[3:]) if c]
+
+    asyncio.run(scrape_channels(out_path, since_iso, channels))
+
+
+if __name__ == "__main__":
+    main()

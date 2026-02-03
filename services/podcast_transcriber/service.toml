@@ -1,0 +1,10 @@
+[service]
+description = "transcribes podcasts that have been labeled as is_en"
+type = "oneshot"
+runtime = "transcription"
+
+
+[timer]
+on_boot_sec = "2min"
+on_unit_inactive_sec = "2min"
+persistent = false 

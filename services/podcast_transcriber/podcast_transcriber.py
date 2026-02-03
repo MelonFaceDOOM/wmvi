@@ -245,7 +245,7 @@ def _thread_entry(fn, *args):
         os._exit(1)
 
 
-def main(limit: Optional[int] = None) -> None:
+def main(prod=False, limit: Optional[int] = None) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -254,7 +254,10 @@ def main(limit: Optional[int] = None) -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    init_pool()
+    if prod:
+        init_pool(prefix="prod")
+    else:
+        init_pool(prefix="dev")
 
     audio_q = queue.Queue(maxsize=AUDIO_QUEUE_SIZE)
     save_q = queue.Queue(maxsize=SAVE_QUEUE_SIZE)

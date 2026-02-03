@@ -1,78 +1,81 @@
 from __future__ import annotations
 
 from db.db import getcursor
-from ingestion.ingestion import insert_batch, bulk_link_dual_key
+from ingestion.ingestion import insert_batch_return_inserted, bulk_link_dual_key
+
+"""Expects data cols to match these, even though yt uses some diff values
+i.e. published_at (yt) should be converted to created_at_ts"""
 
 YOUTUBE_COMMENT_COLS = [
     "video_id",
     "comment_id",
+    "parent_comment_id",
     "comment_url",
     "text",
     "filtered_text",
     "created_at_ts",
     "like_count",
-    "raw",
+    "reply_count",
 ]
 
-YOUTUBE_COMMENT_INSERT_SQL = """
+YOUTUBE_COMMENT_INSERT_SQL = f"""
     INSERT INTO youtube.comment(
-        {cols}
-    ) VALUES (
-        {vals}
-    )
+        {", ".join(YOUTUBE_COMMENT_COLS)}
+    ) VALUES %s
     ON CONFLICT (video_id, comment_id) DO NOTHING
-""".format(
-    cols=", ".join(YOUTUBE_COMMENT_COLS),
-    vals=", ".join(f"%({c})s" for c in YOUTUBE_COMMENT_COLS),
-)
+    RETURNING video_id, comment_id
+"""
 
 
-def flush_youtube_comment_batch(rows: list[dict], job_id: int) -> tuple[int, int]:
+def flush_youtube_comment_batch(
+    rows: list[dict],
+    job_id: int,
+    cur=None
+) -> tuple[int, int, set[tuple[str, str]]]:
     """
-    `rows` is a list of dicts keyed by YOUTUBE_COMMENT_COLS.
-    job_id is the id of the scrape_job associated with this batch
+    Insert a batch of YouTube comments and link them to a scrape job.
+
     In a single transaction:
-        Insert a batch of youtube comments into sm.youtube_comment.
-        For each inserted youtube comment, ensure scrape.post_scrape link exists.
+      1) Bulk insert rows into youtube.comment using ON CONFLICT DO NOTHING
+         and RETURNING (video_id, comment_id) so we can identify which were new.
+      2) Ensure scrape.post_scrape links exist for *all attempted* (video_id, comment_id)
+         pairs (inserted + skipped), which is desired.
 
     Returns:
-        (inserted, skipped) where:
-          - inserted = number of rows actually inserted
-          - skipped  = number of rows skipped due to ON CONFLICT
-
-    Assumes:
-      - DB pool has been initialized (db.init_pool)
+      (inserted, skipped, inserted_keys)
+        inserted_keys is a set of (video_id, comment_id) for newly inserted rows.
     """
-
     if not rows:
-        return 0, 0
+        return 0, 0, set()
 
-    with getcursor(commit=True) as cur:
-        # getcursor() will auto-rollback if anything fails
-        # and autocommit if everything succeeds
-        # 1) Insert comments
-        inserted, skipped = insert_batch(
+    # Sanity check: if parent_comment_id exists, comment_id must exist (your original intent)
+    for d in rows:
+        if d.get("parent_comment_id") and not d.get("comment_id"):
+            raise ValueError("Reply comment missing comment_id")
+
+    # Build linkage keys for all attempted rows
+    key1_list: list[str] = []
+    key2_list: list[str] = []
+    for d in rows:
+        vid = d.get("video_id")
+        cid = d.get("comment_id")
+        if vid is None or cid is None:
+            continue
+        key1_list.append(str(vid))
+        key2_list.append(str(cid))
+
+    if not key1_list:
+        return 0, 0, set()
+
+    def _run(cur):
+        inserted, skipped, inserted_keys = insert_batch_return_inserted(
             insert_sql=YOUTUBE_COMMENT_INSERT_SQL,
             rows=rows,
+            returning_cols=("video_id", "comment_id"),
+            cols=YOUTUBE_COMMENT_COLS,
             json_cols=["raw"],
             cur=cur,
         )
-
-        # 2) Batched linkage of post_registry to scrape job
-        # If any youtube comments already existed,
-        # and therefore didn't get entered in step 1,
-        # they will still be linked to the scrape job here,
-        # which is desired (1 post can be linked to multiple scrape jobs)
-
-        key1_list: list[str] = []
-        key2_list: list[str] = []
-        for d in rows:
-            vid = d.get("video_id")
-            cid = d.get("comment_id")
-            if vid is None or cid is None:
-                continue
-            key1_list.append(str(vid))
-            key2_list.append(str(cid))
 
         bulk_link_dual_key(
             job_id=job_id,
@@ -82,4 +85,14 @@ def flush_youtube_comment_batch(rows: list[dict], job_id: int) -> tuple[int, int
             cur=cur,
         )
 
-        return inserted, skipped
+        # type narrow: inserted_keys contains tuples[str,...] already, but we want tuples[str,str]
+        inserted_keys2: set[tuple[str, str]] = set()
+        for k in inserted_keys:
+            if len(k) == 2:
+                inserted_keys2.add((k[0], k[1]))
+
+        return inserted, skipped, inserted_keys2
+    if not cur:
+        with getcursor() as cur2:
+            return _run(cur2)
+    return _run(cur)

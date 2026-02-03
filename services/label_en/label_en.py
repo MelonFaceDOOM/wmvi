@@ -105,51 +105,88 @@ class LanguageLabeler:
         scanned = updated = unknown = 0
 
         with getcursor() as read_cur, getcursor(commit=True) as write_cur:
-            for batch in self._iter_posts(
-                read_cur,
-                min_id=last_checked,
-                max_id=max_id,
-            ):
+            for batch in self._iter_posts_new(read_cur, min_id=last_checked, max_id=max_id):
                 scanned += len(batch)
-
-                updates_by_platform: Dict[str,
-                                          List[Tuple[Any, ...]]] = defaultdict(list)
-
-                for post_id, platform, key1, key2, text in batch:
-                    spec = PLATFORM_UPDATE_SPEC.get(platform)
-                    if not spec:
-                        continue
-
-                    r = detect_is_en(text, min_len=MIN_LEN, min_conf=MIN_CONF)
-                    if r is None:
-                        unknown += 1
-                        continue
-
-                    if spec[2] == "":
-                        updates_by_platform[platform].append((r, key1))
-                    else:
-                        updates_by_platform[platform].append((r, key1, key2))
-
-                for platform, rows in updates_by_platform.items():
-                    table, key1_col, key2_col = PLATFORM_UPDATE_SPEC[platform]
-                    sql = build_update_sql(table, key1_col, key2_col)
-                    execute_batch(write_cur, sql, rows, page_size=1000)
-                    updated += write_cur.rowcount or 0
+                u, unk = self._label_batch(batch, write_cur)
+                updated += u
+                unknown += unk
 
         self._update_cursor(max_id)
 
+        log.info("language labeler: scanned=%d updated=%d unknown=%d (unknown are still marked as False)",
+                 scanned, updated, unknown)
+
+    def recheck_old_unlabeled(self) -> None:
+        """
+        Recheck ALL posts with:
+          - post_id < last_checked_post_id
+          - is_en IS NULL (as exposed through sm.posts_all)
+        """
+        log = logging.getLogger(__name__)
+        log.info("language labeler: starting recheck of old unlabeled posts")
+
+        with getcursor() as cur:
+            last_checked = self._get_cursor(cur)
+
+        scanned = updated = unknown = 0
+
+        with getcursor() as read_cur, getcursor(commit=True) as write_cur:
+            for batch in self._iter_posts_old_unlabeled(read_cur, before_id=last_checked):
+                scanned += len(batch)
+                u, unk = self._label_batch(batch, write_cur)
+                updated += u
+                unknown += unk
+
+        # Intentionally do NOT move the cursor in recheck mode.
         log.info(
-            "language labeler: scanned=%d updated=%d unknown=%d",
+            "language labeler: recheck complete scanned=%d updated=%d unknown=%d (unknown still marked as False)",
             scanned,
             updated,
             unknown,
         )
 
     # ------------------------------------------------------------------
+    # Shared labeling logic
+    # ------------------------------------------------------------------
+
+    def _label_batch(self, batch, write_cur) -> tuple[int, int]:
+        """
+        Apply detect_is_en() to a batch and write updates grouped by platform.
+        Returns: (updated_count, unknown_count)
+        """
+        updates_by_platform: Dict[str,
+                                  List[Tuple[Any, ...]]] = defaultdict(list)
+        unknown = 0
+
+        for _post_id, platform, key1, key2, text in batch:
+            spec = PLATFORM_UPDATE_SPEC.get(platform)
+            if not spec:
+                continue
+
+            r = detect_is_en(text, min_len=MIN_LEN, min_conf=MIN_CONF)
+            if r is None:
+                unknown += 1
+                r = False  # still mark as False if unknown
+
+            if spec[2] == "":
+                updates_by_platform[platform].append((r, key1))
+            else:
+                updates_by_platform[platform].append((r, key1, key2))
+
+        updated = 0
+        for platform, rows in updates_by_platform.items():
+            table, key1_col, key2_col = PLATFORM_UPDATE_SPEC[platform]
+            sql = build_update_sql(table, key1_col, key2_col)
+            execute_batch(write_cur, sql, rows, page_size=1000)
+            updated += write_cur.rowcount or 0
+
+        return updated, unknown
+
+    # ------------------------------------------------------------------
     # Iteration
     # ------------------------------------------------------------------
 
-    def _iter_posts(self, cur, *, min_id: int, max_id: int):
+    def _iter_posts_new(self, cur, *, min_id: int, max_id: int):
         cur.execute(
             """
             SELECT
@@ -166,7 +203,29 @@ class LanguageLabeler:
             """,
             (min_id, max_id),
         )
+        while True:
+            rows = cur.fetchmany(BATCH_SIZE)
+            if not rows:
+                break
+            yield rows
 
+    def _iter_posts_old_unlabeled(self, cur, *, before_id: int):
+        cur.execute(
+            """
+            SELECT
+                post_id,
+                platform,
+                key1,
+                key2,
+                text
+            FROM sm.posts_all
+            WHERE post_id < %s
+              AND is_en IS NULL
+              AND text IS NOT NULL
+            ORDER BY post_id
+            """,
+            (before_id,),
+        )
         while True:
             rows = cur.fetchmany(BATCH_SIZE)
             if not rows:
@@ -181,9 +240,9 @@ class LanguageLabeler:
     def _get_cursor(cur) -> int:
         cur.execute(
             """
-            SELECT last_checked_post_id
-            FROM sm.lang_label_state
-            WHERE id = 'global'
+            select last_checked_post_id
+            from sm.lang_label_state
+            where id = 'global'
             """
         )
         row = cur.fetchone()
@@ -192,9 +251,9 @@ class LanguageLabeler:
 
         cur.execute(
             """
-            INSERT INTO sm.lang_label_state (id, last_checked_post_id)
-            VALUES ('global', 0)
-            ON CONFLICT DO NOTHING
+            insert into sm.lang_label_state (id, last_checked_post_id)
+            values ('global', 0)
+            on conflict do nothing
             """
         )
         return 0
@@ -222,14 +281,16 @@ class LanguageLabeler:
 # Entrypoint
 # ----------------------------------------------------------------------
 
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-    )
-    init_pool()
+def main(prod=False, recheck=False) -> None:
+    if prod:
+        init_pool(prefix="prod")
+    else:
+        init_pool(prefix="dev")
     try:
-        LanguageLabeler().run_once()
+        if recheck:
+            LanguageLabeler().recheck_old_unlabeled()
+        else:
+            LanguageLabeler().run_once()
     finally:
         close_pool()
 

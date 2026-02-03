@@ -1,0 +1,10 @@
+[service]
+description = "labels is_en in posts registered in post_registry"
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+on_boot_sec = "2min"
+on_unit_inactive_sec = "10min"
+persistent = false 

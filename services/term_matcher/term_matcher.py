@@ -99,7 +99,7 @@ def _process_term(term_id: int, term: str) -> None:
 # CLI (minimal, obvious)
 # --------------------
 
-def main() -> None:
+def main(prod=False) -> None:
     parser = argparse.ArgumentParser(
         description="Run term matcher over post_search_en.",
     )
@@ -114,8 +114,10 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-
-    init_pool()
+    if prod:
+        init_pool(prefix="prod")
+    else:
+        init_pool(prefix="dev")
     try:
         run(args.term)
     finally:

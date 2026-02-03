@@ -1,0 +1,10 @@
+[service]
+description = "scrape channel list for new posts, quit."
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+on_boot_sec = "2min"
+on_unit_inactive_sec = "60min"
+persistent = false 

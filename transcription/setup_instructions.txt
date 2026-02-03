@@ -4,7 +4,13 @@
 sudo apt install ffmpeg
 pip install yt-dlp
 sudo apt install firefox
-sudo apt install nodejs npm
+
+
+install nodejs 20.x:
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+node --version
+# expect v20.x or newer
 
 run firefox once to get cookies:
 firefox https://www.youtube.com

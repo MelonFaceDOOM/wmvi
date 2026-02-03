@@ -1,0 +1,5 @@
+[service]
+description = "reddit_monitor long-running ingestion service"
+type = "longrunning"
+runtime = "base"
+

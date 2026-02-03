@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Tuple, Iterable, Sequence, Optional
-from psycopg2.extras import Json
+from typing import Sequence, Optional
+import re
 from db.db import getcursor
+from psycopg2.extras import Json, execute_values
 
 
 def ensure_scrape_job(
@@ -31,6 +32,7 @@ def ensure_scrape_job(
         )
         (job_id,) = cur.fetchone()
         return job_id
+
 
 def link_post_to_job(
     job_id: int,
@@ -62,7 +64,6 @@ def link_post_to_job(
             """,
             (job_id, post_id),
         )
-
 
 
 def insert_batch(
@@ -110,6 +111,70 @@ def insert_batch(
     return inserted, skipped
 
 
+# Split:
+#   INSERT ... (cols)  VALUES (single-row placeholders)  <suffix>
+_VALUES_SPLIT_RE = re.compile(
+    r"(?is)^\s*(.*?\))\s*VALUES\s*\(.*?\)\s*(.*)\s*$"
+)
+
+
+def insert_batch_return_inserted(
+    insert_sql: str,
+    rows: list[dict],
+    *,
+    returning_cols: Sequence[str],
+    cols: Sequence[str],
+    json_cols: Optional[Sequence[str]] = None,
+    cur=None,
+    page_size: int = 500,
+) -> tuple[int, int, set[tuple[str, ...]]]:
+    """
+    Bulk insert rows using psycopg2.extras.execute_values and return inserted keys.
+
+    Requirements:
+      - insert_sql MUST be execute_values-friendly, i.e. contains:
+            ... VALUES %s ...
+      - insert_sql MUST NOT contain any other %-format placeholders
+        (no %(col)s, no %(...), etc.)
+      - If insert_sql does not already include a RETURNING clause, this function
+        will append: RETURNING <returning_cols...>
+
+    Returns:
+      (inserted, skipped, inserted_keys)
+        inserted_keys is a set of tuples[str,...] matching returning_cols order.
+    """
+    if not rows:
+        return 0, 0, set()
+
+    sql = insert_sql.strip().rstrip(";")
+    json_cols_set = set(json_cols or ())
+
+    values: list[tuple] = []
+    for r in rows:
+        d = dict(r)
+        for jc in json_cols_set:
+            if jc in d and d[jc] is not None:
+                d[jc] = Json(d[jc])
+        values.append(tuple(d.get(c) for c in cols))
+
+    template = "(" + ",".join(["%s"] * len(cols)) + ")"
+
+    execute_values(
+        cur,
+        sql,
+        values,
+        template=template,
+        page_size=page_size,
+    )
+    returned = cur.fetchall()
+    inserted_keys: set[tuple[str, ...]] = set(
+        tuple("" if x is None else str(x) for x in row) for row in returned
+    )
+    inserted = len(returned)
+    skipped = len(rows) - inserted
+    return inserted, skipped, inserted_keys
+
+
 def fetch_post_ids_for_single_key(
     platform: str,
     key1_values: list[str],
@@ -117,7 +182,7 @@ def fetch_post_ids_for_single_key(
 ) -> list[int]:
     if not key1_values:
         return []
-        
+
     if cur is None:
         with getcursor() as cur2:
             cur2.execute(
@@ -143,7 +208,6 @@ def fetch_post_ids_for_single_key(
             (platform, key1_values),
         )
         return [row[0] for row in cur.fetchall()]
-
 
 
 def fetch_post_ids_for_dual_key(
@@ -199,7 +263,8 @@ def fetch_post_ids_for_dual_key(
         for pair in norm_pairs
         if pair in registry_map
     ]
-    
+
+
 def bulk_link_single_key(
     *,
     job_id: int,
@@ -244,7 +309,8 @@ def bulk_link_single_key(
             """,
             (job_id, platform, vals),
         )
-        
+
+
 def bulk_link_dual_key(
     *,
     job_id: int,

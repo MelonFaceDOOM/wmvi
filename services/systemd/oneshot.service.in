@@ -1,0 +1,27 @@
+[Unit]
+Description={{DESCRIPTION}}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory={{PROJECT_ROOT}}
+ExecStart={{PYTHON}} -m {{SERVICE_MODULE}}
+EnvironmentFile={{ENV_FILE}}
+
+# Allow long runtimes (minutes/hours) without systemd killing it
+TimeoutStartSec=infinity
+
+# If manually stopped, give it a chance to exit cleanly
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Ensure child processes also get cleaned up if it has to be killed
+KillMode=control-group
+
+# Helpful default: prevent multiple concurrent runs
+# (systemd already won't start a second instance while active, but this makes intent clear)
+RemainAfterExit=no
+
+[Install]
+WantedBy=default.target

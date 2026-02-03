@@ -273,7 +273,7 @@ def main() -> None:
     # --- DB connection status (visible) ---
     with st.status("Connecting to DB…", expanded=True) as status:
         try:
-            ensure_db_pool(prefix)
+            ensure_db_pool("dev")
             status.update(label=f"DB connected (prefix={
                           prefix!r}).", state="complete")
         except Exception as e:

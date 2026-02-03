@@ -341,9 +341,12 @@ def _setup_logging() -> None:
     root.addHandler(file_handler)
 
 
-if __name__ == "__main__":
+def main(prod=False):
     _setup_logging()
-    init_pool()
+    if prod:
+        init_pool(prefix="prod")
+    else:
+        init_pool(prefix="dev")
     scheduler = ScrapeScheduler()
     try:
         scheduler.scrape_loop()
@@ -353,3 +356,7 @@ if __name__ == "__main__":
         # Make sure we stop worker threads so the process can exit
         scheduler.executor.shutdown(wait=False)
         logging.info("Executor shut down; exiting.")
+
+
+if __name__ == "__main__":
+    main()
