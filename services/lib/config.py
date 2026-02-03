@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
-
-import tomllib
+try:
+    import tomllib  # py3.11+
+except ModuleNotFoundError:  # py3.10 and earlier
+    import tomli as tomllib
 
 
 DEFAULT_RUNTIME = "base"
@@ -46,12 +48,12 @@ def parse_service_config(
     description = svc.get("description", service_name)
 
     if runtime not in runtimes:
-        raise ValueError(f"unknown runtime '{
-                         runtime}' for service '{service_name}'")
+        raise ValueError(f"unknown runtime '"
+                f"{runtime}' for service '{service_name}'")
 
     if svc_type not in {"oneshot", "longrunning"}:
-        raise ValueError(f"unknown service type '{
-                         svc_type}' for service '{service_name}'")
+        raise ValueError(f"unknown service type '"
+                         f"{svc_type}' for service '{service_name}'")
 
     timer_cfg = None
     t = data.get("timer")

@@ -1,5 +1,6 @@
 .env
 plan.txt
+.python-version
 
 logs/
 db/snapshots/

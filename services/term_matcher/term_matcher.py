@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import logging
 import re
 from typing import Iterable, List, Tuple
@@ -95,21 +94,7 @@ def _process_term(term_id: int, term: str) -> None:
     )
 
 
-# --------------------
-# CLI (minimal, obvious)
-# --------------------
-
-def main(prod=False) -> None:
-    parser = argparse.ArgumentParser(
-        description="Run term matcher over post_search_en.",
-    )
-    parser.add_argument(
-        "--term",
-        action="append",
-        help="Restrict run to these exact term names (repeatable).",
-    )
-    args = parser.parse_args()
-
+def main(*, prod: bool = False, terms: Optional[list[str]] = None) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -119,10 +104,10 @@ def main(prod=False) -> None:
     else:
         init_pool(prefix="dev")
     try:
-        run(args.term)
+        run(term_names=terms)
     finally:
         close_pool()
 
 
 if __name__ == "__main__":
-    main()
+    main(prod=False)

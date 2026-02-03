@@ -132,16 +132,21 @@ def list_installed(project_root: Path, user: bool) -> int:
             print(f"    [warn] {cfg_err}")
 
         # Unit file presence
-        print(f"    unit files: service={'yes' if st.has_service_unit else 'no'}, timer={
-              'yes' if st.has_timer_unit else 'no'}")
+        print(
+            f"    unit files: service={'yes' if st.has_service_unit else 'no'}, timer="
+            f"{'yes' if st.has_timer_unit else 'no'}"
+        )
 
         # systemctl states (only if unit exists)
         if st.has_service_unit:
-            print(f"    service: enabled={
-                  st.service_enabled}, active={st.service_active}")
+            print(
+                f"    service: enabled="
+                f"{st.service_enabled}, active={st.service_active}"
+            )
         if st.has_timer_unit:
-            print(f"    timer: enabled={
-                  st.timer_enabled}, active={st.timer_active}")
+            print(f"    timer: enabled="
+                  f"{st.timer_enabled}, active={st.timer_active}"
+              )
 
     return 0
 

@@ -14,22 +14,18 @@ from services.lib.systemd import (
     unit_paths,
 )
 import subprocess
-
-
-# Keep runtimes mapping close to installer for now.
-# If you want, move to services/lib/constants.py later.
-# RUNTIMES = {
-#     "base": "venvs/base/bin/python",
-#     "transcription": "venvs/transcription/bin/python",
-# }
+from dotenv import load_dotenv
+load_dotenv()
 
 RUNTIMES = {
-    "base": "/home/melon/.pyenv/versions/wmvi/bin/python",
+    "base": "/home/melon/wmvi/venv/bin/python",
     "transcription": "/home/melon/.pyenv/versions/wmvi-transcription/bin/python",
 }
-
 SYSTEMD_TEMPLATES_DIR = Path("services/systemd")
 
+SERVICE_ENV = os.getenv("SERVICE_ENV", "dev").strip().lower()
+if SERVICE_ENV not in ("prod", "dev"):
+    die("SERVICE_ENV (set in .env) must be prod or dev")
 
 def die(msg: str) -> None:
     print(f"[error] {msg}", file=sys.stderr)
@@ -84,6 +80,7 @@ def make_replacements(
     service_name: str,
     description: str,
     python_bin: Path,
+    args: str,
 ) -> dict[str, str]:
     return {
         "SERVICE_NAME": service_name,
@@ -92,6 +89,7 @@ def make_replacements(
         "PROJECT_ROOT": str(project_root),
         "PYTHON": str(python_bin),
         "ENV_FILE": str(env_file),
+        "ARGS": args,
     }
 
 
@@ -125,12 +123,18 @@ def install(
     svc_tpl_path = pick_service_template(cfg.type, templates)
     svc_tpl = load_template(svc_tpl_path)
 
+    # build an args str (only includes system env for now)
+    args_str = "--prod" if SERVICE_ENV == "prod" else ""
+
+    print(f"[info] installing {service_name}: env={SERVICE_ENV} args={args_str or '<none>'}")
+
     repl = make_replacements(
         project_root=project_root,
         env_file=env_file,
         service_name=service_name,
         description=cfg.description,
         python_bin=py,
+        args=args_str
     )
 
     svc_rendered = render_template(svc_tpl, repl)

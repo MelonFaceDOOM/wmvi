@@ -48,8 +48,8 @@ def list_available(project_root: Path) -> int:
         if cfg.timer:
             print("  timer:")
             print(f"    on_boot_sec: {cfg.timer.on_boot_sec}")
-            print(f"    on_unit_inactive_sec: {
-                  cfg.timer.on_unit_inactive_sec}")
+            print(f"    on_unit_inactive_sec:" 
+                  f"{cfg.timer.on_unit_inactive_sec}")
             print(f"    persistent: {cfg.timer.persistent}")
         else:
             print("  timer: no")

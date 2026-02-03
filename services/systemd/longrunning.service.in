@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory={{PROJECT_ROOT}}
-ExecStart={{PYTHON}} -m {{SERVICE_MODULE}}
+ExecStart={{PYTHON}} -m {{SERVICE_MODULE}} {{ARGS}}
 EnvironmentFile={{ENV_FILE}}
 
 Restart=on-failure

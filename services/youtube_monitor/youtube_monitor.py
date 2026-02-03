@@ -186,8 +186,10 @@ def save_videos(videos: List[dict], *, term_name: str) -> tuple[int, int, set[st
 
     job_id = ensure_scrape_job(
         name=f"youtube monitor: {term_name}",
-        description=f"Continuous YouTube monitor scrape for term {
-            term_name!r}",
+        description=(
+            f"Continuous YouTube monitor scrape for term "
+            f"{term_name!r}"
+        ),
         platforms=["youtube_video"],
     )
 
@@ -404,8 +406,6 @@ def load_term_state(term_states):
     old_term_states = term_states.copy()
 
     terms = load_search_terms(SEARCH_TERM_LIST_NAME)
-    import random
-    random.shuffle(terms)
     status = load_status_table()
 
     now = datetime.now(timezone.utc)
