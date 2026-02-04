@@ -6,8 +6,13 @@ from pathlib import Path
 
 
 """
-This allows the app to be run from top-level with:
-python -m apps.claim_browser
+Run from repo root with:
+
+  # dev (default)
+  python -m apps.claim_browser
+
+  # prod
+  python -m apps.claim_browser --prod
 
 to add arguments, use this syntax:
 python -m apps.claim_browser -- --prefix DEV

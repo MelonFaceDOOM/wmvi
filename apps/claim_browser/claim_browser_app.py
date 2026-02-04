@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import streamlit as st
 import pandas as pd
 from pandas.api.types import is_integer_dtype, is_float_dtype
@@ -11,18 +12,27 @@ from shared import (
 )
 
 
+def _apply_cli_defaults() -> None:
+    """
+    Accepts args forwarded by __main__.py, e.g.:
+      python -m apps.claim_browser --prod
+    """
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("--prod", action="store_true")
+    p.add_argument("--prefix")  # optional explicit override
+    args, _unknown = p.parse_known_args()
+
+    # Only set a default once per session.
+    if "db_prefix" not in st.session_state:
+        if args.prefix:
+            st.session_state["db_prefix"] = args.prefix.strip() or "DEV"
+        else:
+            st.session_state["db_prefix"] = "PROD" if args.prod else "DEV"
+
+
 def _init_global_sidebar() -> None:
     st.sidebar.header("WMVI DB")
     st.sidebar.caption("These settings apply to all pages.")
-
-    if "db_prefix" not in st.session_state:
-        st.session_state["db_prefix"] = "DEV"
-
-    st.session_state["db_prefix"] = st.sidebar.text_input(
-        "DB prefix (for init_pool)",
-        value=st.session_state["db_prefix"],
-        help="Matches your db.db init_pool(prefix=...). Example: DEV / PROD.",
-    ).strip() or "DEV"
 
     st.sidebar.divider()
     st.sidebar.caption("Landing page only (for now).")
@@ -259,7 +269,7 @@ def _load_dashboard_payload() -> dict:
 
 
 def main() -> None:
-
+    _apply_cli_defaults()
     prefix = st.session_state.get("db_prefix", "DEV") or "DEV"
 
     st.set_page_config(page_title="WMVI Pipeline Dashboard", layout="wide")
@@ -273,7 +283,7 @@ def main() -> None:
     # --- DB connection status (visible) ---
     with st.status("Connecting to DB…", expanded=True) as status:
         try:
-            ensure_db_pool("dev")
+            ensure_db_pool(prefix)
             status.update(label=f"DB connected (prefix={
                           prefix!r}).", state="complete")
         except Exception as e:
