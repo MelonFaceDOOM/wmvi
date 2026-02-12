@@ -116,14 +116,15 @@ class LanguageLabeler:
         log.info("language labeler: scanned=%d updated=%d unknown=%d (unknown are still marked as False)",
                  scanned, updated, unknown)
 
-    def recheck_old_unlabeled(self) -> None:
+    def recheck_old_unlabeled(self, platform: str | None = None) -> None:
         """
         Recheck ALL posts with:
           - post_id < last_checked_post_id
           - is_en IS NULL (as exposed through sm.posts_all)
         """
         log = logging.getLogger(__name__)
-        log.info("language labeler: starting recheck of old unlabeled posts")
+        log.info(
+            "language labeler: starting recheck of old unlabeled posts platform=%s", platform or "ALL")
 
         with getcursor() as cur:
             last_checked = self._get_cursor(cur)
@@ -131,20 +132,20 @@ class LanguageLabeler:
         scanned = updated = unknown = 0
 
         with getcursor() as read_cur, getcursor(commit=True) as write_cur:
-            for batch in self._iter_posts_old_unlabeled(read_cur, before_id=last_checked):
+            for batch in self._iter_posts_old_unlabeled(
+                read_cur, before_id=last_checked, platform=platform
+            ):
                 scanned += len(batch)
                 u, unk = self._label_batch(batch, write_cur)
                 updated += u
                 unknown += unk
 
-        # Intentionally do NOT move the cursor in recheck mode.
         log.info(
             "language labeler: recheck complete scanned=%d updated=%d unknown=%d (unknown still marked as False)",
             scanned,
             updated,
             unknown,
         )
-
     # ------------------------------------------------------------------
     # Shared labeling logic
     # ------------------------------------------------------------------
@@ -209,9 +210,8 @@ class LanguageLabeler:
                 break
             yield rows
 
-    def _iter_posts_old_unlabeled(self, cur, *, before_id: int):
-        cur.execute(
-            """
+    def _iter_posts_old_unlabeled(self, cur, *, before_id: int, platform: str | None = None):
+        sql = """
             SELECT
                 post_id,
                 platform,
@@ -222,10 +222,17 @@ class LanguageLabeler:
             WHERE post_id < %s
               AND is_en IS NULL
               AND text IS NOT NULL
-            ORDER BY post_id
-            """,
-            (before_id,),
-        )
+        """
+        params: list = [before_id]
+
+        if platform is not None:
+            sql += " AND platform = %s"
+            params.append(platform)
+
+        sql += " ORDER BY post_id"
+
+        cur.execute(sql, params)
+
         while True:
             rows = cur.fetchmany(BATCH_SIZE)
             if not rows:
@@ -281,14 +288,12 @@ class LanguageLabeler:
 # Entrypoint
 # ----------------------------------------------------------------------
 
-def main(prod=False, recheck=False) -> None:
-    if prod:
-        init_pool(prefix="prod")
-    else:
-        init_pool(prefix="dev")
+def main(prod: bool = False, recheck: str | None = None) -> None:
+    init_pool(prefix="prod" if prod else "dev")
     try:
-        if recheck:
-            LanguageLabeler().recheck_old_unlabeled()
+        if recheck is not None:
+            platform = None if recheck == "__ALL__" else recheck
+            LanguageLabeler().recheck_old_unlabeled(platform=platform)
         else:
             LanguageLabeler().run_once()
     finally:

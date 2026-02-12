@@ -310,7 +310,7 @@ def main() -> None:
     # Lay out metrics in rows of 4 for readability
     cols = st.columns(4)
     for i, (label, table) in enumerate(sources):
-        res = query_table_count(table)
+        res = query_table_count(table, exact=True)
         with cols[i % 4]:
             if res.ok:
                 st.metric(label, _fmt_int(res.value))

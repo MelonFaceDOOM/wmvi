@@ -5,31 +5,34 @@ import sys
 import os
 from pathlib import Path
 
-from services.lib.config import load_toml, parse_service_config
-from services.lib.render import load_template, render_template, write_text
-from services.lib.systemd import (
+from services.cli.lib.config import load_toml, parse_service_config
+from services.cli.lib.render import load_template, render_template, write_text
+from services.cli.lib.systemd import (
     SystemdNotAvailable,
     systemctl_cmd,
-    unit_dir,
     unit_paths,
 )
 import subprocess
 from dotenv import load_dotenv
 load_dotenv()
 
-RUNTIMES = {
-    "base": "/home/melon/wmvi/venv/bin/python",
-    "transcription": "/home/melon/.pyenv/versions/wmvi-transcription/bin/python",
-}
-SYSTEMD_TEMPLATES_DIR = Path("services/systemd")
-
-SERVICE_ENV = os.getenv("SERVICE_ENV", "dev").strip().lower()
-if SERVICE_ENV not in ("prod", "dev"):
-    die("SERVICE_ENV (set in .env) must be prod or dev")
 
 def die(msg: str) -> None:
     print(f"[error] {msg}", file=sys.stderr)
     raise SystemExit(1)
+
+
+RUNTIMES = {
+    "base": os.getenv("BASE_INTERPRETER", "venvs/base/bin/python"),
+    "transcription": os.getenv("TRANSCRIPTION_INTERPRETER", "venvs/transcription/bin/python"),
+}
+
+
+SYSTEMD_TEMPLATES_DIR = Path("services/cli/systemd")
+
+SERVICE_ENV = os.getenv("SERVICE_ENV", "dev").strip().lower()
+if SERVICE_ENV not in ("prod", "dev"):
+    die("SERVICE_ENV (set in .env) must be prod or dev")
 
 
 def run(cmd: list[str]) -> None:
@@ -126,7 +129,8 @@ def install(
     # build an args str (only includes system env for now)
     args_str = "--prod" if SERVICE_ENV == "prod" else ""
 
-    print(f"[info] installing {service_name}: env={SERVICE_ENV} args={args_str or '<none>'}")
+    print(f"[info] installing {service_name}: env={
+          SERVICE_ENV} args={args_str or '<none>'}")
 
     repl = make_replacements(
         project_root=project_root,

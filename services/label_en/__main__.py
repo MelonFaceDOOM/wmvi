@@ -22,10 +22,15 @@ def _parse_args():
     )
     ap.add_argument(
         "--recheck",
-        action="store_true",
-        help="Recheck ALL old posts where post_id < last_checked_post_id and is_en IS NULL",
+        nargs="?",              # optional value
+        const="__ALL__",        # value when flag is present with no arg
+        default=None,           # flag not present
+        metavar="PLATFORM",
+        help=(
+            "Recheck old posts where post_id < last_checked_post_id and is_en IS NULL. "
+            "Optionally restrict to one platform: --recheck podcast_episode"
+        ),
     )
-
     return ap.parse_args()
 
 

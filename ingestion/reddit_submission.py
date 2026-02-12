@@ -6,10 +6,12 @@ from ingestion.ingestion import insert_batch, bulk_link_single_key
 REDDIT_SUB_COLS = [
     "id",
     "url",
+    "shared_url",
     "domain",
     "title",
     "permalink",
     "created_at_ts",
+    "selftext",
     "filtered_text",
     "url_overridden_by_dest",
     "subreddit_id",

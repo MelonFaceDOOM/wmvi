@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 
 def main() -> None:
@@ -44,33 +45,59 @@ def main() -> None:
         help="Uninstall user systemd unit (~/.config/systemd/user)",
     )
 
+    # stop installed
+    ap_stop_installed = sub.add_parser(
+        "stop-installed", help="Stop all installed services.")
+    ap_stop_installed.add_argument(
+        "--user",
+        action="store_true",
+        help="Install as user systemd unit (~/.config/systemd/user)",
+    )
+
+    # start installed
+    ap_start_installed = sub.add_parser(
+        "start-installed", help="Start all installed services.")
+    ap_start_installed.add_argument(
+        "--user",
+        action="store_true",
+        help="Uninstall user systemd unit (~/.config/systemd/user)",
+    )
+
     args = ap.parse_args()
 
     # Dispatch
     if args.cmd == "list-available":
-        from services.list_available import list_available
-        from pathlib import Path
+        from services.cli.list_available import list_available
 
         raise SystemExit(list_available(Path.cwd().resolve()))
 
     elif args.cmd == "list-installed":
-        from services.list_installed import list_installed
-        from pathlib import Path
+        from services.cli.list_installed import list_installed
 
         raise SystemExit(list_installed(Path.cwd().resolve(), user=args.user))
 
     elif args.cmd == "install":
-        from services.install import install
+        from services.cli.install import install
 
         name = args.service.replace("-", "_")
         install(service_name=name, user=args.user)
         return
 
     elif args.cmd == "uninstall":
-        from services.install import uninstall
+        from services.cli.install import uninstall
 
         name = args.service.replace("-", "_")
         uninstall(service_name=name, user=args.user)
+        return
+
+    elif args.cmd == "stop-installed":
+        from services.cli.bulk_control import stop_all
+        stop_all(Path.cwd().resolve(), user=args.user)
+        return
+
+    elif args.cmd == "start-installed":
+        from services.cli.bulk_control import start_all
+        start_all(Path.cwd().resolve(), user=args.user)
         return
 
     else:

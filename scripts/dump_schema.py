@@ -1,15 +1,18 @@
 import os
-import sys
 import subprocess
 from dotenv import load_dotenv
+import argparse
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in {"dev", "prod"}:
-        print("usage: python dump_schema.py [dev|prod]")
-        sys.exit(1)
-
-    env = sys.argv[1].upper()
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--prod",
+        action="store_true",
+        help="Apply dump PROD schema (DEV by default).",
+    )
+    args = ap.parse_args()
+    env = "PROD" if args.prod else "DEV"
     prefix = f"{env}_"
 
     load_dotenv()

@@ -7,13 +7,14 @@ telethon==1.42.0
 google-api-python-client==2.189.0
 
 # --- Database / networking ---
-psycopg2==2.9.10
+psycopg2-binary
 bcrypt==5.0.0
 cryptography==44.0.3
 PyNaCl==1.6.1
 cffi==2.0.0
 pycparser==2.23
 websocket-client==1.8.0
+sshtunnel
 
 # --- HTTP / URL tooling ---
 requests==2.32.3

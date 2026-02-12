@@ -4,8 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from services.lib.discover import discover_services
-from services.lib.config import load_toml, parse_service_config
+from services.cli.lib.discover import discover_services
+from services.cli.lib.config import load_toml, parse_service_config
 
 
 RUNTIMES = {
@@ -48,7 +48,7 @@ def list_available(project_root: Path) -> int:
         if cfg.timer:
             print("  timer:")
             print(f"    on_boot_sec: {cfg.timer.on_boot_sec}")
-            print(f"    on_unit_inactive_sec:" 
+            print(f"    on_unit_inactive_sec:"
                   f"{cfg.timer.on_unit_inactive_sec}")
             print(f"    persistent: {cfg.timer.persistent}")
         else:

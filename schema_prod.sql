@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CU27cCRcbkqYfU9SKm5PYciA60HHbRRl7ePaeBOtbkHwgB1Pmcn0AByeaQwvT6T
+\restrict yt5c3TGQcbl3CB7g8NbYMdd9P3CNZJ2ojc63PdW6ioLkbkZHIDJi8NDrdh9DnVQ
 
 -- Dumped from database version 17.7
 -- Dumped by pg_dump version 18.1
@@ -1933,5 +1933,5 @@ ALTER TABLE ONLY youtube.transcript_segments
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CU27cCRcbkqYfU9SKm5PYciA60HHbRRl7ePaeBOtbkHwgB1Pmcn0AByeaQwvT6T
+\unrestrict yt5c3TGQcbl3CB7g8NbYMdd9P3CNZJ2ojc63PdW6ioLkbkZHIDJi8NDrdh9DnVQ
 

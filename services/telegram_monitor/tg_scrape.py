@@ -95,11 +95,10 @@ async def probe_channel(client: TelegramClient, channel_name: str):
     try:
         entity = await client.get_entity(chan)
     except errors.UsernameInvalidError:
-        raise ValueError(f"Invalid channel username: {channel_name}")
+        return None
     except errors.FloodWaitError as e:
         await asyncio.sleep(e.seconds + 1)
         entity = await client.get_entity(chan)
-
     return entity
 
 

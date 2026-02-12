@@ -15,3 +15,8 @@ venv/
 
 *.session
 *.session-journal
+
+claims_temp/
+
+*.session
+*.session-journal

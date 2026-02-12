@@ -5,7 +5,7 @@ might want to expand in the future with more checks
 
 
 from __future__ import annotations
-
+import argparse
 from dataclasses import dataclass
 
 from db.db import init_pool, close_pool, getcursor
@@ -179,16 +179,23 @@ def check_table(platform: str) -> None:
 
 
 def main() -> None:
-    init_pool(prefix="dev")  # defaults to DEV
+    ap = argparse.ArgumentParser(prog="python -m scripts.table_stats")
+    ap.add_argument(
+        "--prod",
+        action="store_true",
+        help="Run against PROD (default: dev).",
+    )
+    args = ap.parse_args()
+
+    init_pool(prefix="prod" if args.prod else "dev")
 
     try:
         print("=" * 80)
+        print("connected on", "PROD" if args.prod else "DEV")
         print("POST REGISTRY DATA QUALITY CHECK")
         print("=" * 80)
 
         print("\n--- REQUIRED 1:1 TABLES ---\n")
-
-        results: list[TableCheckResult] = []
 
         for platform in REQUIRED_1_TO_1:
             check_table(platform)

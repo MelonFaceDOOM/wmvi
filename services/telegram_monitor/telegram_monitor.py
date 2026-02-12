@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 import asyncio
+import logging
+import time
 
 from db.db import getcursor, init_pool, close_pool
 from ingestion.telegram_post import flush_telegram_batch
@@ -34,7 +36,6 @@ CHANNEL_LIST = [
     "@SGTnewsNetwork",
     "@IVERMECTIN444",
     "@NEWSVIDEOS56",
-    "@time_capsule",
     "@SlayNews",
     "@NFSCHimalayaNews",
     "@pastcipher",
@@ -42,6 +43,35 @@ CHANNEL_LIST = [
     "@CeTvlxeew6NkZDZh",
     "@communityhealthproject"
 ]
+
+log = logging.getLogger(__name__)
+
+
+def _setup_logging() -> None:
+    """
+    Minimal, sane defaults:
+    - INFO level by default
+    - timestamps in UTC
+    - quiet Telethon noise unless you bump log level
+    """
+    if logging.getLogger().handlers:
+        # Don't double-configure if something else already called basicConfig.
+        return
+
+    class _UTCFormatter(logging.Formatter):
+        converter = time.gmtime
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(_UTCFormatter(
+        fmt="%(asctime)sZ %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    ))
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+
+    logging.getLogger("telethon").setLevel(logging.WARNING)
 
 
 def _session_paths(session: str) -> tuple[Path, Path]:
@@ -108,25 +138,57 @@ async def monitor_loop(client):
         description="scrape a list of tg channels known for vaxx misinfo",
         platforms=["telegram_post"]
     )
+    log.info("monitor start: channels=%d job_id=%s session=%s",
+             len(CHANNEL_LIST), job_id, SESSION)
+
     for channel in CHANNEL_LIST:
-        entity = await probe_channel(client, channel)
-        chan_id = getattr(entity, "id", None)
+        t0 = time.monotonic()
+        total_rows = 0
+        total_batches = 0
 
-        # give channel name, it converts to id
-        most_recent_ts = get_most_recent_ts_for_tg_channel_in_db(chan_id)
-
-        async for batch in scrape_channel_batches(
-            client,
-            channel,
-            most_recent_ts,
-            entity=entity,
-            batch_size=200,
-        ):
-            if not batch:
+        log.info("channel start: %s", channel)
+        try:
+            entity = await probe_channel(client, channel)
+            if not entity:
+                log.warning("channel invalid/unreachable: %s", channel)
                 continue
 
-            flush_telegram_batch(batch, job_id)
+            chan_id = getattr(entity, "id", None)
+            if chan_id is None:
+                log.warning(
+                    "channel has no id? channel=%s entity=%r", channel, entity)
+                continue
 
+            # give channel name, it converts to id
+            most_recent_ts = get_most_recent_ts_for_tg_channel_in_db(chan_id)
+
+            async for batch in scrape_channel_batches(
+                client,
+                channel,
+                most_recent_ts,
+                entity=entity,
+                batch_size=200,
+            ):
+
+                if not batch:
+                    continue
+
+                total_batches += 1
+                total_rows += len(batch)
+
+                flush_telegram_batch(batch, job_id)
+                if total_batches == 1 or total_batches % 10 == 0:
+                    log.info("channel progress: %s batches=%d rows=%d",
+                             channel, total_batches, total_rows)
+        except Exception:
+            log.exception("channel error: %s", channel)
+            continue
+        finally:
+            dt = time.monotonic() - t0
+            log.info("channel done: %s batches=%d rows=%d took=%.2fs",
+                     channel, total_batches, total_rows, dt)
+
+    log.info("monitor done")
     await client.disconnect()
 
 ####################################
@@ -161,8 +223,10 @@ async def main(prod=False):
     client = TelegramClient(SESSION, int(API_ID), API_HASH)
 
     try:
+        log.info("main start: prod=%s", prod)
         await monitor_loop(client)
     finally:
         close_pool()
         if client.is_connected():
             await client.disconnect()
+        log.info("main done")

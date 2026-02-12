@@ -33,7 +33,6 @@ from .yt_scrape import (
     iter_videos,
     fetch_comment_threads,
     YTQuotaExceeded,
-    YTUnexpectedError,
 )
 
 # ---------------------------------------------------------------------
