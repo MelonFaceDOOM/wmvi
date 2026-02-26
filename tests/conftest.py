@@ -68,15 +68,63 @@ def prepared_fresh_db():
 
     # Core sanity checks
     with getcursor() as cur:
-        cur.execute("SELECT to_regclass('sm.tweet')")
-        assert cur.fetchone()[0] == 'sm.tweet'
-        cur.execute("SELECT to_regclass('sm.post_registry')")
-        assert cur.fetchone()[0] == 'sm.post_registry'
-        cur.execute("SELECT to_regclass('scrape.post_scrape')")
-        assert cur.fetchone()[0] == 'scrape.post_scrape'
-        cur.execute(
-            "SELECT 1 FROM pg_views WHERE schemaname='sm' AND viewname='posts_unified'"
-        )
-        assert cur.fetchone() is not None
+        def _dbg(msg: str, **kv):
+            pytest.fail(f"DB sanity check failed: {msg} | {kv}")
 
-    return test_db
+        # Tables
+        cur.execute("SELECT to_regclass('sm.tweet')")
+        got = cur.fetchone()[0]
+        if got != "sm.tweet":
+            _dbg("missing table", obj="sm.tweet", to_regclass=got)
+        assert got == "sm.tweet"
+
+        cur.execute("SELECT to_regclass('sm.post_registry')")
+        got = cur.fetchone()[0]
+        if got != "sm.post_registry":
+            _dbg("missing table", obj="sm.post_registry", to_regclass=got)
+        assert got == "sm.post_registry"
+
+        cur.execute("SELECT to_regclass('scrape.post_scrape')")
+        got = cur.fetchone()[0]
+        if got != "scrape.post_scrape":
+            _dbg("missing table", obj="scrape.post_scrape", to_regclass=got)
+        assert got == "scrape.post_scrape"
+
+        # View: use to_regclass first (most direct “does something named this exist?”)
+        cur.execute("SELECT to_regclass('sm.posts_all')")
+        v = cur.fetchone()[0]
+        if v is None:
+            # dump useful catalog info
+            cur.execute("""
+                SELECT schemaname, viewname
+                FROM pg_views
+                WHERE schemaname = 'sm'
+                ORDER BY viewname
+            """)
+            views = cur.fetchall()
+
+            cur.execute("""
+                SELECT schemaname, matviewname
+                FROM pg_matviews
+                WHERE schemaname = 'sm'
+                ORDER BY matviewname
+            """)
+            matviews = cur.fetchall()
+
+            cur.execute("""
+                SELECT n.nspname AS schema, c.relname AS name, c.relkind AS kind
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'sm'
+                  AND c.relname = 'posts_all'
+            """)
+            rel = cur.fetchall()
+
+            _dbg(
+                "missing view sm.posts_all",
+                to_regclass=v,
+                pg_views_sm=views,
+                pg_matviews_sm=matviews,
+                pg_class_hit=rel,
+            )
+        assert v == "sm.posts_all"

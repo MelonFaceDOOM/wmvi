@@ -20,3 +20,7 @@ claims_temp/
 
 *.session
 *.session-journal
+
+
+# ensures the repo stores/checkout as LF consistently across machines.
+db/migrations/*.sql text eol=lf

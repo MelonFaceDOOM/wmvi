@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Tuple, Optional
 from db.db import init_pool, getcursor, close_pool
 
 from ingestion.ingestion import ensure_scrape_job
-from ingestion.youtube_video import flush_youtube_video_batch
-from ingestion.youtube_comment import flush_youtube_comment_batch
+from ingestion.youtube.videos import flush_youtube_video_batch
+from ingestion.youtube.comments import flush_youtube_comment_batch
 from .yt import youtube_client
 from .yt_scrape import (
     iter_videos,

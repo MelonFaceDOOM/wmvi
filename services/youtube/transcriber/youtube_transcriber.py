@@ -16,7 +16,7 @@ from transcription.transcription import (
     load_whisper_model,
     transcribe_audio_file,
 )
-from . import download_yt_audio, DownloadFailed
+from services.youtube.transcriber.youtube_transcriber import download_yt_audio, DownloadFailed
 
 load_dotenv()
 

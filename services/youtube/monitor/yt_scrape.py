@@ -4,18 +4,6 @@ from googleapiclient.errors import HttpError
 from datetime import datetime, timezone
 from filtering.anonymization import redact_pii
 
-# ---------------------------------------------------------------------
-# Exceptions and Errors
-# ---------------------------------------------------------------------
-
-
-class YTQuotaExceeded(RuntimeError):
-    """Daily quota exhausted (403 quotaExceeded)."""
-
-
-class YTUnexpectedError(RuntimeError):
-    """Unexpected YouTube API error."""
-
 
 def _yt_error_reason(e: HttpError) -> Optional[str]:
     try:

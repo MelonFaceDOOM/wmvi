@@ -6,11 +6,19 @@ from typing import Dict, List
 from db.db import getcursor
 
 
-def _sha256(path: str) -> str:
+def _sha256_canonical_sql(path: str) -> str:
     h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
+
+    raw = open(path, "rb").read()
+
+    # Decode (strip UTF-8 BOM if present)
+    text = raw.decode("utf-8-sig")
+
+    # Normalize newlines: CRLF / CR -> LF
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Hash canonical form
+    h.update(text.encode("utf-8"))
     return h.hexdigest()
 
 
@@ -31,8 +39,14 @@ def applied_migrations() -> Dict[str, str]:
         return {v: c for (v, c) in cur.fetchall()}
 
 
+def read_sql_canonical(path: str) -> str:
+    raw = open(path, "rb").read()
+    text = raw.decode("utf-8-sig")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def apply_sql_file(path: str) -> None:
-    sql_text = open(path, "r", encoding="utf-8").read()
+    sql_text = read_sql_canonical(path)
     with getcursor(commit=True) as cur:
         cur.execute(sql_text)
 
@@ -58,7 +72,7 @@ def run_migrations(migrations_dir: str = "db/migrations") -> List[str]:
 
     for path in paths:
         version = os.path.basename(path)
-        checksum = _sha256(path)
+        checksum = _sha256_canonical_sql(path)
 
         if version in done:
             if done[version] != checksum:

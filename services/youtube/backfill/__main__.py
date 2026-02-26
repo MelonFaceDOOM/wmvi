@@ -1,20 +1,20 @@
 import argparse
-from .youtube_monitor import main
+from .backfill import main
 
 
 """
 TO RUN ON DEV:
-python -m services.youtube_monitor
+python -m services.backfill
 
 TO RUN ON PROD:
-python -m services.youtube_monitor --prod
+python -m services.backfill --prod
 
 calls must come from root dir (wmvi):
 """
 
 
 def _parse_args():
-    ap = argparse.ArgumentParser(prog="python -m services.youtube_monitor")
+    ap = argparse.ArgumentParser(prog="python -m services.backfill")
     ap.add_argument(
         "--prod",
         action="store_true",

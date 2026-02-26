@@ -6,8 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory={{PROJECT_ROOT}}
-ExecStart={{PYTHON}} -m {{SERVICE_MODULE}} {{ARGS}}
 EnvironmentFile={{ENV_FILE}}
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{PYTHON}} -m {{SERVICE_MODULE}} {{ARGS}}
 
 # Allow long runtimes (minutes/hours) without systemd killing it
 TimeoutStartSec=infinity
@@ -24,4 +25,4 @@ KillMode=control-group
 RemainAfterExit=no
 
 [Install]
-WantedBy=default.target
+WantedBy={{WANTED_BY}}

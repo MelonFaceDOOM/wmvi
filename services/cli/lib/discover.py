@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Iterable
 
 
+
 @dataclass(frozen=True)
 class DiscoveredService:
     name: str
@@ -28,18 +29,15 @@ def iter_service_dirs(services_root: Path) -> Iterable[Path]:
 
 
 def discover_services(project_root: Path) -> list[DiscoveredService]:
-    """
-    Discover services by finding services/<name>/service.toml.
-    """
     services_root = project_root / "services"
     if not services_root.exists():
-        raise FileNotFoundError(
-            f"services/ directory not found: {services_root}")
+        raise FileNotFoundError(f"services/ directory not found: {services_root}")
 
     out: list[DiscoveredService] = []
-    for d in sorted(iter_service_dirs(services_root), key=lambda x: x.name):
-        toml_path = d / "service.toml"
-        if not toml_path.exists():
-            continue
-        out.append(DiscoveredService(name=d.name, dir=d, toml_path=toml_path))
+    for toml_path in sorted(services_root.rglob("service.toml")):
+        svc_dir = toml_path.parent
+        rel = svc_dir.relative_to(services_root).as_posix()  # "youtube/monitor"
+        out.append(DiscoveredService(name=rel, dir=svc_dir, toml_path=toml_path))
+
+    out.sort(key=lambda s: s.name)
     return out

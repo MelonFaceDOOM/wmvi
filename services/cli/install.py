@@ -12,9 +12,30 @@ from services.cli.lib.systemd import (
     systemctl_cmd,
     unit_paths,
 )
+from services.cli.lib.naming import (
+    normalize_service_id,
+    unit_name_from_service_id,
+    module_from_service_id,
+)
+
 import subprocess
 from dotenv import load_dotenv
 load_dotenv()
+
+# NOTE ON NAMING:
+# Two different names are made for each service:
+#
+#   service_id:
+#       Example: "youtube/monitor"
+#       Used to locate: services/youtube/monitor/service.toml
+#       Used to build module: python -m services.youtube.monitor
+#
+#   unit_name: systemd unit prefix (must be flat, safe for filenames)
+#       Derived from service_id by replacing "/" and "-" with "_"
+#       Example: "youtube/monitor" -> "youtube_youtube_monitor"
+#       Used for unit files + systemctl:
+#         /etc/systemd/system/youtube_youtube_monitor.service
+#         systemctl enable --now youtube_youtube_monitor.service
 
 
 def die(msg: str) -> None:
@@ -80,30 +101,37 @@ def make_replacements(
     *,
     project_root: Path,
     env_file: Path,
-    service_name: str,
+    service_id: str,
+    unit_name: str,
     description: str,
     python_bin: Path,
     args: str,
+    user: bool,
 ) -> dict[str, str]:
+    wanted_by = "default.target" if user else "multi-user.target"
     return {
-        "SERVICE_NAME": service_name,
-        "SERVICE_MODULE": f"services.{service_name}",
+        "SERVICE_NAME": unit_name,
+        "SERVICE_MODULE": module_from_service_id(service_id),
         "DESCRIPTION": description,
         "PROJECT_ROOT": str(project_root),
         "PYTHON": str(python_bin),
         "ENV_FILE": str(env_file),
         "ARGS": args,
+        "WANTED_BY": wanted_by,
     }
 
 
 def install(
     *,
-    service_name: str,
+    service_name: str,  # now interpreted as service_id, e.g. "youtube/monitor"
     user: bool,
 ) -> None:
     project_root = Path.cwd().resolve()
 
-    service_dir = project_root / "services" / service_name
+    service_id = normalize_service_id(service_name)
+    unit_name = unit_name_from_service_id(service_id)
+
+    service_dir = project_root / "services" / Path(service_id)
     if not service_dir.exists():
         die(f"Service directory not found: {service_dir}")
 
@@ -116,35 +144,33 @@ def install(
         die(".env file not found in project root")
 
     data = load_toml(toml_path)
-    cfg = parse_service_config(
-        data=data, service_name=service_name, runtimes=RUNTIMES)
+    cfg = parse_service_config(data=data, service_name=service_id, runtimes=RUNTIMES)
 
     py = resolve_python(project_root, cfg.runtime)
     templates = templates_root(project_root)
 
-    # Render service unit
     svc_tpl_path = pick_service_template(cfg.type, templates)
     svc_tpl = load_template(svc_tpl_path)
 
-    # build an args str (only includes system env for now)
     args_str = "--prod" if SERVICE_ENV == "prod" else ""
 
-    print(f"[info] installing {service_name}: env={
-          SERVICE_ENV} args={args_str or '<none>'}")
+    print(f"[info] installing {service_id} as unit={unit_name}: env={SERVICE_ENV} args={args_str or '<none>'}")
 
     repl = make_replacements(
         project_root=project_root,
         env_file=env_file,
-        service_name=service_name,
+        service_id=service_id,
+        unit_name=unit_name,
         description=cfg.description,
         python_bin=py,
-        args=args_str
+        args=args_str,
+        user=user,
     )
 
     svc_rendered = render_template(svc_tpl, repl)
 
-    # Write units
-    paths = unit_paths(service_name, user=user)
+    paths = unit_paths(unit_name, user=user)
+
     try:
         write_text(paths["service"], svc_rendered)
     except PermissionError as e:
@@ -190,9 +216,9 @@ def install(
     run(systemctl + ["daemon-reload"])
 
     if cfg.timer is not None:
-        run(systemctl + ["enable", "--now", f"{service_name}.timer"])
+        run(systemctl + ["enable", "--now", f"{unit_name}.timer"])
     else:
-        run(systemctl + ["enable", "--now", f"{service_name}.service"])
+        run(systemctl + ["enable", "--now", f"{unit_name}.service"])
 
     print("[done] service installed")
 
@@ -210,7 +236,7 @@ def require_root_for_system_units(*, user: bool, action: str) -> None:
 
 def uninstall(
     *,
-    service_name: str,
+    service_name: str,  # now interpreted as service_id, same as install
     user: bool,
 ) -> None:
     """
@@ -219,37 +245,37 @@ def uninstall(
     """
     require_root_for_system_units(user=user, action="uninstall")
 
-    project_root = Path.cwd().resolve()
+    service_id = normalize_service_id(service_name)
+    unit_name = unit_name_from_service_id(service_id)
+
     # We do not require the service dir or service.toml to uninstall; we operate on unit files.
-    paths = unit_paths(service_name, user=user)
+    paths = unit_paths(unit_name, user=user)
 
     try:
         systemctl = systemctl_cmd(user)
     except SystemdNotAvailable as e:
         die(str(e))
 
-    # Best-effort stop/disable (don't fail if not installed)
     def try_run(cmd: list[str]) -> None:
         print("+", " ".join(cmd))
         subprocess.run(cmd, check=False)
 
     # Stop timers first (prevents re-trigger)
-    try_run(systemctl + ["disable", "--now", f"{service_name}.timer"])
-    try_run(systemctl + ["disable", "--now", f"{service_name}.service"])
+    try_run(systemctl + ["disable", "--now", f"{unit_name}.timer"])
+    try_run(systemctl + ["disable", "--now", f"{unit_name}.service"])
 
     # Clean up "failed" state so status output is clearer
-    try_run(systemctl + ["reset-failed", f"{service_name}.service"])
-    try_run(systemctl + ["reset-failed", f"{service_name}.timer"])
+    try_run(systemctl + ["reset-failed", f"{unit_name}.service"])
+    try_run(systemctl + ["reset-failed", f"{unit_name}.timer"])
 
     # Remove unit files if they exist
     removed_any = False
-    for unit_type, p in paths.items():
+    for _, p in paths.items():
         if p.exists():
             p.unlink()
             removed_any = True
             print(f"[ok] deleted {p}")
 
-    # Reload systemd if we changed anything
     if removed_any:
         try_run(systemctl + ["daemon-reload"])
 
@@ -262,23 +288,23 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     ap_install = sub.add_parser("install", help="Install a service")
-    ap_install.add_argument("service", help="Service name (services/<name>/)")
+    ap_install.add_argument("service", help="Service id under services/ (e.g. youtube/monitor)")
     ap_install.add_argument("--user", action="store_true",
                             help="Install as user unit (~/.config/systemd/user)")
 
     ap_uninstall = sub.add_parser(
         "uninstall", help="Uninstall a service (stop/disable + delete unit files)")
-    ap_uninstall.add_argument("service", help="Service name (unit prefix)")
+    ap_uninstall.add_argument("service", help="Service id under services/ (e.g. youtube/monitor)")
     ap_uninstall.add_argument("--user", action="store_true",
                               help="Uninstall user unit (~/.config/systemd/user)")
 
     args = ap.parse_args()
-    name = args.service.replace("-", "_")
+    service_id = normalize_service_id(args.service)
 
     if args.cmd == "install":
-        install(service_name=name, user=args.user)
+        install(service_name=service_id, user=args.user)
     elif args.cmd == "uninstall":
-        uninstall(service_name=name, user=args.user)
+        uninstall(service_name=service_id, user=args.user)
     else:
         die(f"Unknown command: {args.cmd}")
 

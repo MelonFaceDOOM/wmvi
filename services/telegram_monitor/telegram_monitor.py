@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-import asyncio
 import logging
 import time
 
@@ -16,7 +15,7 @@ load_dotenv()
 
 API_ID = os.getenv("TELEGRAM_API_ID")
 API_HASH = os.getenv("TELEGRAM_API_HASH")
-SESSION = os.getenv("TG_SESSION", "tg_scrape")
+SESSION = os.getenv("TG_SESSION", "services/telegram_monitor/tg_scrape")
 
 
 CHANNEL_LIST = [
@@ -214,6 +213,8 @@ async def login_once(prod: bool = False) -> None:
 
 
 async def main(prod=False):
+    _setup_logging()
+    log.info("main start: prod=%s session=%s", prod, SESSION)
     require_session_file(SESSION)
     if prod:
         init_pool(prefix="prod")

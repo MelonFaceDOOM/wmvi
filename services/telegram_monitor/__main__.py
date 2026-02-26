@@ -1,6 +1,9 @@
 import argparse
 import asyncio
 from .telegram_monitor import main, login_once
+import logging
+
+log = logging.getLogger(__name__)
 
 """
 TO RUN ON DEV:
@@ -26,7 +29,11 @@ def _parse_args():
 
 if __name__ == "__main__":
     args = _parse_args()
-    if args.login:
-        asyncio.run(login_once(prod=args.prod))
-    else:
-        asyncio.run(main(prod=args.prod))
+    try:
+        if args.login:
+            asyncio.run(login_once(prod=args.prod))
+        else:
+            asyncio.run(main(prod=args.prod))
+    except KeyboardInterrupt:
+        # asyncio.run() turns cancellation into KeyboardInterrupt at top-level
+        log.warning("KeyboardInterrupt: exiting")
