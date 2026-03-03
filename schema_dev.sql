@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CU27cCRcbkqYfU9SKm5PYciA60HHbRRl7ePaeBOtbkHwgB1Pmcn0AByeaQwvT6T
+\restrict 249EMiqS1Vnu2w9yyzb6QTABRkiAncbqabFMXYmLaD0xoMM5E9OC2Lo8PJ8trW0
 
 -- Dumped from database version 17.7
 -- Dumped by pg_dump version 18.1
@@ -414,8 +414,7 @@ ALTER SEQUENCE news.article_id_seq OWNED BY news.article.id;
 CREATE TABLE podcasts.episodes (
     id text NOT NULL,
     date_entered timestamp with time zone DEFAULT now() NOT NULL,
-    audio_path text NOT NULL,
-    guid text NOT NULL,
+    guid text,
     title text,
     description text,
     created_at_ts timestamp with time zone,
@@ -425,7 +424,8 @@ CREATE TABLE podcasts.episodes (
     transcript_updated_at timestamp with time zone,
     is_en boolean,
     tsv_en tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, COALESCE(transcript, ''::text))) STORED,
-    transcription_started_at timestamp with time zone
+    transcription_started_at timestamp with time zone,
+    CONSTRAINT episodes_guid_not_empty_chk CHECK (((guid IS NULL) OR (guid <> ''::text)))
 );
 
 
@@ -438,7 +438,12 @@ CREATE TABLE podcasts.shows (
     date_entered timestamp with time zone DEFAULT now() NOT NULL,
     title text NOT NULL,
     rss_url text,
-    rss_url_hash character varying(32) GENERATED ALWAYS AS (md5(rss_url)) STORED
+    rss_url_hash character varying(32) GENERATED ALWAYS AS (md5(rss_url)) STORED,
+    etag text,
+    last_modified text,
+    last_fetch_ts timestamp with time zone,
+    last_http_status integer,
+    last_error text
 );
 
 
@@ -659,7 +664,9 @@ CREATE TABLE sm.reddit_submission (
     media jsonb,
     gildings jsonb,
     all_awardings jsonb,
-    is_en boolean
+    is_en boolean,
+    selftext text,
+    shared_url text
 );
 
 
@@ -888,6 +895,19 @@ CREATE VIEW sm.post_search_en AS
 
 
 --
+-- Name: reddit_submission_search_status; Type: TABLE; Schema: sm; Owner: -
+--
+
+CREATE TABLE sm.reddit_submission_search_status (
+    term_id integer NOT NULL,
+    last_found_ts timestamp with time zone NOT NULL,
+    last_found_id text NOT NULL,
+    date_entered timestamp with time zone DEFAULT now() NOT NULL,
+    last_updated timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: vaccine_term; Type: TABLE; Schema: taxonomy; Owner: -
 --
 
@@ -958,7 +978,9 @@ CREATE TABLE youtube.search_status (
     term_id integer NOT NULL,
     last_found_ts timestamp with time zone NOT NULL,
     date_entered timestamp with time zone DEFAULT now() NOT NULL,
-    last_updated timestamp with time zone DEFAULT now() NOT NULL
+    last_updated timestamp with time zone DEFAULT now() NOT NULL,
+    oldest_found_ts timestamp with time zone,
+    oldest_updated timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -1070,14 +1092,6 @@ ALTER TABLE ONLY podcasts.episodes
 
 
 --
--- Name: episodes episodes_podcast_guid_uniq; Type: CONSTRAINT; Schema: podcasts; Owner: -
---
-
-ALTER TABLE ONLY podcasts.episodes
-    ADD CONSTRAINT episodes_podcast_guid_uniq UNIQUE (podcast_id, guid);
-
-
---
 -- Name: shows podcasts_rss_url_uniq; Type: CONSTRAINT; Schema: podcasts; Owner: -
 --
 
@@ -1179,6 +1193,14 @@ ALTER TABLE ONLY sm.reddit_comment
 
 ALTER TABLE ONLY sm.reddit_submission
     ADD CONSTRAINT reddit_submission_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: reddit_submission_search_status reddit_submission_search_status_pkey; Type: CONSTRAINT; Schema: sm; Owner: -
+--
+
+ALTER TABLE ONLY sm.reddit_submission_search_status
+    ADD CONSTRAINT reddit_submission_search_status_pkey PRIMARY KEY (term_id);
 
 
 --
@@ -1334,6 +1356,20 @@ CREATE INDEX episodes_date_entered_brin ON podcasts.episodes USING brin (date_en
 
 
 --
+-- Name: episodes_podcast_download_url_idx; Type: INDEX; Schema: podcasts; Owner: -
+--
+
+CREATE INDEX episodes_podcast_download_url_idx ON podcasts.episodes USING btree (podcast_id, download_url) WHERE ((download_url IS NOT NULL) AND (download_url <> ''::text));
+
+
+--
+-- Name: episodes_podcast_guid_uniq; Type: INDEX; Schema: podcasts; Owner: -
+--
+
+CREATE UNIQUE INDEX episodes_podcast_guid_uniq ON podcasts.episodes USING btree (podcast_id, guid) WHERE ((guid IS NOT NULL) AND (guid <> ''::text));
+
+
+--
 -- Name: episodes_transcript_tsv_en_gin; Type: INDEX; Schema: podcasts; Owner: -
 --
 
@@ -1457,6 +1493,20 @@ CREATE INDEX rc_subreddit_idx ON sm.reddit_comment USING btree (subreddit);
 --
 
 CREATE INDEX rc_tsv_en_gin ON sm.reddit_comment USING gin (tsv_en);
+
+
+--
+-- Name: reddit_submission_search_status_last_found_idx; Type: INDEX; Schema: sm; Owner: -
+--
+
+CREATE INDEX reddit_submission_search_status_last_found_idx ON sm.reddit_submission_search_status USING btree (last_found_ts);
+
+
+--
+-- Name: reddit_submission_search_status_last_found_ts_id_idx; Type: INDEX; Schema: sm; Owner: -
+--
+
+CREATE INDEX reddit_submission_search_status_last_found_ts_id_idx ON sm.reddit_submission_search_status USING btree (last_found_ts, last_found_id);
 
 
 --
@@ -1846,7 +1896,7 @@ ALTER TABLE ONLY podcasts.episodes
 --
 
 ALTER TABLE ONLY podcasts.transcript_segments
-    ADD CONSTRAINT transcript_segments_episode_id_fkey FOREIGN KEY (episode_id) REFERENCES podcasts.episodes(id) ON DELETE CASCADE;
+    ADD CONSTRAINT transcript_segments_episode_id_fkey FOREIGN KEY (episode_id) REFERENCES podcasts.episodes(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 --
@@ -1879,6 +1929,14 @@ ALTER TABLE ONLY sm.reddit_comment
 
 ALTER TABLE ONLY sm.reddit_comment
     ADD CONSTRAINT reddit_comment_submission_fk FOREIGN KEY (link_id) REFERENCES sm.reddit_submission(id) ON DELETE CASCADE;
+
+
+--
+-- Name: reddit_submission_search_status reddit_submission_search_status_term_fk; Type: FK CONSTRAINT; Schema: sm; Owner: -
+--
+
+ALTER TABLE ONLY sm.reddit_submission_search_status
+    ADD CONSTRAINT reddit_submission_search_status_term_fk FOREIGN KEY (term_id) REFERENCES taxonomy.vaccine_term(id) ON DELETE CASCADE;
 
 
 --
@@ -1933,5 +1991,5 @@ ALTER TABLE ONLY youtube.transcript_segments
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CU27cCRcbkqYfU9SKm5PYciA60HHbRRl7ePaeBOtbkHwgB1Pmcn0AByeaQwvT6T
+\unrestrict 249EMiqS1Vnu2w9yyzb6QTABRkiAncbqabFMXYmLaD0xoMM5E9OC2Lo8PJ8trW0
 

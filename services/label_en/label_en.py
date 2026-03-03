@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import signal
+import threading
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
@@ -16,76 +18,24 @@ BATCH_SIZE = 2000
 MIN_LEN = 24
 MIN_CONF = 0.65
 
-# ----------------------------------------------------------------------
-# Platform-specific routing (Needs to be updated on new platform additions)
-# ----------------------------------------------------------------------
+_STOP = threading.Event()  # long loops will check if this is set to enable faster quits on ctrl-c
 
-PLATFORM_UPDATE_SPEC: dict[str, tuple[str, str, str | None]] = {
-    "tweet": (
-        "sm.tweet",
-        "id",
-        "",
-    ),
-    "reddit_submission": (
-        "sm.reddit_submission",
-        "id",
-        "",
-    ),
-    "reddit_comment": (
-        "sm.reddit_comment",
-        "id",
-        "",
-    ),
-    "telegram_post": (
-        "sm.telegram_post",
-        "channel_id",
-        "message_id",
-    ),
-    "youtube_comment": (
-        "youtube.comment",
-        "video_id",
-        "comment_id",
-    ),
-    "youtube_video": (
-        "youtube.video",
-        "video_id",
-        "",
-    ),
-    "podcast_episode": (
-        "podcasts.episodes",
-        "id",
-        "",
-    ),
-    "news_article": (
-        "news.article",
-        "id",
-        "",
-    ),
-}
+def _handle_signal(signum, frame):
+    logging.getLogger(__name__).warning("Received signal %s, stopping...", signum)
+    _STOP.set()
 
 
-def build_update_sql(
-    table: str,
-    key1_col: str,
-    key2_col: str,
-) -> str:
-    if key2_col == "":
-        return f"""
-            UPDATE {table}
-               SET is_en = %s
-             WHERE {key1_col} = %s
-        """
-    else:
-        return f"""
-            UPDATE {table}
-               SET is_en = %s
-             WHERE {key1_col} = %s
-               AND {key2_col} = %s
-        """
+def build_update_sql_from_row(row_cls) -> str:
+    table = row_cls.TABLE
+    pk = row_cls.PK
 
-# ----------------------------------------------------------------------
-# Core service
-# ----------------------------------------------------------------------
+    if len(pk) == 1:
+        return f"UPDATE {table} SET is_en = %s WHERE {pk[0]} = %s"
+    if len(pk) == 2:
+        return f"UPDATE {table} SET is_en = %s WHERE {pk[0]} = %s AND {pk[1]} = %s"
+
+    raise ValueError(f"Unsupported PK length for {row_cls}: {pk!r}")
+
 
 
 class LanguageLabeler:
@@ -106,6 +56,9 @@ class LanguageLabeler:
 
         with getcursor() as read_cur, getcursor(commit=True) as write_cur:
             for batch in self._iter_posts_new(read_cur, min_id=last_checked, max_id=max_id):
+                if _STOP.is_set():
+                    log.info("language labeler: stop requested, exiting early")
+                    break
                 scanned += len(batch)
                 u, unk = self._label_batch(batch, write_cur)
                 updated += u
@@ -135,6 +88,9 @@ class LanguageLabeler:
             for batch in self._iter_posts_old_unlabeled(
                 read_cur, before_id=last_checked, platform=platform
             ):
+                if _STOP.is_set():
+                    log.info("language labeler: stop requested, exiting early")
+                    break
                 scanned += len(batch)
                 u, unk = self._label_batch(batch, write_cur)
                 updated += u
@@ -155,13 +111,19 @@ class LanguageLabeler:
         Apply detect_is_en() to a batch and write updates grouped by platform.
         Returns: (updated_count, unknown_count)
         """
-        updates_by_platform: Dict[str,
-                                  List[Tuple[Any, ...]]] = defaultdict(list)
+        from ingestion.platform_registry import PLATFORM_ROW  # platform -> InsertableRow subclass
+
+        updates_by_platform: Dict[str, List[Tuple[Any, ...]]] = defaultdict(list)
         unknown = 0
 
+        # Cache update SQL per platform to avoid rebuilding in the loop
+        sql_by_platform: dict[str, str] = {}
+
         for _post_id, platform, key1, key2, text in batch:
-            spec = PLATFORM_UPDATE_SPEC.get(platform)
-            if not spec:
+            if _STOP.is_set():
+                break
+            row_cls = PLATFORM_ROW.get(platform)
+            if row_cls is None:
                 continue
 
             r = detect_is_en(text, min_len=MIN_LEN, min_conf=MIN_CONF)
@@ -169,15 +131,21 @@ class LanguageLabeler:
                 unknown += 1
                 r = False  # still mark as False if unknown
 
-            if spec[2] == "":
+            pk = row_cls.PK
+
+            # Build SQL once per platform
+            if platform not in sql_by_platform:
+                sql_by_platform[platform] = build_update_sql_from_row(row_cls)
+
+            # Queue row update args
+            if len(pk) == 1:
                 updates_by_platform[platform].append((r, key1))
             else:
                 updates_by_platform[platform].append((r, key1, key2))
 
         updated = 0
         for platform, rows in updates_by_platform.items():
-            table, key1_col, key2_col = PLATFORM_UPDATE_SPEC[platform]
-            sql = build_update_sql(table, key1_col, key2_col)
+            sql = sql_by_platform[platform]
             execute_batch(write_cur, sql, rows, page_size=1000)
             updated += write_cur.rowcount or 0
 
@@ -205,6 +173,8 @@ class LanguageLabeler:
             (min_id, max_id),
         )
         while True:
+            if _STOP.is_set():
+                break
             rows = cur.fetchmany(BATCH_SIZE)
             if not rows:
                 break
@@ -234,6 +204,8 @@ class LanguageLabeler:
         cur.execute(sql, params)
 
         while True:
+            if _STOP.is_set():
+                break
             rows = cur.fetchmany(BATCH_SIZE)
             if not rows:
                 break
@@ -289,6 +261,14 @@ class LanguageLabeler:
 # ----------------------------------------------------------------------
 
 def main(prod: bool = False, recheck: str | None = None) -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+
     init_pool(prefix="prod" if prod else "dev")
     try:
         if recheck is not None:

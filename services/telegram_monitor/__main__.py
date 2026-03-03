@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-from .telegram_monitor import main, login_once
+from .monitor import main, login_once
 import logging
 
 log = logging.getLogger(__name__)

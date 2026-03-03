@@ -48,7 +48,7 @@ OVERLAP = timedelta(minutes=5)
 MAX_PAGES = 10
 MIN_NEW_RATIO = 0.1
 
-TOTAL_BUDGET_UNITS_PER_DAY = 5_000
+TOTAL_BUDGET_UNITS_PER_DAY = 3_500
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 

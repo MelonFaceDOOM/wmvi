@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import List
 
 from db.db import getcursor
-from ingestion.youtube.videos import save_videos
-from ingestion.youtube.comments import save_comments
+from ingestion.youtube.video import save_videos, YoutubeVideoRow
+from ingestion.youtube.comment import save_comments, YoutubeCommentRow
+
 from .quota_client import YTQuotaClient, iter_videos
 
 @dataclass
@@ -115,7 +116,9 @@ def _ingest_page(
     vids: list[dict],              # normalized videos
     min_comments_for_scrape: int,
 ) -> tuple[list[dict], int, int, list[dict], int, int]:
-    ins_v, skip_v, inserted_vid_ids = save_videos(vids, term_name=term_name)
+    vid_rows = [YoutubeVideoRow(**v) for v in vids]
+    ins_v, skip_v, inserted_vid_ids = save_videos(vid_rows, term_name=term_name)
+
     new_vids = [v for v in vids if v.get("video_id") in inserted_vid_ids]
 
     ins_c = skip_c = 0
@@ -134,7 +137,9 @@ def _ingest_page(
             if not comments:
                 continue
 
-            ins, skip, inserted_comment_ids = save_comments(comments, term_name=term_name)
+            comment_rows = [YoutubeCommentRow(**c) for c in comments]
+
+            ins, skip, inserted_comment_ids = save_comments(comment_rows, term_name=term_name)
             ins_c += ins
             skip_c += skip
 

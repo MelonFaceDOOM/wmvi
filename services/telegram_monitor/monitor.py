@@ -3,7 +3,7 @@ import logging
 import time
 
 from db.db import getcursor, init_pool, close_pool
-from ingestion.telegram_post import flush_telegram_batch
+from ingestion.telegram import TelegramPostRow, flush_telegram_batch
 from ingestion.ingestion import ensure_scrape_job
 from .tg_scrape import scrape_channel_batches, probe_channel
 from telethon import TelegramClient
@@ -123,6 +123,30 @@ def get_most_recent_ts_for_tg_channel_in_db(channel_id):
     return row[0]
 
 
+def insert_batch(batch, job_id):
+    """convert to expected class obj then insert"""
+    rows = [
+        TelegramPostRow(
+            channel_id=str(d["channel_id"]),
+            message_id=str(d["message_id"]),
+            link=d.get("link"),
+            text=d.get("text"),
+            filtered_text=d.get("filtered_text"),
+            created_at_ts=d.get("created_at_ts"),
+            views=d.get("views"),
+            forwards=d.get("forwards"),
+            replies=d.get("replies"),
+            reactions_total=d.get("reactions_total"),
+            is_pinned=d.get("is_pinned"),
+            has_media=d.get("has_media"),
+            raw_type=d.get("raw_type"),
+        )
+        for d in batch
+    ]
+
+    flush_telegram_batch(rows, job_id)
+
+
 async def monitor_loop(client):
     await client.connect()
     if not await client.is_user_authorized():
@@ -175,7 +199,7 @@ async def monitor_loop(client):
                 total_batches += 1
                 total_rows += len(batch)
 
-                flush_telegram_batch(batch, job_id)
+                insert_batch(batch, job_id)
                 if total_batches == 1 or total_batches % 10 == 0:
                     log.info("channel progress: %s batches=%d rows=%d",
                              channel, total_batches, total_rows)
@@ -189,6 +213,7 @@ async def monitor_loop(client):
 
     log.info("monitor done")
     await client.disconnect()
+
 
 ####################################
 # TWO VALID ENTRY POINTS

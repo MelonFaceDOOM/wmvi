@@ -12,11 +12,11 @@ from db.migrations_runner import run_migrations
 from datetime import datetime, timezone
 from filtering.anonymization import redact_pii
 from ingestion.ingestion import ensure_scrape_job
-from ingestion.reddit_submission import flush_reddit_submission_batch
-from ingestion.telegram_post import flush_telegram_batch
-from ingestion.youtube.videos import flush_youtube_video_batch
-from ingestion.youtube.comments import flush_youtube_comment_batch
-from ingestion.reddit_comment import (
+from ingestion.reddit.submission import flush_reddit_submission_batch
+from ingestion.telegram import flush_telegram_batch
+from ingestion.youtube.video import flush_youtube_video_batch
+from ingestion.youtube.comment import flush_youtube_comment_batch
+from ingestion.reddit.comment import (
     flush_reddit_comment_batch,
     parse_link_id,
     parse_comment_id

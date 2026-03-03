@@ -139,7 +139,6 @@ async def scrape_channel_batches(
             normalized = normalize_message(msg, username, chan_id)
             text = normalized.get("text", "")
             if text and text.strip():
-                batch.append(normalize_message(msg, username, chan_id))
                 processed += 1
 
             if len(batch) >= batch_size:

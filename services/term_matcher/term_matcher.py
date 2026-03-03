@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import re
 from typing import Iterable, List, Tuple
+import signal
+import threading
 
 from dotenv import load_dotenv
 
@@ -21,6 +23,12 @@ load_dotenv()
 
 MATCHER_VERSION = "tsv_en_spans_v2"
 
+
+_STOP = threading.Event()
+
+def _handle_signal(signum, frame):
+    logging.getLogger("term_matcher").warning("Received signal %s, stopping...", signum)
+    _STOP.set()
 
 # --------------------
 # core matcher
@@ -42,6 +50,9 @@ def run(term_names: Iterable[str] | None = None) -> None:
     log.info("Processing %d terms.", len(terms))
 
     for term_id, term_name in terms:
+        if _STOP.is_set():
+            log.info("Stop requested; exiting before term=%r", term_name)
+            return
         _process_term(term_id, term_name)
 
 
@@ -69,6 +80,8 @@ def _process_term(term_id: int, term: str) -> None:
         pattern = re.compile(re.escape(term), re.IGNORECASE)
 
         for post_id, text in candidates:
+            if _STOP.is_set():
+                break
             for m in pattern.finditer(text):
                 hits.append(
                     (
@@ -94,7 +107,9 @@ def _process_term(term_id: int, term: str) -> None:
     )
 
 
-def main(*, prod: bool = False, terms: Optional[list[str]] = None) -> None:
+def main(*, prod: bool = False, terms: list[str] | None = None) -> None:
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

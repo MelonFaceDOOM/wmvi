@@ -12,15 +12,16 @@ from dotenv import load_dotenv
 
 from db.db import init_pool, close_pool, getcursor
 from db.post_registry_utils import ensure_post_registered
+from ingestion.podcast import PodcastTranscriptSegmentRow, flush_podcast_transcript_segments_batch
+
 from transcription.transcription import (
     load_whisper_model,
     transcribe_audio_file,
 )
-from services.youtube.transcriber.youtube_transcriber import download_yt_audio, DownloadFailed
+from . import download_episode, DownloadFailed
 
 load_dotenv()
 
-MAX_VID_LENGTH = 3 * 3600
 AUDIO_QUEUE_SIZE = 3
 SAVE_QUEUE_SIZE = 2
 
@@ -66,7 +67,7 @@ def _handle_signal(signum, frame):
     logging.warning("Received signal %s, cleaning up temp files", signum)
     _cleanup_all_tempdirs()
     close_pool()
-    logging.info("youtube transcriber: shutdown complete")
+    logging.info("transcriber: shutdown complete")
     os._exit(0)
 
 
@@ -74,79 +75,63 @@ def _handle_signal(signum, frame):
 # DB helpers
 # ----------------------------
 
-def claim_next_video(cur) -> Optional[Tuple[str, str]]:
+def claim_next_episode(cur) -> Optional[Tuple[str, str]]:
     cur.execute(
         """
-        SELECT video_id, url 
-        FROM youtube.video
+        SELECT id, download_url
+        FROM podcasts.episodes
         WHERE transcript IS NULL
           AND (
                 transcription_started_at IS NULL
-              OR transcription_started_at < now() - interval '6 hours'
+             OR transcription_started_at < now() - interval '6 hours'
           )
-          AND duration_seconds IS NOT NULL
-          AND duration_seconds <= %s
         ORDER BY created_at_ts
         LIMIT 1
         FOR UPDATE SKIP LOCKED
-        """,
-        (MAX_VID_LENGTH,)
+        """
     )
     row = cur.fetchone()
     if not row:
         return None
 
-    video_id, url = row
+    episode_id, url = row
     cur.execute(
         """
-        UPDATE youtube.video
+        UPDATE podcasts.episodes
            SET transcription_started_at = now()
-         WHERE video_id = %s
+         WHERE id = %s
         """,
-        (video_id,),
+        (episode_id,),
     )
 
-    return video_id, str(url)
+    return episode_id, str(url)
 
 
-def save_transcript(cur, video_id: str, transcript: str) -> None:
+def save_transcript(cur, episode_id: str, transcript: str) -> None:
     cur.execute(
         """
-        UPDATE youtube.video
+        UPDATE podcasts.episodes
            SET transcript = %s,
                transcript_updated_at = now()
-         WHERE video_id = %s
+         WHERE id = %s
         """,
-        (transcript, video_id),
+        (transcript, episode_id),
     )
 
 
-def save_segments(cur, video_id: str, segments) -> None:
-    cur.execute(
-        """DELETE FROM youtube.transcript_segments WHERE video_id = %s""", (video_id,))
-    cur.executemany(
-        """
-        INSERT INTO youtube.transcript_segments (
-            video_id,
-            seg_idx,
-            start_s,
-            end_s,
-            text
+def save_segments(cur, episode_id: str, segments) -> None:
+    rows = [
+        PodcastTranscriptSegmentRow(
+            episode_id=episode_id,
+            seg_idx=idx,
+            start_s=float(seg.start),
+            end_s=float(seg.end),
+            text=seg.text,
         )
-        VALUES (%s, %s, %s, %s, %s)
-        """,
-        [
-            (
-                video_id,
-                idx,
-                seg.start,
-                seg.end,
-                seg.text,
-            )
-            for idx, seg in enumerate(segments)
-        ],
-    )
-
+        for idx, seg in enumerate(segments)
+    ]
+    # replace=True will delete existing segments for this episode_id inside the same transaction
+    flush_podcast_transcript_segments_batch(rows, cur=cur, replace=True)
 
 # ----------------------------
 # Workers
@@ -159,19 +144,19 @@ def audio_loader_worker(audio_q: queue.Queue, limit: Optional[int]) -> None:
 
     while True:
         if limit is not None and claimed >= limit:
-            logging.info("audio_loader: reached limit=%s", limit)
             audio_q.put(None)  # pass exit signal down the line
+            logging.info("audio_loader: reached limit=%s", limit)
             return
 
         with getcursor(commit=True) as cur:
-            item = claim_next_video(cur)
+            item = claim_next_episode(cur)
 
         if item is None:
-            logging.info("audio_loader: no videos left")
             audio_q.put(None)  # pass exit signal down the line
+            logging.info("audio_loader: no episodes left")
             return
 
-        video_id, url = item
+        episode_id, url = item
         claimed += 1
 
         td = tempfile.TemporaryDirectory()
@@ -179,9 +164,9 @@ def audio_loader_worker(audio_q: queue.Queue, limit: Optional[int]) -> None:
         audio_path = os.path.join(td.name, "audio")
         logging.info("audio_loader: downloading %s", url)
         try:
-            download_yt_audio(url, audio_path)
+            download_episode(url, audio_path)
             # completed by transcriber_worker()
-            audio_q.put((video_id, audio_path, td))
+            audio_q.put((episode_id, audio_path, td))
         except DownloadFailed as e:
             logging.warning("audio_loader: %s", e)
             _cleanup_tempdir(td)
@@ -196,12 +181,12 @@ def transcriber_worker(audio_q: queue.Queue, save_q: queue.Queue) -> None:
     while True:
         item = audio_q.get()
         if item is None:
-            save_q.put(None)  # pass exit signal to saver
+            save_q.put(None)  # pass exit signal along
             return  # exit
         try:
-            video_id, audio_path, td = item
+            episode_id, audio_path, td = item
             segments, transcript = transcribe_audio_file(model, audio_path)
-            save_q.put((video_id, segments, transcript, td))
+            save_q.put((episode_id, segments, transcript, td))
         finally:
             audio_q.task_done()
 
@@ -212,18 +197,17 @@ def saver_worker(save_q: queue.Queue) -> None:
     while True:
         item = save_q.get()
         if item is None:
-            return  # exit signal received
+            return  # exit
         try:
-            video_id, segments, transcript, td = item
+            episode_id, segments, transcript, td = item
 
             # Persist to DB (atomic within one transaction)
             with getcursor(commit=True) as cur:
-                save_transcript(cur, video_id, transcript)
-                save_segments(cur, video_id, segments)
+                save_transcript(cur, episode_id, transcript)
+                save_segments(cur, episode_id, segments)
                 ensure_post_registered(
-                    cur, platform="youtube_video", key1=video_id)
-
-            logging.info("saver: videos %s saved", video_id)
+                    cur, platform="podcast_episode", key1=episode_id)
+            logging.info("saver: episode %s saved", episode_id)
         finally:
             # Always clean up the tempdir once saver is done
             # Saver is the *final owner* of td
@@ -292,8 +276,7 @@ def main(prod=False, limit: Optional[int] = None) -> None:
     try:
         for t in threads:
             t.join()
-
-        logging.info("All youtube videos processed")
+        logging.info("All episodes processed")
     finally:
         _cleanup_all_tempdirs()
         close_pool()

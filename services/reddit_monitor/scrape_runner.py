@@ -16,10 +16,10 @@ from psycopg2.extensions import cursor as PGCursor
 from db.db import getcursor
 
 from ingestion.ingestion import ensure_scrape_job
-from ingestion.reddit_submission import flush_reddit_submission_batch
-from ingestion.reddit_comment import flush_reddit_comment_batch
+from ingestion.reddit.submission import flush_reddit_submission_batch
+from ingestion.reddit.comment import flush_reddit_comment_batch
 from filtering.anonymization import redact_pii
-from ingestion.reddit_comment import parse_link_id, parse_comment_id
+from ingestion.reddit.comment import parse_link_id, parse_comment_id
 
 import threading
 

@@ -64,7 +64,7 @@ def test_backfill_term_uses_backfill_end_when_no_existing_data(monkeypatch) -> N
 
     calls: list[tuple[datetime, datetime]] = []
 
-    def fake_scrape_window(*, qyt, term_name, published_after, published_before, max_pages):
+    def fake_scrape_window(*, qyt, term_name, published_after, published_before, max_pages, **_):
         calls.append((published_after, published_before))
         return FakeScrapeWindowOutcome(
             pages=1,
@@ -103,7 +103,7 @@ def test_backfill_term_shrinks_window_on_max_pages_and_retries_same_window(monke
     calls: list[tuple[datetime, datetime]] = []
     n = {"k": 0}
 
-    def fake_scrape_window(*, qyt, term_name, published_after, published_before, max_pages):
+    def fake_scrape_window(*, qyt, term_name, published_after, published_before, max_pages, **_):
         calls.append((published_after, published_before))
         n["k"] += 1
         if n["k"] == 1:
@@ -134,7 +134,7 @@ def test_backfill_term_advances_published_before_backward_with_overlap(monkeypat
 
     calls: list[tuple[datetime, datetime]] = []
 
-    def fake_scrape_window(*, qyt, term_name, published_after, published_before, max_pages):
+    def fake_scrape_window(*, qyt, term_name, published_after, published_before, max_pages, **_):
         calls.append((published_after, published_before))
         return FakeScrapeWindowOutcome(stops={}, pages=1)
 

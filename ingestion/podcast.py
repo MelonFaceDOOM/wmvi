@@ -1,178 +1,162 @@
 from __future__ import annotations
 
-from typing import List, Dict, Tuple
+from dataclasses import dataclass
+from datetime import datetime
+import hashlib
+
 
 from db.db import getcursor
-from ingestion.ingestion import insert_batch
+from ingestion.ingestion import flush_rows
+from ingestion.row_model import InsertableRow
 
 """
-podcasts are entered into shows/episodes tables
-but they are not entered into post_registry until transcription is done
-the transcription service should enter them into post_registry
+Notes / current design:
 
-the transcription service will fill the following cols:
- - transcript
- - tsv_en
-
-then later is_en will be set by the label_en service
-"""
-
-# -------------------------
-# podcasts.shows
-# -------------------------
-
-PODCAST_SHOWS_COLS = [
-    "id",
-    "date_entered",
-    "title",
-    "rss_url",
-]
-
-PODCAST_SHOWS_INSERT_SQL = """
-    INSERT INTO podcasts.shows (
-        id,
-        date_entered,
-        title,
-        rss_url
-    )
-    OVERRIDING SYSTEM VALUE
-    VALUES (
-        %(id)s,
-        %(date_entered)s,
-        %(title)s,
-        %(rss_url)s
-    )
-    ON CONFLICT DO NOTHING
+- podcasts.shows and podcasts.episodes are populated by the monitor / scrapers.
+- podcast episodes are NOT entered into sm.post_registry here.
+  The transcription service should enter them into post_registry once transcription exists.
+  Then later is_en will be set by the label_en service
 """
 
 
-def flush_podcast_shows_batch(rows: List[Dict]) -> Tuple[int, int]:
-    """
-    Insert a batch of podcast shows into podcasts.shows.
+# -------------------------
+# episode id stuff
+# -------------------------
+# id format is: "ep_<podcast_id>_<md5(token)>"
+#   where token is built from the first of these that is present: guid > download_url > created_at_ts+title
 
-    rows: list of dicts with keys PODCAST_SHOWS_COLS:
+def _md5_hex(s: str) -> str:
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
 
-    Returns:
-        (inserted, skipped) where:
-          - inserted = number of rows actually inserted
-          - skipped  = number of rows skipped due to ON CONFLICT (id)
 
-    Assumes:
-      - DB pool has been initialized (db.init_pool)
-    """
+def compute_episode_id(
+    *,
+    podcast_id: int,
+    guid: str | None,
+    download_url: str | None,
+    created_at_ts: datetime | None,
+    title: str | None,
+) -> str:
+    guid_s = (guid or "").strip()
+    url_s = (download_url or "").strip()
+
+    if guid_s:
+        token = guid_s
+    elif url_s:
+        token = url_s
+    else:
+        created_s = created_at_ts.isoformat() if created_at_ts else ""
+        title_s = title or ""
+        token = f"{created_s}:{title_s}"
+
+    material = f"{podcast_id}:{token}"
+    return f"ep_{podcast_id}_{_md5_hex(material)}"
+# -------------------------
+# Row models
+# -------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class PodcastShowRow(InsertableRow):
+    TABLE = "podcasts.shows"
+    PK = ("id",)  # TODO: This will cause issues if we ever actually try to insert these objects;
+                  #  since the db table generates the id values and needs special sql to specify value
+                  #  furthermore, we can't just remove it from this class since InsertableRow needs PK
+                  #  This is fine for now but we'll have to figure it out when we start inserting shows
+
+    id: int
+    title: str
+    rss_url: str | None = None
+
+    # monitor state (usually None on insert; populated on read)
+    etag: str | None = None
+    last_modified: str | None = None  # http header value; not datetime obj
+    last_fetch_ts: datetime | None = None
+    last_http_status: int | None = None
+    last_error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PodcastEpisodeRow(InsertableRow):
+    TABLE = "podcasts.episodes"
+    PK = ("id",)
+
+    id: str
+    podcast_id: int
+    guid: str | None = None
+    title: str | None = None
+    description: str | None = None
+    created_at_ts: datetime | None = None
+    download_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PodcastTranscriptSegmentRow(InsertableRow):
+    TABLE = "podcasts.transcript_segments"
+    PK = ("episode_id", "seg_idx")
+
+    episode_id: str
+    seg_idx: int
+    start_s: float
+    end_s: float
+    text: str | None = None
+
+
+# -------------------------
+# Flush functions
+# -------------------------
+
+# Note that none of these link to a scrape job
+# There's no point because eps link to a podcast show and that's better and more specific
+# than any scrape job
+
+def flush_podcast_shows_batch(
+    rows: list[PodcastShowRow],
+    *,
+    cur=None,
+) -> tuple[int, int, set[tuple[str, ...]]]:
     if not rows:
-        return 0, 0
-
-    with getcursor(commit=True) as cur:
-        inserted, skipped = insert_batch(
-            insert_sql=PODCAST_SHOWS_INSERT_SQL,
-            rows=rows,
-            cur=cur,
-        )
-        return inserted, skipped
+        return 0, 0, set()
+    if not isinstance(rows[0], PodcastShowRow):
+        raise TypeError("rows must be list of PodcastShowRow")
+    return flush_rows(rows=rows, cur=cur)
 
 
-# -------------------------
-# podcasts.episodes
-# -------------------------
-
-PODCAST_EPISODE_COLS = [
-    "id",
-    "date_entered",
-    "audio_path",
-    "guid",
-    "title",
-    "description",
-    "created_at_ts",
-    "download_url",
-    "podcast_id",
-]
-
-PODCAST_EPISODES_INSERT_SQL = """
-    INSERT INTO podcasts.episodes (
-        {cols}
-    ) VALUES (
-        {vals}
-    )
-    ON CONFLICT DO NOTHING
-""".format(
-    cols=", ".join(PODCAST_EPISODE_COLS),
-    vals=", ".join(f"%({c})s" for c in PODCAST_EPISODE_COLS),
-)
-
-
-def flush_podcast_episodes_batch(rows: List[Dict]) -> Tuple[int, int]:
-    """
-    Insert a batch of episodes into podcasts.episodes.
-
-    rows: list of dicts with keys PODCAST_EPISODE_COLS:
-        id, date_entered, audio_path, guid, title, description,
-        created_at_ts, download_url, podcast_id
-
-    Caller is responsible for:
-        - building created_at_ts (e.g., from legacy pub_date)
-
-    Returns:
-        (inserted, skipped) as above.
-    """
+def flush_podcast_episodes_batch(
+    rows: list[PodcastEpisodeRow],
+    *,
+    cur=None,
+) -> tuple[int, int, set[tuple[str, ...]]]:
     if not rows:
-        return 0, 0
-
-    with getcursor(commit=True) as cur:
-        inserted, skipped = insert_batch(
-            insert_sql=PODCAST_EPISODES_INSERT_SQL,
-            rows=rows,
-            cur=cur,
-        )
-        return inserted, skipped
+        return 0, 0, set()
+    if not isinstance(rows[0], PodcastEpisodeRow):
+        raise TypeError("rows must be list of PodcastEpisodeRow")
+    return flush_rows(rows=rows, cur=cur)
 
 
-# -------------------------
-# podcasts.transcript_segments
-# -------------------------
-
-PODCAST_SEGMENT_COLS = [
-    "id",
-    "episode_id",
-    "seg_idx",
-    "start_s",
-    "end_s",
-    "text",
-    "filtered_text",
-]
-
-PODCAST_SEGMENTS_INSERT_SQL = """
-    INSERT INTO podcasts.transcript_segments (
-        {cols}
-    ) VALUES (
-        {vals}
-    )
-    ON CONFLICT (episode_id, seg_idx) DO NOTHING
-""".format(
-    cols=", ".join(PODCAST_SEGMENT_COLS),
-    vals=", ".join(f"%({c})s" for c in PODCAST_SEGMENT_COLS),
-)
-
-
-def flush_podcast_transcript_segments_batch(rows: List[Dict]) -> Tuple[int, int]:
-    """
-    Insert a batch of transcript segments into podcasts.transcript_segments.
-
-    rows: list of dicts with keys PODCAST_SEGMENT_COLS:
-        id, episode_id, seg_idx, start_s, end_s, text, filtered_text
-
-    Caller is responsible for pre-populating 'filtered_text'.
-
-    Returns:
-        (inserted, skipped) as above.
-    """
+def flush_podcast_transcript_segments_batch(
+    rows: list[PodcastTranscriptSegmentRow],
+    *,
+    cur=None,
+    replace: bool = False,
+) -> tuple[int, int, set[tuple[str, ...]]]:
     if not rows:
-        return 0, 0
+        return 0, 0, set()
+    if not isinstance(rows[0], PodcastTranscriptSegmentRow):
+        raise TypeError("rows must be list of PodcastTranscriptSegmentRow")
 
-    with getcursor(commit=True) as cur:
-        inserted, skipped = insert_batch(
-            insert_sql=PODCAST_SEGMENTS_INSERT_SQL,
-            rows=rows,
-            cur=cur,
+    if not replace:
+        return flush_rows(rows=rows, cur=cur)
+
+    def _run(cur2):
+        episode_ids = sorted({r.episode_id for r in rows})
+        cur2.execute(
+            "DELETE FROM podcasts.transcript_segments WHERE episode_id = ANY(%s)",
+            (episode_ids,),
         )
-        return inserted, skipped
+        return flush_rows(rows=rows, cur=cur2)
+
+    if cur is None:
+        with getcursor(commit=True) as cur2:
+            return _run(cur2)
+    return _run(cur)

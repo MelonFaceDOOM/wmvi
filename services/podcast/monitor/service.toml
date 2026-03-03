@@ -1,0 +1,4 @@
+[service]
+description = "Finds new podcasts and downloads metadata to db"
+type = "longrunning"
+runtime = "base"

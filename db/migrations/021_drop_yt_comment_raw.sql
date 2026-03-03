@@ -1,0 +1,1 @@
+ALTER TABLE youtube.comment DROP COLUMN raw;

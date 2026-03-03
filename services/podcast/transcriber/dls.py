@@ -1,11 +1,7 @@
 from dotenv import load_dotenv
 
 from db.db import init_pool, close_pool, getcursor
-from transcription.transcription import (
-    load_whisper_model,
-    transcribe_audio_file,
-)
-from . import download_episode, DownloadFailed
+from . import download_episode
 
 load_dotenv()
 

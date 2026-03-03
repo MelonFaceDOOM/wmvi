@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Sequence, Optional
-import re
-from db.db import getcursor
+from typing import Sequence, Optional, TypeVar
 from psycopg2.extras import Json, execute_values
+
+from db.db import getcursor
+from ingestion.row_model import InsertableRow, insert_rows_returning
 
 
 def ensure_scrape_job(
@@ -32,6 +33,86 @@ def ensure_scrape_job(
         )
         (job_id,) = cur.fetchone()
         return job_id
+
+def flush_rows(
+    *,
+    rows: list[InsertableRow],
+    cur=None,
+) -> tuple[int, int, set[tuple[str, ...]]]:
+    if not rows:
+        return 0, 0, set()
+
+    def _run(cur2):
+        return insert_rows_returning(rows=rows, cur=cur2)
+
+    if cur is None:
+        with getcursor(commit=True) as cur2:
+            return _run(cur2)
+    return _run(cur)
+
+
+T = TypeVar("T", bound=InsertableRow)
+
+
+def flush_and_link_single_key(
+    *,
+    rows: list[T],
+    job_id: int,
+    platform: str,
+    cur=None,
+) -> tuple[int, int, set[str]]:
+    if not rows:
+        return 0, 0, set()
+
+    def _run(cur2):
+        inserted, skipped, inserted_keys = insert_rows_returning(rows=rows, cur=cur2)
+        inserted_ids = {k[0] for k in inserted_keys if len(k) == 1 and k[0]}
+
+        if inserted_ids:
+            bulk_link_single_key(
+                job_id=job_id,
+                platform=platform,
+                key1_values=sorted(inserted_ids),
+                cur=cur2,
+            )
+        return inserted, skipped, inserted_ids
+
+    if cur is None:
+        with getcursor(commit=True) as cur2:
+            return _run(cur2)
+    return _run(cur)
+
+
+def flush_and_link_dual_key(
+    *,
+    rows: list[T],
+    job_id: int,
+    platform: str,
+    cur=None,
+) -> tuple[int, int, set[tuple[str, str]]]:
+    if not rows:
+        return 0, 0, set()
+
+    def _run(cur2):
+        inserted, skipped, inserted_keys = insert_rows_returning(rows=rows, cur=cur2)
+        pairs = {(k[0], k[1]) for k in inserted_keys if len(k) == 2 and k[0] and k[1]}
+
+        if pairs:
+            key1_values = [p[0] for p in pairs]
+            key2_values = [p[1] for p in pairs]
+            bulk_link_dual_key(
+                job_id=job_id,
+                platform=platform,
+                key1_values=key1_values,
+                key2_values=key2_values,
+                cur=cur2,
+            )
+        return inserted, skipped, pairs
+
+    if cur is None:
+        with getcursor(commit=True) as cur2:
+            return _run(cur2)
+    return _run(cur)
 
 
 def link_post_to_job(
@@ -65,7 +146,6 @@ def link_post_to_job(
             (job_id, post_id),
         )
 
-
 def insert_batch(
     insert_sql: str,
     rows: list[dict],
@@ -83,8 +163,8 @@ def insert_batch(
     - cur: optional cursor; if None, uses db.getcursor().
 
     Returns (inserted, skipped), where:
-      inserted = number of rows actually inserted
-      skipped  = len(rows) - inserted  (e.g. due to ON CONFLICT DO NOTHING)
+      inserted_count = number of rows actually inserted
+      skipped_count  = len(rows) - inserted  (e.g. due to ON CONFLICT DO NOTHING)
     """
     if not rows:
         return 0, 0
@@ -111,18 +191,10 @@ def insert_batch(
     return inserted, skipped
 
 
-# Split:
-#   INSERT ... (cols)  VALUES (single-row placeholders)  <suffix>
-_VALUES_SPLIT_RE = re.compile(
-    r"(?is)^\s*(.*?\))\s*VALUES\s*\(.*?\)\s*(.*)\s*$"
-)
-
-
 def insert_batch_return_inserted(
     insert_sql: str,
     rows: list[dict],
     *,
-    returning_cols: Sequence[str],
     cols: Sequence[str],
     json_cols: Optional[Sequence[str]] = None,
     cur=None,
@@ -140,8 +212,9 @@ def insert_batch_return_inserted(
         will append: RETURNING <returning_cols...>
 
     Returns:
-      (inserted, skipped, inserted_keys)
+      (inserted_count, skipped_count, inserted_keys)
         inserted_keys is a set of tuples[str,...] matching returning_cols order.
+      returning inserted keys is useful if we want to do something on each inserted row
     """
     if not rows:
         return 0, 0, set()
@@ -173,97 +246,6 @@ def insert_batch_return_inserted(
     inserted = len(returned)
     skipped = len(rows) - inserted
     return inserted, skipped, inserted_keys
-
-
-def fetch_post_ids_for_single_key(
-    platform: str,
-    key1_values: list[str],
-    cur=None
-) -> list[int]:
-    if not key1_values:
-        return []
-
-    if cur is None:
-        with getcursor() as cur2:
-            cur2.execute(
-                """
-                SELECT id
-                FROM sm.post_registry
-                WHERE platform = %s
-                  AND key1 = ANY(%s)
-                  AND key2 IS NULL
-                """,
-                (platform, key1_values),
-            )
-            return [row[0] for row in cur2.fetchall()]
-    else:
-        cur.execute(
-            """
-            SELECT id
-            FROM sm.post_registry
-            WHERE platform = %s
-              AND key1 = ANY(%s)
-              AND key2 IS NULL
-            """,
-            (platform, key1_values),
-        )
-        return [row[0] for row in cur.fetchall()]
-
-
-def fetch_post_ids_for_dual_key(
-    platform: str,
-    key_pairs: list[tuple[str, str]],
-    cur=None
-) -> list[int]:
-    """
-    Given (key1, key2) pairs for a platform, return matching post_registry ids.
-
-    key_pairs: list of (key1, key2) – will be stringified.
-    """
-    # Normalize & dedupe
-    norm_pairs = {
-        (str(k1), str(k2))
-        for (k1, k2) in key_pairs
-        if k1 is not None and k2 is not None
-    }
-    if not norm_pairs:
-        return []
-
-    key1_list = list({k1 for (k1, _k2) in norm_pairs})
-    if cur is None:
-        with getcursor() as cur2:
-            cur2.execute(
-                """
-                SELECT id, key1, key2
-                FROM sm.post_registry
-                WHERE platform = %s
-                  AND key1 = ANY(%s)
-                """,
-                (platform, key1_list),
-            )
-            rows = cur2.fetchall()
-    else:
-        cur.execute(
-            """
-            SELECT id, key1, key2
-            FROM sm.post_registry
-            WHERE platform = %s
-              AND key1 = ANY(%s)
-            """,
-            (platform, key1_list),
-        )
-        rows = cur.fetchall()
-
-    # Build map (key1, key2) -> post_id
-    registry_map = {(k1, k2): post_id for (post_id, k1, k2) in rows}
-
-    # Return all post_ids that match our requested pairs
-    return [
-        registry_map[pair]
-        for pair in norm_pairs
-        if pair in registry_map
-    ]
-
 
 def bulk_link_single_key(
     *,

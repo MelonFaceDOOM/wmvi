@@ -30,6 +30,9 @@ update-checker==0.18.0
 praw==7.8.1
 prawcore==2.4.0
 
+# --- Podcasts ---
+feedparser==6.0.12
+
 # --- Data / utilities ---
 numpy==2.2.6
 pandas==2.2.2
