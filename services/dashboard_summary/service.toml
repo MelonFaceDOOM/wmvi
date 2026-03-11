@@ -1,0 +1,10 @@
+[service]
+description = "saves database summary to azure acc"
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+on_boot_sec = "1min"
+on_unit_inactive_sec = "30min"
+persistent = false 
