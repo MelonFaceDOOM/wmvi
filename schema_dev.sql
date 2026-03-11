@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 249EMiqS1Vnu2w9yyzb6QTABRkiAncbqabFMXYmLaD0xoMM5E9OC2Lo8PJ8trW0
+\restrict RxglvQNT608xv8cpNVzGf811v4jOIoB05ntIcgSZ2hXfqej7g1q2KMCgQUG9nCt
 
 -- Dumped from database version 17.7
 -- Dumped by pg_dump version 18.1
@@ -731,7 +731,6 @@ CREATE TABLE youtube.comment (
     tsv_en tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, filtered_text)) STORED,
     created_at_ts timestamp with time zone NOT NULL,
     like_count bigint,
-    raw jsonb,
     is_en boolean,
     parent_comment_id text,
     reply_count bigint
@@ -1991,5 +1990,5 @@ ALTER TABLE ONLY youtube.transcript_segments
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 249EMiqS1Vnu2w9yyzb6QTABRkiAncbqabFMXYmLaD0xoMM5E9OC2Lo8PJ8trW0
+\unrestrict RxglvQNT608xv8cpNVzGf811v4jOIoB05ntIcgSZ2hXfqej7g1q2KMCgQUG9nCt
 
