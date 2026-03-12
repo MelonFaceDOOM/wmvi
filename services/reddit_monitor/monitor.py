@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from db.db import init_pool, getcursor
 
 from .queries import get_effective_term_list
-from .scrape_runner import scrape_term_once
+from .scrape_runner import scrape_term_once, StopRequested
 
 load_dotenv()
 
@@ -99,6 +99,7 @@ class ScrapeScheduler:
         self.task_heap: List[Tuple[float, str]] = []  # (next_scrape_ts, term)
         self.task_set: set[str] = set()
         self.max_workers = max_workers
+        self.stop_event = threading.Event()
 
         from concurrent.futures import ThreadPoolExecutor
 
@@ -111,6 +112,9 @@ class ScrapeScheduler:
         self._fatal_error = False  # guard against 2 threads trying to crash at once
 
         self._setup_initial_schedule()
+
+    def request_stop(self) -> None:
+        self.stop_event.set()
 
     # --------- scheduling primitives ---------
 
@@ -202,6 +206,8 @@ class ScrapeScheduler:
 
     # --------- main loop ---------
     def _handle_worker_result(self, future):
+        if future.cancelled():
+            return
         exc = future.exception()
         if exc and not self._fatal_error:
             self._fatal_error = True
@@ -213,14 +219,18 @@ class ScrapeScheduler:
         Blocking main loop: continuously checks heap and runs scrapes when due.
         """
         logging.info("ScrapeScheduler loop started.")
-        while True:
+        while not self.stop_event.is_set():
             with self.lock:
                 if not self.task_heap:
-                    time.sleep(1.0)
-                    continue
+                    empty = True
+                else:
+                    empty = False
+                    next_time, term = heapq.heappop(self.task_heap)
+                    self.task_set.remove(term)
 
-                next_time, term = heapq.heappop(self.task_heap)
-                self.task_set.remove(term)
+            if empty:
+                time.sleep(1.0)
+                continue
 
             # spacing between scrape launches
             time.sleep(5.0)
@@ -257,6 +267,9 @@ class ScrapeScheduler:
                 raw_scrapes_per_day = MULTIPLIER * (subs_per_day / 250)
                 clamp between MIN_SCRAPES_PER_DAY and MAX_SCRAPES_PER_DAY.
         """
+        if self.stop_event.is_set():
+            return
+
         logging.info(
             "[%s] Scraping term: %r",
             datetime.now(timezone.utc).isoformat(),
@@ -267,7 +280,11 @@ class ScrapeScheduler:
 
         try:
             # scrape_term_once should return the number of *new* submissions inserted
-            new_count = scrape_term_once(term) or 0
+            new_count = scrape_term_once(term, stop_event=self.stop_event) or 0
+
+        except StopRequested:
+            logging.info("Stop requested while scraping term %r", term)
+            return
 
         except prawcore.exceptions.TooManyRequests as e:
             # Do not drop the term; back off and reschedule.
@@ -287,7 +304,8 @@ class ScrapeScheduler:
                 term,
                 backoff_interval,
             )
-            self._add_task(term, next_scrape)
+            if not self.stop_event.is_set():
+                self._add_task(term, next_scrape)
             return
 
         except Exception as e:
@@ -319,7 +337,8 @@ class ScrapeScheduler:
             new_count,
         )
 
-        self._add_task(term, next_scrape)
+        if not self.stop_event.is_set():
+            self._add_task(term, next_scrape)
 
 
 def _setup_logging() -> None:
@@ -340,21 +359,22 @@ def _setup_logging() -> None:
     root.addHandler(console)
     root.addHandler(file_handler)
 
-
 def main(prod=False):
     _setup_logging()
     if prod:
         init_pool(prefix="prod")
     else:
         init_pool(prefix="dev")
+
     scheduler = ScrapeScheduler()
     try:
         scheduler.scrape_loop()
     except KeyboardInterrupt:
         logging.info("KeyboardInterrupt received, shutting down scheduler...")
+        scheduler.request_stop()
     finally:
-        # Make sure we stop worker threads so the process can exit
-        scheduler.executor.shutdown(wait=False)
+        scheduler.request_stop()
+        scheduler.executor.shutdown(wait=False, cancel_futures=True)
         logging.info("Executor shut down; exiting.")
 
 

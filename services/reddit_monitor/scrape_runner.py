@@ -16,8 +16,8 @@ from psycopg2.extensions import cursor as PGCursor
 from db.db import getcursor
 
 from ingestion.ingestion import ensure_scrape_job
-from ingestion.reddit.submission import flush_reddit_submission_batch
-from ingestion.reddit.comment import flush_reddit_comment_batch
+from ingestion.reddit.submission import flush_reddit_submission_batch, RedditSubmissionRow
+from ingestion.reddit.comment import flush_reddit_comment_batch, RedditCommentRow
 from filtering.anonymization import redact_pii
 from ingestion.reddit.comment import parse_link_id, parse_comment_id
 
@@ -29,8 +29,14 @@ _replace_more_lock = threading.Lock()
 # HIGH LEVEL ENTRYPOINTS
 # -------------------------
 
+class StopRequested(Exception):
+    pass
 
-def scrape_term_once(term: str) -> int:
+def _check_stop(stop_event) -> None:
+    if stop_event is not None and stop_event.is_set():
+        raise StopRequested()
+
+def scrape_term_once(term: str, stop_event=None) -> int:
     """
     High-level "do one scrape cycle for a term" entrypoint.
 
@@ -41,6 +47,7 @@ def scrape_term_once(term: str) -> int:
       - Insert via ingestion.reddit_submission.flush_reddit_submission_batch,
         and link posts to a scrape.job via ensure_scrape_job.
     """
+    _check_stop(stop_event)
     logging.info("Scrape runner: starting scrape for term %r", term)
 
     reddit = make_reddit_api_interface()
@@ -55,7 +62,9 @@ def scrape_term_once(term: str) -> int:
         term,
         last_found_ts=last_found_ts,
         last_found_id=last_found_id,
+        stop_event=stop_event,
     ):
+        _check_stop(stop_event)
         new_submissions.append(submission)
 
     if not new_submissions:
@@ -66,7 +75,8 @@ def scrape_term_once(term: str) -> int:
                  len(new_submissions), term)
 
     # Map to format that can be ingested to db
-    rows = _submissions_to_rows(new_submissions)
+    rows = _submissions_to_rows(new_submissions, stop_event=stop_event)
+    _check_stop(stop_event)
     logging.info("Mapped %d/%d submissions to rows for term %r",
                  len(rows), len(new_submissions), term)
 
@@ -78,6 +88,7 @@ def scrape_term_once(term: str) -> int:
             platforms=["reddit_submission", "reddit_comment"],
         )
         inserted, skipped = flush_reddit_submission_batch(rows, job_id)
+        _check_stop(stop_event)
         logging.info(
             "Flush complete for term %r: inserted=%d skipped=%d", term, inserted, skipped)
 
@@ -90,6 +101,7 @@ def scrape_term_once(term: str) -> int:
     # Fetch + save comments for newly seen submissions
     # -------------------------
     for s in new_submissions:
+        _check_stop(stop_event)
         # PRAW gives num_comments in the listing response, usually without extra requests.
         reported = int(getattr(s, "num_comments", 0) or 0)
         if reported <= 0:
@@ -102,7 +114,8 @@ def scrape_term_once(term: str) -> int:
         _ = fetch_comment_rows_for_submission(
             reddit=reddit,
             submission_id_any=link_id,
-            job_id=job_id
+            job_id=job_id,
+            stop_event=stop_event
         )
     # record new scrape status info for this term
     max_ts = last_found_ts
@@ -140,6 +153,7 @@ def fetch_comment_rows_for_submission(
     max_comments: int = 500,
     replace_more_limit: int = 8,
     replace_more_threshold: int = 10,
+    stop_event=None,
 ) -> int:
     """Get comments for a given submission.
        Does not attempt to 'only insert new comments'
@@ -152,16 +166,17 @@ def fetch_comment_rows_for_submission(
     bare_id = submission_id_bare(submission_id_any)
 
     try:
-        submission = backoff_api_call(lambda: reddit.submission(id=bare_id))
+        submission = backoff_api_call(lambda: reddit.submission(id=bare_id), stop_event=stop_event)
 
         # Force fetch early so 404/403 happens here
-        backoff_api_call(lambda: getattr(submission, "id"))
+        backoff_api_call(lambda: getattr(submission, "id"), stop_event=stop_event)
         with _replace_more_lock:
             backoff_api_call(
                 lambda: submission.comments.replace_more(
                     limit=replace_more_limit,
                     threshold=replace_more_threshold,
-                )
+                ),
+                stop_event=stop_event
             )
 
     except (prawcore.exceptions.NotFound, prawcore.exceptions.Forbidden) as e:
@@ -177,8 +192,9 @@ def fetch_comment_rows_for_submission(
     gen = _iter_top_level_comments(
         submission) if top_level_only else _iter_all_comments(submission)
 
-    rows: List[dict] = []
+    rows: List[RedditCommentRow] = []
     for c in gen:
+        _check_stop(stop_event)
         if len(rows) >= max_comments:
             break
         row = _comment_to_row(c, link_id=link_id)  # store link_id as 't3_<id>'
@@ -249,12 +265,19 @@ def _parse_ratelimit_seconds(message: str) -> int | None:
     unit = m.group(2).lower()
     return n if unit.startswith("second") else n * 60
 
+def _sleep_with_stop(stop_event, seconds: float) -> None:
+    if stop_event is None:
+        time.sleep(seconds)
+        return
+    if stop_event.wait(seconds):
+        raise StopRequested()
 
 def backoff_api_call(
     api_call_func,
     *args,
     max_sleep: int = 300,
     max_attempts: int | None = 3,
+    stop_event=None,
     **kwargs,
 ):
     """
@@ -278,6 +301,9 @@ def backoff_api_call(
         return f"{attempts}/{max_attempts}" if max_attempts is not None else str(attempts)
 
     while True:
+        if stop_event is not None and stop_event.is_set():
+            raise StopRequested()
+
         if max_attempts is not None and attempts >= max_attempts:
             # Re-raise the last retryable exception for better tracebacks/debuggability.
             if last_retryable is not None:
@@ -301,7 +327,7 @@ def backoff_api_call(
                         wait_seconds,
                         _attempt_str(),
                     )
-                    time.sleep(wait_seconds)
+                    _sleep_with_stop(stop_event, float(wait_seconds))
                     delay = 2.0
                     break
 
@@ -340,7 +366,7 @@ def backoff_api_call(
                 sleep_for,
                 _attempt_str(),
             )
-            time.sleep(sleep_for)
+            _sleep_with_stop(stop_event, sleep_for)
             delay = min(delay * 2.0, float(max_sleep))
             continue
 
@@ -362,7 +388,7 @@ def backoff_api_call(
                 sleep_for,
                 _attempt_str(),
             )
-            time.sleep(sleep_for)
+            _sleep_with_stop(stop_event, sleep_for)
             delay = min(delay * 2.0, float(max_sleep))
             continue
 
@@ -422,6 +448,7 @@ def get_new_submissions_since_status(
     *,
     last_found_ts: datetime,
     last_found_id: str,
+    stop_event=None,
 ):
     """
     Yield submissions from Reddit search sorted by 'new' until we hit the boundary
@@ -444,7 +471,11 @@ def get_new_submissions_since_status(
 
     while True:
         try:
-            submission = backoff_api_call(lambda: next(submission_generator))
+            _check_stop(stop_event)
+            submission = backoff_api_call(
+                lambda: next(submission_generator),
+                stop_event=stop_event,
+            )
         except StopIteration:
             break
 
@@ -461,7 +492,7 @@ def get_new_submissions_since_status(
         yield submission
 
 
-def _submission_to_row(submission) -> dict | None:
+def _submission_to_row(submission) -> RedditSubmissionRow  | None:
     """
     Map a PRAW Submission -> dict keyed by REDDIT_SUB_COLS.
     """
@@ -486,13 +517,9 @@ def _submission_to_row(submission) -> dict | None:
     if not is_self:
         raw_for_filter = title
     else:
-        if unusable_selftext:
-            raw_for_filter = title
-        else:
-            raw_for_filter = f"{title}\n{selftext}"
+        raw_for_filter = title if unusable_selftext else f"{title}\n{selftext}"
 
     filtered = redact_pii(raw_for_filter)
-
     internal_id = parse_link_id(submission.id)
 
     # Some attributes may not be present on all submissions; use getattr with defaults.
@@ -518,52 +545,47 @@ def _submission_to_row(submission) -> dict | None:
     if shared_url == reddit_url:
         shared_url = None
 
-    logging.info("===ATTRIBUTES GATHERED, FINAL FORMATTING===")
     try:
-        row = {
-            "id": internal_id,
-            "url": reddit_url,
-            "domain": submission.domain or "reddit.com",
-            "title": title,
-            "selftext": selftext if is_self else "",
-            "permalink": reddit_url,
-            "shared_url": shared_url,
-            "created_at_ts": created_ts,
-            "filtered_text": filtered,
-            # "url_overridden_by_dest": getattr(submission, "url_overridden_by_dest", None), REMOVING CUS IT SEEMS TO CAUSE A WEB REQUEST TO ACCESS IT
-            "url_overridden_by_dest": None,
-            "subreddit_id": subreddit_id or "",
-            "subreddit": subreddit_name,
-            "upvote_ratio": float(getattr(submission, "upvote_ratio", 1.0) or 1.0),
-            "score": int(getattr(submission, "score", 0) or 0),
-            "gilded": int(getattr(submission, "gilded", 0) or 0),
-            "num_comments": int(getattr(submission, "num_comments", 0) or 0),
-            "num_crossposts": int(getattr(submission, "num_crossposts", 0) or 0),
-            "pinned": bool(getattr(submission, "pinned", False)),
-            "stickied": bool(getattr(submission, "stickied", False)),
-            "over_18": bool(getattr(submission, "over_18", False)),
-            "is_created_from_ads_ui": bool(getattr(submission, "is_created_from_ads_ui", False)),
-            "is_self": is_self,
-            "is_video": bool(getattr(submission, "is_video", False)),
-            # These three are JSON in the DB; insert_batch(json_cols=...) will serialize.
-            "media": getattr(submission, "media", None),
-            "gildings": getattr(submission, "gildings", None),
-            "all_awardings": getattr(submission, "all_awardings", None),
-            # Language detection is done in a standardized later pass.
-            "is_en": None,
-        }
-        return row
+        return RedditSubmissionRow(
+            id=internal_id,
+            url=reddit_url,
+            domain=submission.domain or "reddit.com",
+            title=title,
+            created_at_ts=created_ts,
+            filtered_text=filtered,
+            subreddit_id=subreddit_id or "",
+            subreddit=subreddit_name,
+            upvote_ratio=float(getattr(submission, "upvote_ratio", 1.0) or 1.0),
+            score=int(getattr(submission, "score", 0) or 0),
+            gilded=int(getattr(submission, "gilded", 0) or 0),
+            num_comments=int(getattr(submission, "num_comments", 0) or 0),
+            num_crossposts=int(getattr(submission, "num_crossposts", 0) or 0),
+            shared_url=shared_url,
+            permalink=reddit_url,
+            selftext=selftext if is_self else "",
+            url_overridden_by_dest=None,
+            pinned=bool(getattr(submission, "pinned", False)),
+            stickied=bool(getattr(submission, "stickied", False)),
+            over_18=bool(getattr(submission, "over_18", False)),
+            is_created_from_ads_ui=bool(getattr(submission, "is_created_from_ads_ui", False)),
+            is_self=is_self,
+            is_video=bool(getattr(submission, "is_video", False)),
+            media=getattr(submission, "media", None),
+            gildings=getattr(submission, "gildings", None),
+            all_awardings=getattr(submission, "all_awardings", None),
+        )
     except Exception as e:
         logging.exception("Failed to map submission %s: %s", submission.id, e)
         return None
 
 
-def _submissions_to_rows(submissions) -> List[dict]:
-    rows: List[Dict] = []
+def _submissions_to_rows(submissions, *, stop_event=None) -> List[RedditSubmissionRow]:
+    rows: List[RedditSubmissionRow] = []
     t0 = time.time()
     n = len(submissions)
 
     for i, s in enumerate(submissions, start=1):
+        _check_stop(stop_event)
         if i == 1 or i % 25 == 0:
             logging.info("Mapping progress %d/%d", i, n)
 
@@ -643,7 +665,7 @@ def _iter_all_comments(submission) -> Iterable[object]:
         yield c
 
 
-def _comment_to_row(comment, *, link_id: str) -> dict | None:
+def _comment_to_row(comment, *, link_id: str) -> RedditCommentRow  | None:
     """
     Returns dict keyed exactly by REDDIT_COMMENT_COLS.
     - id and parent_comment_id are 't1_<id>' (or None for parent)
@@ -676,27 +698,26 @@ def _comment_to_row(comment, *, link_id: str) -> dict | None:
                 f"{link_id.removeprefix('t3_')}"
             )
 
-        row = {
-            "id": comment_id,
-            "parent_comment_id": parent_comment_id,
-            "link_id": link_id,
-            "body": body,
-            "permalink": permalink,
-            "created_at_ts": created_ts,
-            "filtered_text": filtered,
-            "subreddit_id": getattr(comment, "subreddit_id", "") or "",
-            "subreddit_type": getattr(comment, "subreddit_type", None),
-            "total_awards_received": int(getattr(comment, "total_awards_received", 0) or 0),
-            "subreddit": subreddit_name or "",
-            "score": int(getattr(comment, "score", 0) or 0),
-            "gilded": int(getattr(comment, "gilded", 0) or 0),
-            "stickied": bool(getattr(comment, "stickied", False)),
-            "is_submitter": bool(getattr(comment, "is_submitter", False)),
-            "gildings": getattr(comment, "gildings", None),
-            "all_awardings": getattr(comment, "all_awardings", None),
-        }
+        return RedditCommentRow(
+            id=comment_id,
+            parent_comment_id=parent_comment_id,
+            link_id=link_id,
+            body=body,
+            permalink=permalink,
+            created_at_ts=created_ts,
+            filtered_text=filtered,
+            subreddit_id=getattr(comment, "subreddit_id", "") or "",
+            subreddit_type=getattr(comment, "subreddit_type", None),
+            total_awards_received=int(getattr(comment, "total_awards_received", 0) or 0),
+            subreddit=subreddit_name or "",
+            score=int(getattr(comment, "score", 0) or 0),
+            gilded=int(getattr(comment, "gilded", 0) or 0),
+            stickied=bool(getattr(comment, "stickied", False)),
+            is_submitter=bool(getattr(comment, "is_submitter", False)),
+            gildings=getattr(comment, "gildings", None),
+            all_awardings=getattr(comment, "all_awardings", None),
+        )
 
-        return row
     except Exception as e:
         logging.exception("Failed mapping comment -> row: %s", e)
         return None

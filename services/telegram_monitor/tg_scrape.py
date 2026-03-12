@@ -133,19 +133,25 @@ async def scrape_channel_batches(
             if msg.date is None:
                 continue
 
-            msg_dt = msg.date.replace(tzinfo=timezone.utc)
+            msg_dt = clean_created_at_ts_from_telegram(msg.date)
+            if msg_dt is None:
+                continue
+
             if msg_dt < since_dt:
                 break
+
             normalized = normalize_message(msg, username, chan_id)
             text = normalized.get("text", "")
+
             if text and text.strip():
+                batch.append(normalized)
                 processed += 1
 
             if len(batch) >= batch_size:
                 yield batch
                 batch = []
 
-            if sleep_every and processed % sleep_every == 0:
+            if sleep_every and processed > 0 and processed % sleep_every == 0:
                 await asyncio.sleep(sleep_s)
 
     except errors.FloodWaitError as e:

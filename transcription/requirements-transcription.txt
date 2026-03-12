@@ -1,12 +1,13 @@
 # Core transcription
 faster-whisper==1.2.1
 ctranslate2==4.6.3
-yt-dlp==2025.12.8
+yt-dlp
 # Audio handling
-ffmpeg-python==0.2.0
-soundfile==0.12.1
+ffmpeg-python
+soundfile
 
 # Utilities
+tomli
 numpy
 deepmultilingualpunctuation==1.0.1
 psycopg2-binary
