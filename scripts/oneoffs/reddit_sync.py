@@ -189,11 +189,7 @@ def _robust_insert_rows(
 # Phase 1: submissions
 # -----------------------------------------------------------------------------
 
-def sync_submissions(
-    *,
-    dev_conn: PGConn,
-    prod_conn: PGConn,
-) -> tuple[int, int, int]:
+def sync_submissions(*, dev_conn: PGConn, prod_conn: PGConn) -> tuple[int, int, int]:
     """
     Returns (dev_total, missing_in_prod, inserted_prod)
     """
@@ -203,30 +199,30 @@ def sync_submissions(
     inserted_total = 0
 
     prod_cur = prod_conn.cursor()
-
     try:
         buf: list[dict[str, Any]] = []
 
-        for d in _server_side_stream_rows(dev_conn, table="sm.reddit_submission", cols=cols, order_by="id"):
+        for d in _server_side_stream_rows(
+            dev_conn, table="sm.reddit_submission", cols=cols, order_by="id"
+        ):
             dev_total += 1
             buf.append(d)
             if len(buf) < ID_BATCH:
                 continue
 
-            inserted_total += _process_submission_buffer(buf, prod_conn=prod_conn, prod_cur=prod_cur)
-            missing_total += _last_missing_count  # set by helper
+            miss, ins = _process_submission_buffer(buf, prod_conn=prod_conn, prod_cur=prod_cur)
+            missing_total += miss
+            inserted_total += ins
             buf = []
 
         if buf:
-            inserted_total += _process_submission_buffer(buf, prod_conn=prod_conn, prod_cur=prod_cur)
-            missing_total += _last_missing_count
+            miss, ins = _process_submission_buffer(buf, prod_conn=prod_conn, prod_cur=prod_cur)
+            missing_total += miss
+            inserted_total += ins
 
         return dev_total, missing_total, inserted_total
     finally:
         prod_cur.close()
-
-
-_last_missing_count = 0  # hacky but simple without plumbing an extra return
 
 
 def _process_submission_buffer(
@@ -234,25 +230,23 @@ def _process_submission_buffer(
     *,
     prod_conn: PGConn,
     prod_cur: PGCursor,
-) -> int:
+) -> tuple[int, int]:
     """
-    For a buffer of DEV submission dicts:
-      - find which are missing in PROD
-      - insert missing with robust bisection
+    Returns (missing_in_prod_for_this_buf, inserted_for_this_buf)
     """
-    global _last_missing_count
-    _last_missing_count = 0
-
     ids = [str(d["id"]) for d in buf if d.get("id")]
     existing = _fetch_existing_ids(prod_cur, table="sm.reddit_submission", ids=ids)
     missing = [d for d in buf if str(d.get("id")) not in existing]
-    _last_missing_count = len(missing)
+    missing_count = len(missing)
 
     if DRY_RUN or not missing:
-        return 0
+        return missing_count, 0
 
     rows = [RedditSubmissionRow(**_coerce_submission(dict(d))) for d in missing]
-    return _robust_insert_rows(prod_conn, prod_cur, rows=rows, batch_size=INSERT_BATCH, label="reddit_submission")
+    inserted = _robust_insert_rows(
+        prod_conn, prod_cur, rows=rows, batch_size=INSERT_BATCH, label="reddit_submission"
+    )
+    return missing_count, inserted
 
 
 # -----------------------------------------------------------------------------
