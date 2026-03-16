@@ -1,29 +1,34 @@
-"""reddit scraping was ran for a while on dev
-this script will add all the dev submissions/comments to prod"""
-
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extensions import connection as PGConn
+from psycopg2.extensions import cursor as PGCursor
+
 from dotenv import load_dotenv
+
+from ingestion.row_model import insert_rows_returning
+from ingestion.reddit.submission import RedditSubmissionRow
+from ingestion.reddit.comment import RedditCommentRow
 
 load_dotenv()
 
-# ----------------------------
+# -----------------------------------------------------------------------------
 # CONFIG
-# ----------------------------
-DO_INSERT = False        # <-- set True to actually insert into PROD
-BATCH_KEYS = 50_000      # ids per batch to diff (tune)
-BATCH_INSERT = 5_000     # rows per execute_values insert (tune)
-PRINT_EVERY = 10         # progress print cadence (batches)
+# -----------------------------------------------------------------------------
 
-# ----------------------------
-# Creds + connections
-# ----------------------------
+DRY_RUN = False
+
+ID_BATCH = 50_000
+INSERT_BATCH = 5_000
+MAX_REPLY_PASSES = 12  # replies may be deep; multiple passes let parents land first
+
+# -----------------------------------------------------------------------------
+# Credentials / connections
+# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class PgCreds:
@@ -35,17 +40,18 @@ class PgCreds:
     sslmode: str = "require"
 
 
-def _get_creds(prefix: str, db_override: Optional[str] = None) -> PgCreds:
-    host = os.environ[f"{prefix}_PGHOST"]
-    port = os.environ.get(f"{prefix}_PGPORT", "5432")
-    user = os.environ[f"{prefix}_PGUSER"]
-    password = os.environ[f"{prefix}_PGPASSWORD"]
-    database = db_override or os.environ[f"{prefix}_PGDATABASE"]
-    sslmode = os.environ.get(f"{prefix}_PGSSLMODE", "require")
-    return PgCreds(host=host, port=port, user=user, password=password, database=database, sslmode=sslmode)
+def _get_creds(prefix: str) -> PgCreds:
+    return PgCreds(
+        host=os.environ[f"{prefix}_PGHOST"],
+        port=os.environ.get(f"{prefix}_PGPORT", "5432"),
+        user=os.environ[f"{prefix}_PGUSER"],
+        password=os.environ[f"{prefix}_PGPASSWORD"],
+        database=os.environ[f"{prefix}_PGDATABASE"],
+        sslmode=os.environ.get(f"{prefix}_PGSSLMODE", "require"),
+    )
 
 
-def _connect(creds: PgCreds) -> psycopg2.extensions.connection:
+def _connect(creds: PgCreds) -> PGConn:
     return psycopg2.connect(
         host=creds.host,
         port=creds.port,
@@ -56,159 +62,363 @@ def _connect(creds: PgCreds) -> psycopg2.extensions.connection:
     )
 
 
-def _chunked(seq: Sequence[Any], n: int) -> Iterable[Sequence[Any]]:
+# -----------------------------------------------------------------------------
+# Small helpers
+# -----------------------------------------------------------------------------
+
+def _chunks(seq: Sequence[Any], n: int) -> Iterator[list[Any]]:
     for i in range(0, len(seq), n):
-        yield seq[i : i + n]
+        yield list(seq[i : i + n])
 
 
-# ----------------------------
-# Common helpers (single-PK tables)
-# ----------------------------
-
-def _fetch_ids_batch(cur, *, table: str, last_id: Optional[str], limit: int) -> List[str]:
-    # keyset pagination on id
-    if last_id is None:
-        cur.execute(f"SELECT id FROM {table} ORDER BY id LIMIT %s", (limit,))
-    else:
-        cur.execute(f"SELECT id FROM {table} WHERE id > %s ORDER BY id LIMIT %s", (last_id, limit))
-    return [r[0] for r in cur.fetchall()]
+def _dicts_from_rows(cols: Sequence[str], rows: Sequence[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    return [{c: v for c, v in zip(cols, r)} for r in rows]
 
 
-def _existing_ids(cur, *, table: str, ids: List[str]) -> set[str]:
+def _fetch_existing_ids(prod_cur: PGCursor, *, table: str, ids: list[str]) -> set[str]:
     if not ids:
         return set()
-    cur.execute(f"SELECT id FROM {table} WHERE id = ANY(%s)", (ids,))
-    return {r[0] for r in cur.fetchall()}
+    prod_cur.execute(f"SELECT id FROM {table} WHERE id = ANY(%s)", (ids,))
+    return {str(r[0]) for r in prod_cur.fetchall()}
 
 
-def _fetch_rows(cur, *, table: str, cols: List[str], ids: List[str]) -> List[tuple]:
-    if not ids:
-        return []
+def _fetch_existing_ids_by_key(prod_cur: PGCursor, *, table: str, key_col: str, values: list[str]) -> set[str]:
+    if not values:
+        return set()
+    prod_cur.execute(f"SELECT {key_col} FROM {table} WHERE {key_col} = ANY(%s)", (values,))
+    return {str(r[0]) for r in prod_cur.fetchall()}
+
+
+def _server_side_stream_rows(
+    conn: PGConn,
+    *,
+    table: str,
+    cols: Sequence[str],
+    where_sql: str = "",
+    params: tuple[Any, ...] = (),
+    order_by: str = "id",
+    itersize: int = 10_000,
+) -> Iterator[dict[str, Any]]:
+    """
+    Stream rows from DEV without loading everything into RAM.
+    """
     col_sql = ", ".join(cols)
-    cur.execute(f"SELECT {col_sql} FROM {table} WHERE id = ANY(%s)", (ids,))
-    return cur.fetchall()
+    cur = conn.cursor(name=f"stream_{table.replace('.', '_')}_{order_by}")
+    cur.itersize = itersize
+
+    sql = f"SELECT {col_sql} FROM {table} {where_sql} ORDER BY {order_by}"
+    cur.execute(sql, params)
+    try:
+        for tup in cur:
+            yield {c: v for c, v in zip(cols, tup)}
+    finally:
+        cur.close()
 
 
-def _insert_rows(cur, *, table: str, cols: List[str], rows: List[tuple]) -> int:
+def _coerce_submission(d: dict[str, Any]) -> dict[str, Any]:
     """
-    Inserts rows using execute_values and ON CONFLICT DO NOTHING.
-    Returns attempted rows count (not actual inserted count).
+    DEV -> Row object coercions (only where DB types might not match dataclass types).
     """
+    # numeric -> float
+    if "upvote_ratio" in d and d["upvote_ratio"] is not None:
+        d["upvote_ratio"] = float(d["upvote_ratio"])
+    elif "upvote_ratio" in d and d["upvote_ratio"] is None:
+        d["upvote_ratio"] = 0.0
+    return d
+
+
+def _coerce_comment(d: dict[str, Any]) -> dict[str, Any]:
+    return d
+
+
+# -----------------------------------------------------------------------------
+# Robust insert: never lose whole chunks
+# -----------------------------------------------------------------------------
+
+def _robust_insert_rows(
+    prod_conn: PGConn,
+    prod_cur: PGCursor,
+    *,
+    rows: list[Any],  # InsertableRow instances
+    batch_size: int,
+    label: str,
+) -> int:
+    """
+    Tries to insert rows in batches. If a batch fails (FK / NOT NULL / etc),
+    rollback and bisect until it finds the bad row(s), logs and skips them.
+    Returns count inserted (not attempted).
+    """
+    inserted_total = 0
     if not rows:
         return 0
-    col_sql = ", ".join(cols)
-    sql = f"INSERT INTO {table} ({col_sql}) VALUES %s ON CONFLICT (id) DO NOTHING"
-    # execute_values uses %s placeholder for VALUES
-    execute_values(cur, sql, rows, page_size=min(BATCH_INSERT, len(rows)))
-    return len(rows)
+
+    def _try_batch(batch: list[Any]) -> int:
+        nonlocal inserted_total
+        if not batch:
+            return 0
+
+        try:
+            ins, _skip, _keys = insert_rows_returning(rows=batch, cur=prod_cur, page_size=min(batch_size, len(batch)))
+            inserted_total += ins
+            return ins
+        except Exception as e:
+            prod_conn.rollback()
+
+            if len(batch) == 1:
+                r = batch[0]
+                # high signal row dump (don’t print huge JSONs)
+                print(f"[{label}] SKIP 1 row due to insert error: {type(e).__name__}: {e}")
+                print(f"[{label}]   row_type={type(r).__name__} pk={getattr(r, 'id', None)}")
+                return 0
+
+            mid = len(batch) // 2
+            _try_batch(batch[:mid])
+            _try_batch(batch[mid:])
+            return 0
+
+    # chunk the overall set to keep recursion depth reasonable
+    for chunk in _chunks(rows, batch_size):
+        _try_batch(chunk)
+
+    # only commit if caller is doing real inserts
+    prod_conn.commit()
+    return inserted_total
 
 
-def sync_table_single_pk(
+# -----------------------------------------------------------------------------
+# Phase 1: submissions
+# -----------------------------------------------------------------------------
+
+def sync_submissions(
     *,
-    dev_cur,
-    prod_cur,
-    table: str,
-    cols: List[str],
-    label: str,
-) -> Tuple[int, int]:
+    dev_conn: PGConn,
+    prod_conn: PGConn,
+) -> tuple[int, int, int]:
     """
-    DEV -> PROD sync for a table with PK (id).
-    Returns: (missing_total, attempted_insert_total)
+    Returns (dev_total, missing_in_prod, inserted_prod)
     """
+    cols = list(RedditSubmissionRow.cols())
+    dev_total = 0
     missing_total = 0
-    attempted_insert_total = 0
-    batch_idx = 0
-    last_id: Optional[str] = None
+    inserted_total = 0
 
-    while True:
-        batch_ids = _fetch_ids_batch(dev_cur, table=table, last_id=last_id, limit=BATCH_KEYS)
-        if not batch_ids:
-            break
+    prod_cur = prod_conn.cursor()
 
-        last_id = batch_ids[-1]
-        batch_idx += 1
+    try:
+        buf: list[dict[str, Any]] = []
 
-        existing = _existing_ids(prod_cur, table=table, ids=batch_ids)
-        missing = [i for i in batch_ids if i not in existing]
-        missing_total += len(missing)
+        for d in _server_side_stream_rows(dev_conn, table="sm.reddit_submission", cols=cols, order_by="id"):
+            dev_total += 1
+            buf.append(d)
+            if len(buf) < ID_BATCH:
+                continue
 
-        if DO_INSERT and missing:
-            rows = _fetch_rows(dev_cur, table=table, cols=cols, ids=missing)
-            # rows already in correct tuple order
-            for chunk in _chunked(rows, BATCH_INSERT):
-                attempted_insert_total += _insert_rows(prod_cur, table=table, cols=cols, rows=list(chunk))
+            inserted_total += _process_submission_buffer(buf, prod_conn=prod_conn, prod_cur=prod_cur)
+            missing_total += _last_missing_count  # set by helper
+            buf = []
 
-        if batch_idx % PRINT_EVERY == 0:
-            scanned = batch_idx * BATCH_KEYS
-            print(f"[{label}] batches={batch_idx} scanned≈{scanned:,} missing_so_far={missing_total:,}")
+        if buf:
+            inserted_total += _process_submission_buffer(buf, prod_conn=prod_conn, prod_cur=prod_cur)
+            missing_total += _last_missing_count
 
-    return missing_total, attempted_insert_total
+        return dev_total, missing_total, inserted_total
+    finally:
+        prod_cur.close()
 
 
-# ----------------------------
-# Column sets (exclude generated columns)
-# ----------------------------
-
-# reddit_submission has generated: url_hash, tsv_en
-REDDIT_SUBMISSION_COLS = [
-    "id",
-    "date_entered",
-    "url",
-    "domain",
-    "title",
-    "filtered_text",
-    "permalink",
-    "created_at_ts",
-    "url_overridden_by_dest",
-    "subreddit_id",
-    "subreddit",
-    "upvote_ratio",
-    "score",
-    "gilded",
-    "num_comments",
-    "num_crossposts",
-    "pinned",
-    "stickied",
-    "over_18",
-    "is_created_from_ads_ui",
-    "is_self",
-    "is_video",
-    "media",
-    "gildings",
-    "all_awardings",
-    "is_en",
-    "selftext",
-    "shared_url",
-]
-
-# reddit_comment has generated: tsv_en
-REDDIT_COMMENT_COLS = [
-    "id",
-    "date_entered",
-    "link_id",
-    "parent_comment_id",
-    "body",
-    "filtered_text",
-    "permalink",
-    "created_at_ts",
-    "subreddit_id",
-    "subreddit_type",
-    "total_awards_received",
-    "subreddit",
-    "score",
-    "gilded",
-    "stickied",
-    "is_submitter",
-    "gildings",
-    "all_awardings",
-    "is_en",
-    "reply_count",
-]
+_last_missing_count = 0  # hacky but simple without plumbing an extra return
 
 
-# ----------------------------
+def _process_submission_buffer(
+    buf: list[dict[str, Any]],
+    *,
+    prod_conn: PGConn,
+    prod_cur: PGCursor,
+) -> int:
+    """
+    For a buffer of DEV submission dicts:
+      - find which are missing in PROD
+      - insert missing with robust bisection
+    """
+    global _last_missing_count
+    _last_missing_count = 0
+
+    ids = [str(d["id"]) for d in buf if d.get("id")]
+    existing = _fetch_existing_ids(prod_cur, table="sm.reddit_submission", ids=ids)
+    missing = [d for d in buf if str(d.get("id")) not in existing]
+    _last_missing_count = len(missing)
+
+    if DRY_RUN or not missing:
+        return 0
+
+    rows = [RedditSubmissionRow(**_coerce_submission(dict(d))) for d in missing]
+    return _robust_insert_rows(prod_conn, prod_cur, rows=rows, batch_size=INSERT_BATCH, label="reddit_submission")
+
+
+# -----------------------------------------------------------------------------
+# Phase 2+: comments in passes
+# -----------------------------------------------------------------------------
+
+def sync_comments_phased(
+    *,
+    dev_conn: PGConn,
+    prod_conn: PGConn,
+) -> tuple[int, int, int]:
+    """
+    Returns (dev_total, missing_in_prod, inserted_prod)
+
+    Phases:
+      Pass 0: parent_comment_id IS NULL AND link_id exists in prod submissions
+      Pass 1..N: parent_comment_id IS NOT NULL AND link_id exists AND parent exists in prod comments
+    """
+    cols = list(RedditCommentRow.cols())
+    dev_total = 0
+    missing_total = 0
+    inserted_total = 0
+
+    prod_cur = prod_conn.cursor()
+    try:
+        # pass 0: top-level only
+        dt, miss, ins = _comment_pass(
+            dev_conn=dev_conn,
+            prod_conn=prod_conn,
+            prod_cur=prod_cur,
+            cols=cols,
+            pass_label="pass0_top_level",
+            where_sql="WHERE parent_comment_id IS NULL",
+            require_parent_exists=False,
+        )
+        dev_total += dt
+        missing_total += miss
+        inserted_total += ins
+
+        # reply passes
+        for i in range(1, MAX_REPLY_PASSES + 1):
+            dt, miss, ins = _comment_pass(
+                dev_conn=dev_conn,
+                prod_conn=prod_conn,
+                prod_cur=prod_cur,
+                cols=cols,
+                pass_label=f"pass{i}_replies",
+                where_sql="WHERE parent_comment_id IS NOT NULL",
+                require_parent_exists=True,
+            )
+            dev_total += dt
+            missing_total += miss
+            inserted_total += ins
+
+            print(f"[reddit_comment] replies pass {i}: inserted={ins} missing_seen={miss}")
+            if ins == 0:
+                break
+
+        return dev_total, missing_total, inserted_total
+    finally:
+        prod_cur.close()
+
+
+def _comment_pass(
+    *,
+    dev_conn: PGConn,
+    prod_conn: PGConn,
+    prod_cur: PGCursor,
+    cols: list[str],
+    pass_label: str,
+    where_sql: str,
+    require_parent_exists: bool,
+) -> tuple[int, int, int]:
+    """
+    One streaming pass over DEV comments with prefilters to satisfy FKs.
+    Returns (dev_seen, missing_seen, inserted)
+    """
+    dev_seen = 0
+    missing_seen = 0
+    inserted = 0
+
+    buf: list[dict[str, Any]] = []
+
+    for d in _server_side_stream_rows(
+        dev_conn,
+        table="sm.reddit_comment",
+        cols=cols,
+        where_sql=where_sql,
+        order_by="id",
+    ):
+        dev_seen += 1
+        buf.append(d)
+        if len(buf) < ID_BATCH:
+            continue
+
+        miss, ins = _process_comment_buffer(
+            buf,
+            prod_conn=prod_conn,
+            prod_cur=prod_cur,
+            require_parent_exists=require_parent_exists,
+            label=pass_label,
+        )
+        missing_seen += miss
+        inserted += ins
+        buf = []
+
+    if buf:
+        miss, ins = _process_comment_buffer(
+            buf,
+            prod_conn=prod_conn,
+            prod_cur=prod_cur,
+            require_parent_exists=require_parent_exists,
+            label=pass_label,
+        )
+        missing_seen += miss
+        inserted += ins
+
+    return dev_seen, missing_seen, inserted
+
+
+def _process_comment_buffer(
+    buf: list[dict[str, Any]],
+    *,
+    prod_conn: PGConn,
+    prod_cur: PGCursor,
+    require_parent_exists: bool,
+    label: str,
+) -> tuple[int, int]:
+    """
+    For a buffer of DEV comment dicts:
+      1) keep only ids missing in prod
+      2) keep only rows whose link_id exists in prod submissions
+      3) if require_parent_exists: keep only rows whose parent exists in prod comments
+      4) robust insert the eligible rows
+    Returns (missing_seen, inserted)
+    """
+    ids = [str(d["id"]) for d in buf if d.get("id")]
+    existing = _fetch_existing_ids(prod_cur, table="sm.reddit_comment", ids=ids)
+    missing = [d for d in buf if str(d.get("id")) not in existing]
+    missing_seen = len(missing)
+
+    if DRY_RUN or not missing:
+        return missing_seen, 0
+
+    # FK 1: submission must exist
+    link_ids = [str(d["link_id"]) for d in missing if d.get("link_id")]
+    link_exists = _fetch_existing_ids_by_key(prod_cur, table="sm.reddit_submission", key_col="id", values=link_ids)
+    eligible = [d for d in missing if str(d.get("link_id")) in link_exists]
+
+    # FK 2: parent must exist (for replies pass)
+    if require_parent_exists:
+        parent_ids = [str(d["parent_comment_id"]) for d in eligible if d.get("parent_comment_id")]
+        parent_exists = _fetch_existing_ids_by_key(prod_cur, table="sm.reddit_comment", key_col="id", values=parent_ids)
+        eligible = [d for d in eligible if str(d.get("parent_comment_id")) in parent_exists]
+
+    if not eligible:
+        return missing_seen, 0
+
+    rows = [RedditCommentRow(**_coerce_comment(dict(d))) for d in eligible]
+    ins = _robust_insert_rows(prod_conn, prod_cur, rows=rows, batch_size=INSERT_BATCH, label=f"reddit_comment:{label}")
+    return missing_seen, ins
+
+
+# -----------------------------------------------------------------------------
 # Main
-# ----------------------------
+# -----------------------------------------------------------------------------
 
 def main() -> None:
     dev = _get_creds("DEV")
@@ -217,51 +427,38 @@ def main() -> None:
     if dev.host == prod.host and dev.database == prod.database:
         raise RuntimeError("DEV appears to point at PROD (same host+db). Refusing to continue.")
 
+    print("[sync] DEV :", f"{dev.host}:{dev.port}/{dev.database}")
+    print("[sync] PROD:", f"{prod.host}:{prod.port}/{prod.database}")
+    print("[sync] DRY_RUN =", DRY_RUN)
+
     dev_conn = _connect(dev)
     prod_conn = _connect(prod)
 
     try:
-        dev_conn.autocommit = False
-        prod_conn.autocommit = False
+        # submissions
+        s_dev, s_miss, s_ins = sync_submissions(dev_conn=dev_conn, prod_conn=prod_conn)
+        print()
+        print("[reddit_submission]")
+        print(f"  dev_total      : {s_dev:,}")
+        print(f"  missing_in_prod: {s_miss:,}")
+        print(f"  inserted_prod  : {s_ins:,}")
 
-        with dev_conn.cursor() as dev_cur, prod_conn.cursor() as prod_cur:
-            print(f"[mode] DO_INSERT={DO_INSERT}")
+        # comments (phased)
+        c_dev, c_miss, c_ins = sync_comments_phased(dev_conn=dev_conn, prod_conn=prod_conn)
+        print()
+        print("[reddit_comment]")
+        print(f"  dev_total_seen : {c_dev:,}  (note: counts across passes; not unique)")
+        print(f"  missing_seen   : {c_miss:,} (note: counts across passes; not unique)")
+        print(f"  inserted_prod  : {c_ins:,}")
 
-            # 1) submissions first
-            miss_s, att_s = sync_table_single_pk(
-                dev_cur=dev_cur,
-                prod_cur=prod_cur,
-                table="sm.reddit_submission",
-                cols=REDDIT_SUBMISSION_COLS,
-                label="submissions",
-            )
-            print(f"[submissions] missing_total={miss_s:,} attempted_insert={att_s:,}")
-            if DO_INSERT:
-                prod_conn.commit()
-                print("[submissions] committed")
-
-            # 2) comments second
-            miss_c, att_c = sync_table_single_pk(
-                dev_cur=dev_cur,
-                prod_cur=prod_cur,
-                table="sm.reddit_comment",
-                cols=REDDIT_COMMENT_COLS,
-                label="comments",
-            )
-            print(f"[comments] missing_total={miss_c:,} attempted_insert={att_c:,}")
-            if DO_INSERT:
-                prod_conn.commit()
-                print("[comments] committed")
+        if DRY_RUN:
+            print("\n[sync] DRY_RUN: no inserts performed.")
+        else:
+            print("\n[sync] Done (inserts committed).")
 
     finally:
-        try:
-            dev_conn.close()
-        except Exception:
-            pass
-        try:
-            prod_conn.close()
-        except Exception:
-            pass
+        dev_conn.close()
+        prod_conn.close()
 
 
 if __name__ == "__main__":

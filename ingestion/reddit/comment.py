@@ -3,14 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 from datetime import datetime
+
 from ingestion.ingestion import flush_and_link_single_key
-from ingestion.row_model import InsertableRow
+from ingestion.row_model import InsertableRow, coerce_json
 
 
 @dataclass(frozen=True, slots=True)
 class RedditCommentRow(InsertableRow):
     TABLE = "sm.reddit_comment"
     PK = ("id",)
+
+    COERCE = {
+        "gildings": coerce_json,
+        "all_awardings": coerce_json,
+    }
 
     id: str
     link_id: str

@@ -4,13 +4,30 @@ from dataclasses import dataclass, field
 from typing import Any
 from datetime import datetime
 from ingestion.ingestion import flush_and_link_single_key
-from ingestion.row_model import InsertableRow
+from ingestion.row_model import InsertableRow, coerce_json
+from decimal import Decimal
+
+def _coerce_float(v: Any) -> float:
+    if v is None:
+        return 0.0
+    # psycopg2 numeric often returns Decimal
+    if isinstance(v, Decimal):
+        return float(v)
+    return float(v)
+
 
 
 @dataclass(frozen=True, slots=True)
 class RedditSubmissionRow(InsertableRow):
     TABLE = "sm.reddit_submission"
     PK = ("id",)
+
+    COERCE = {
+        "media": coerce_json,
+        "gildings": coerce_json,
+        "all_awardings": coerce_json,
+        "upvote_ratio": _coerce_float,
+    }
 
     id: str
     url: str

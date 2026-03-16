@@ -21,6 +21,8 @@ claims_temp/
 *.session
 *.session-journal
 
+# random troubleshooting output files
+podcast_samples.txt
 
 # ensures the repo stores/checkout as LF consistently across machines.
 db/migrations/*.sql text eol=lf
