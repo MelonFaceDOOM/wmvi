@@ -177,26 +177,50 @@ def backfill_term(qyt: YTQuotaClient, *, term_id: int, term_name: str) -> None:
 # ----------------------------
 # Main loop
 # ----------------------------
-
 def run_backfill() -> None:
-    tracker = BudgetTracker(budget_units_per_day=TOTAL_BUDGET_UNITS_PER_DAY)
-    qyt = YTQuotaClient.from_api_key(tracker=tracker)
+    """
+    Run until all terms are fully backfilled, sleeping across quota/budget reset boundaries.
+    - YTQuotaClient handles transient backoff internally.
+    - We handle daily quota/budget exhaustion by sleeping until next midnight Pacific.
+    """
+    while True:
+        tracker = BudgetTracker(budget_units_per_day=TOTAL_BUDGET_UNITS_PER_DAY)
+        qyt = YTQuotaClient.from_api_key(tracker=tracker)
 
-    terms = load_search_terms(SEARCH_TERM_LIST_NAME)
+        terms = load_search_terms(SEARCH_TERM_LIST_NAME)
 
-    for term_id, term_name in terms:
-        try:
-            backfill_term(qyt, term_id=term_id, term_name=term_name)
-        except (YTQuotaExceeded, YTBudgetExceeded):
-            # stop for the day
-            now = datetime.now(timezone.utc)
-            resume_at = next_midnight_pacific(now)
-            sleep_s = max(0, (resume_at - now).total_seconds())
-            logging.warning(
-                "Quota/Budget exhausted. Sleeping until %s (%.0fs)",
-                resume_at.isoformat(),
-                sleep_s,
-            )
+        all_done = True
+
+        for term_id, term_name in terms:
+            try:
+                backfill_term(qyt, term_id=term_id, term_name=term_name)
+            except (YTQuotaExceeded, YTBudgetExceeded) as e:
+                # Quota exhausted (API) or local budget exhausted: wait for Pacific reset.
+                now = datetime.now(timezone.utc)
+                resume_at = next_midnight_pacific(now)
+                sleep_s = max(0, (resume_at - now).total_seconds())
+
+                logging.warning(
+                    "%s exhausted (%s). Sleeping until %s (%.0fs)",
+                    "YT quota" if isinstance(e, YTQuotaExceeded) else "Local budget",
+                    str(e),
+                    resume_at.isoformat(),
+                    sleep_s,
+                )
+
+                # Actually sleep; keep service alive.
+                __import__("time").sleep(sleep_s)
+
+                # After sleeping, restart outer loop with a fresh client/tracker and refreshed term list.
+                all_done = False
+                break
+            except Exception:
+                # Unexpected / worth stopping for.
+                logging.exception("Backfill crashed on term=%r (id=%s)", term_name, term_id)
+                raise
+
+        if all_done:
+            logging.info("Backfill completed for all terms; exiting.")
             return
 
 
