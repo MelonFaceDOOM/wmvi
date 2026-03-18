@@ -1,9 +1,9 @@
 import argparse
-from .youtube_transciber import main
+from .transcriber import main
 
 """
 TO RUN ON DEV:
-python -m services.youtube_transciber
+python -m services.youtube_transcriber
 
 TO RUN ON PROD:
 python -m services.youtube_transciber --prod
@@ -13,7 +13,7 @@ calls must come from root dir (wmvi):
 
 
 def _parse_args():
-    ap = argparse.ArgumentParser(prog="python -m services.youtube_transciber")
+    ap = argparse.ArgumentParser(prog="python -m services.youtube_transcriber")
     ap.add_argument(
         "--prod",
         action="store_true",

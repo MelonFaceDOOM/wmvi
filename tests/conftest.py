@@ -19,6 +19,9 @@ REQUIRED_ENV = [
     "TEST_PGHOST", "TEST_PGUSER", "TEST_PGPASSWORD", "TEST_PGPORT", "TEST_PGDATABASE"
 ]
 
+def pytest_configure(config):
+    if not config.option.markexpr:
+        config.option.markexpr = "not transcription"
 
 def _admin_creds(admin_prefix: str = "TEST", admin_db: str = "postgres") -> str:
     """Connect to the admin DB (usually 'postgres') so we can drop/create the test DB."""

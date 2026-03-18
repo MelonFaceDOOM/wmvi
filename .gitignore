@@ -8,6 +8,7 @@ db/snapshots/
 
 __pycache__/
 venv/
+venv-transcription/
 .idea/
 .pytest_cache/
 

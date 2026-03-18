@@ -1,23 +1,24 @@
 from __future__ import annotations
+
 import os
 import atexit
+import logging
 from contextlib import contextmanager
 from typing import Optional
-from psycopg2.pool import ThreadedConnectionPool
+
 import psycopg2
-from sshtunnel import SSHTunnelForwarder
-import logging
+from psycopg2.pool import ThreadedConnectionPool
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 _POOL: Optional[ThreadedConnectionPool] = None
-_TUNNEL: Optional[SSHTunnelForwarder] = None
-_DEFAULT_DB: Str = os.environ.get("DEFAULT_DB", "DEV")
+_DEFAULT_DB: str = os.environ.get("DEFAULT_DB", "DEV")
 
 
-def _base_creds(prefix: str = ""):
+def _base_creds(prefix: str = "") -> dict:
     return dict(
         host=os.environ[f"{prefix}_PGHOST"],
         user=os.environ[f"{prefix}_PGUSER"],
@@ -26,11 +27,14 @@ def _base_creds(prefix: str = ""):
         database=os.environ.get(f"{prefix}_PGDATABASE", "postgres"),
         sslmode=os.environ.get(f"{prefix}_PGSSLMODE", "require"),
         connect_timeout=int(os.environ.get("PGCONNECT_TIMEOUT", "10")),
-        keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5,
     )
 
 
-def close_pool():
+def close_pool() -> None:
     global _POOL
     if _POOL:
         logger.info("Closing DB connection pool.")
@@ -38,12 +42,12 @@ def close_pool():
         _POOL = None
 
 
-def close_tunnel():
-    global _TUNNEL
-    if _TUNNEL:
-        logger.info("Stopping SSH tunnel to DB.")
-        _TUNNEL.stop()
-        _TUNNEL = None
+def close_tunnel() -> None:
+    """
+    No-op kept for compatibility with older code paths that may still call it.
+    SSH tunneling is no longer used.
+    """
+    return
 
 
 def init_pool(
@@ -51,11 +55,23 @@ def init_pool(
     minconn: int = 1,
     maxconn: int = 10,
     force_tunnel: bool = False,
-    recreate: bool = False
+    recreate: bool = False,
 ):
-    """Initialize (or reinitialize) the global pool; optionally via SSH tunnel."""
+    """
+    Initialize (or reinitialize) the global DB pool.
+
+    `force_tunnel` is retained for backward compatibility but is ignored.
+    """
     prefix = prefix.upper()
-    global _POOL, _TUNNEL
+    global _POOL
+
+    if force_tunnel or os.environ.get("USE_SSH_TUNNEL") == "1":
+        logger.warning(
+            "SSH tunneling is no longer supported by db.db; ignoring tunnel request "
+            "(prefix=%s).",
+            prefix,
+        )
+
     if _POOL and not recreate:
         logger.info(
             "DB pool already initialized (prefix=%s); reusing existing pool.",
@@ -66,41 +82,16 @@ def init_pool(
     if recreate:
         logger.info("Recreating DB pool (prefix=%s).", prefix)
         close_pool()
-        close_tunnel()
 
     creds = _base_creds(prefix)
-    use_tunnel = os.environ.get("USE_SSH_TUNNEL") == "1" or force_tunnel
-    if use_tunnel:
-        logger.info(
-            "Starting SSH tunnel for DB (prefix=%s, remote=%s:%s).",
-            prefix,
-            creds["host"],
-            creds["port"],
-        )
-        _TUNNEL = SSHTunnelForwarder(
-            (os.environ["SSH_HOST"], 22),
-            ssh_username=os.environ["SSH_USERNAME"],
-            ssh_pkey=os.environ["SSH_PKEY"],
-            remote_bind_address=(creds["host"], creds["port"]),
-            local_bind_address=("127.0.0.1", 0),
-        )
-        _TUNNEL.start()
-        creds["host"] = "127.0.0.1"
-        creds["port"] = _TUNNEL.local_bind_port
-        logger.info(
-            "SSH tunnel established (local=%s:%s).",
-            creds["host"],
-            creds["port"],
-        )
 
     logger.info(
-        "Initializing DB pool (prefix=%s, db=%s, host=%s, minconn=%d, maxconn=%d, tunnel=%s).",
+        "Initializing DB pool (prefix=%s, db=%s, host=%s, minconn=%d, maxconn=%d).",
         prefix,
         creds["database"],
         creds["host"],
         minconn,
         maxconn,
-        use_tunnel,
     )
 
     _POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, **creds)
@@ -112,7 +103,7 @@ def getconn():
     return _POOL.getconn()
 
 
-def putconn(conn):
+def putconn(conn) -> None:
     if _POOL is not None and conn is not None:
         _POOL.putconn(conn)
 
@@ -156,6 +147,6 @@ def getcursor(commit: bool = True, cursor_factory=None):
 
 
 @atexit.register
-def _cleanup():
+def _cleanup() -> None:
     close_pool()
     close_tunnel()

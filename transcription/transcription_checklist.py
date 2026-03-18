@@ -102,20 +102,29 @@ except Exception as e:
 
 header("Firefox cookies")
 
-cookie_paths = [
+cookie_bases = [
     Path.home() / ".mozilla/firefox",
-    Path.home() / ".var/app/org.mozilla.firefox/.mozilla/firefox",
+    Path.home() / ".var/app/org.mozilla.firefox/.mozilla/firefox",  # flatpak
+    Path.home() / "snap/firefox/common/.mozilla/firefox",           # ubuntu snap
 ]
 
-cookies_found = False
-for base in cookie_paths:
-    if base.exists():
-        for p in base.glob("**/cookies.sqlite"):
-            ok(f"Found cookies.sqlite: {p}")
-            cookies_found = True
+firefox_profile = None
 
-if not cookies_found:
-    warn("No Firefox cookies.sqlite found (yt-dlp may hit 403s)")
+for base in cookie_bases:
+    if not base.exists():
+        continue
+
+    for p in base.glob("**/cookies.sqlite"):
+        # p is .../profile_name/cookies.sqlite
+        firefox_profile = p.parent
+        print(f"Using Firefox profile: {firefox_profile}")
+        break
+
+    if firefox_profile:
+        break
+
+if not firefox_profile:
+    print("No Firefox cookies.sqlite found")
 
 # ----------------------------
 # 5. Whisper smoke test
@@ -158,6 +167,7 @@ out = Path("yt_test_audio.mp3")
 
 cmd = [
     "yt-dlp",
+    "--cookies-from-browser", f"firefox:{firefox_profile}",
     "--no-playlist",
     "--extract-audio",
     "--audio-format", "mp3",
