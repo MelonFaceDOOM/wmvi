@@ -1,6 +1,29 @@
 import subprocess
 from pathlib import Path
+import os
+import shutil
+import sys
 
+def resolve_yt_dlp_bin() -> str:
+    env_bin = os.environ.get("YT_DLP_BIN")
+    if env_bin:
+        return env_bin
+
+    venv_bin = Path(sys.prefix) / "bin" / "yt-dlp"
+    if venv_bin.exists():
+        return str(venv_bin)
+
+    exe_bin = Path(sys.executable).parent / "yt-dlp"
+    if exe_bin.exists():
+        return str(exe_bin)
+
+    path_bin = shutil.which("yt-dlp")
+    if path_bin:
+        return path_bin
+
+    raise RuntimeError("yt-dlp not found; set YT_DLP_BIN or install it in the active venv")
+
+YT_DLP_BIN = resolve_yt_dlp_bin()
 
 class DownloadFailed(Exception):
     pass
@@ -19,7 +42,7 @@ def download_yt_audio(url: str, audio_path: str) -> None:
     outtmpl = str(audio_path.with_suffix(""))
 
     cmd = [
-        "yt-dlp",
+        YT_DLP_BIN,
         "--no-playlist",
         "--js-runtimes", "node",
         "--cookies-from-browser", "firefox",
