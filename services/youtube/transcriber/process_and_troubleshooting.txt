@@ -1,0 +1,15 @@
+`download_yt_audio.py` expects two files in `private/`:
+ - `youtube-cookies.txt`
+ - `youtube-agent.txt`.
+
+To refresh them:
+ - open a fresh Firefox private window
+ - sign into YouTube
+ - visit `youtube.com/robots.txt`
+ - export YouTube cookies with the cookies.txt extension (site only) to `private/youtube-cookies.txt`
+ - open dev tools and search headers from any yt request for "user-agent"
+ - save the current value into `private/youtube-agent.txt`.
+
+If downloads start failing with missing formats, bot-check, or JS challenge errors:
+ - refresh cookies and user agent
+ - make sure both `yt-dlp` and `yt-dlp-ejs` in the transcription venv are up to date
