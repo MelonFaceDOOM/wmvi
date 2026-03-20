@@ -1,19 +1,16 @@
-"""
-Compare and validate new db after transfering from old azure platform to new
-"""
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from typing import Any
 
-import psycopg2
 from psycopg2.extras import RealDictCursor
 
-#TODO update these:
-OLD_PREFIX = "OLD"
-NEW_PREFIX = "NEW"
-SAMPLE_LIMIT = 2
+from db.db import init_pool, close_pool, getcursor
+
+
+SAMPLE_LIMIT = 3
+STALE_HOURS = 24
 
 
 @dataclass(frozen=True)
@@ -21,10 +18,9 @@ class SourceTable:
     table: str
     label: str
     platform: str
-    key_cols: tuple[str, ...]
     key1_sql: str
     key2_sql: str
-    null_check_sql: str
+    source_join_null_sql: str
     created_col: str
     date_entered_col: str
     compare_select: tuple[tuple[str, str], ...]
@@ -35,10 +31,9 @@ SOURCE_TABLES = [
         table="sm.reddit_submission",
         label="reddit_submission",
         platform="reddit_submission",
-        key_cols=("id",),
         key1_sql="t.id",
         key2_sql="''",
-        null_check_sql="t.id IS NULL",
+        source_join_null_sql="t.id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -61,10 +56,9 @@ SOURCE_TABLES = [
         table="sm.reddit_comment",
         label="reddit_comment",
         platform="reddit_comment",
-        key_cols=("id",),
         key1_sql="t.id",
         key2_sql="''",
-        null_check_sql="t.id IS NULL",
+        source_join_null_sql="t.id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -84,10 +78,9 @@ SOURCE_TABLES = [
         table="sm.telegram_post",
         label="telegram_post",
         platform="telegram_post",
-        key_cols=("channel_id", "message_id"),
         key1_sql="t.channel_id::text",
         key2_sql="t.message_id::text",
-        null_check_sql="t.channel_id IS NULL",
+        source_join_null_sql="t.channel_id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -108,10 +101,9 @@ SOURCE_TABLES = [
         table="sm.tweet",
         label="tweet",
         platform="tweet",
-        key_cols=("id",),
         key1_sql="t.id::text",
         key2_sql="''",
-        null_check_sql="t.id IS NULL",
+        source_join_null_sql="t.id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -131,10 +123,9 @@ SOURCE_TABLES = [
         table="youtube.video",
         label="youtube_video",
         platform="youtube_video",
-        key_cols=("video_id",),
         key1_sql="t.video_id",
         key2_sql="''",
-        null_check_sql="t.video_id IS NULL",
+        source_join_null_sql="t.video_id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -158,10 +149,9 @@ SOURCE_TABLES = [
         table="youtube.comment",
         label="youtube_comment",
         platform="youtube_comment",
-        key_cols=("video_id", "comment_id"),
         key1_sql="t.video_id",
         key2_sql="t.comment_id",
-        null_check_sql="t.video_id IS NULL",
+        source_join_null_sql="t.video_id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -184,10 +174,9 @@ SOURCE_TABLES = [
         table="podcasts.episodes",
         label="podcast_episode",
         platform="podcast_episode",
-        key_cols=("id",),
         key1_sql="t.id",
         key2_sql="''",
-        null_check_sql="t.id IS NULL",
+        source_join_null_sql="t.id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -210,10 +199,9 @@ SOURCE_TABLES = [
         table="news.article",
         label="news_article",
         platform="news_article",
-        key_cols=("id",),
         key1_sql="t.id::text",
         key2_sql="''",
-        null_check_sql="t.id IS NULL",
+        source_join_null_sql="t.id IS NULL",
         created_col="t.created_at_ts",
         date_entered_col="t.date_entered",
         compare_select=(
@@ -231,38 +219,21 @@ SOURCE_TABLES = [
 ]
 
 
-def creds(prefix: str) -> dict[str, Any]:
-    prefix = prefix.upper()
-    return {
-        "host": os.environ[f"{prefix}_PGHOST"],
-        "user": os.environ[f"{prefix}_PGUSER"],
-        "password": os.environ[f"{prefix}_PGPASSWORD"],
-        "port": int(os.environ.get(f"{prefix}_PGPORT", "5432")),
-        "dbname": os.environ.get(f"{prefix}_PGDATABASE", "postgres"),
-        "sslmode": os.environ.get(f"{prefix}_PGSSLMODE", "require"),
-        "connect_timeout": int(os.environ.get("PGCONNECT_TIMEOUT", "10")),
-    }
-
-
-def connect(prefix: str):
-    return psycopg2.connect(**creds(prefix))
-
-
-def one(conn, sql: str, params: tuple = ()) -> Any:
-    with conn.cursor() as cur:
+def one(sql: str, params: tuple = ()) -> Any:
+    with getcursor(commit=False) as cur:
         cur.execute(sql, params)
         row = cur.fetchone()
         return None if row is None else row[0]
 
 
-def row(conn, sql: str, params: tuple = ()) -> dict[str, Any]:
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+def row(sql: str, params: tuple = ()) -> dict[str, Any]:
+    with getcursor(commit=False, cursor_factory=RealDictCursor) as cur:
         cur.execute(sql, params)
         return dict(cur.fetchone())
 
 
-def rows(conn, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+def rows(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+    with getcursor(commit=False, cursor_factory=RealDictCursor) as cur:
         cur.execute(sql, params)
         return [dict(r) for r in cur.fetchall()]
 
@@ -277,17 +248,19 @@ def compare_select_sql(meta: SourceTable) -> str:
     return ", ".join(f"{expr} AS {alias}" for alias, expr in meta.compare_select)
 
 
-def source_summary(conn, meta: SourceTable) -> dict[str, Any]:
+def source_summary(meta: SourceTable) -> dict[str, Any]:
     sql = f"""
     SELECT
         count(*)::bigint AS total_rows,
         count(*) FILTER (WHERE t.is_en IS TRUE)::bigint AS is_en_true,
         count(*) FILTER (WHERE t.is_en IS FALSE)::bigint AS is_en_false,
         count(*) FILTER (WHERE t.is_en IS NULL)::bigint AS is_en_null,
+        count(*) FILTER (WHERE {meta.created_col} IS NULL)::bigint AS null_created_at,
         count(pr.id)::bigint AS matched_registry_rows,
         count(*) FILTER (WHERE pr.id IS NULL)::bigint AS source_missing_registry,
         min({meta.created_col}) AS min_created_at,
         max({meta.created_col}) AS max_created_at,
+        min({meta.date_entered_col}) AS min_date_entered,
         max({meta.date_entered_col}) AS max_date_entered
     FROM {meta.table} t
     LEFT JOIN sm.post_registry pr
@@ -295,9 +268,8 @@ def source_summary(conn, meta: SourceTable) -> dict[str, Any]:
      AND pr.key1 = {meta.key1_sql}
      AND pr.key2 = {meta.key2_sql}
     """
-    out = row(conn, sql, (meta.platform,))
+    out = row(sql, (meta.platform,))
     out["platform_registry_rows"] = one(
-        conn,
         "SELECT count(*)::bigint FROM sm.post_registry WHERE platform = %s",
         (meta.platform,),
     )
@@ -309,25 +281,13 @@ def source_summary(conn, meta: SourceTable) -> dict[str, Any]:
       ON pr.key1 = {meta.key1_sql}
      AND pr.key2 = {meta.key2_sql}
     WHERE pr.platform = %s
-      AND {meta.null_check_sql}
+      AND {meta.source_join_null_sql}
     """
-    out["registry_orphans"] = one(conn, orphan_sql, (meta.platform,))
+    out["registry_orphans"] = one(orphan_sql, (meta.platform,))
     return out
 
 
-def count_new_rows_up_to_old_cutoff(conn, meta: SourceTable, old_cutoff) -> int | None:
-    if old_cutoff is None:
-        return None
-    sql = f"""
-    SELECT count(*)::bigint
-    FROM {meta.table} t
-    WHERE {meta.date_entered_col} <= %s
-    """
-    return one(conn, sql, (old_cutoff,))
-
-
 def transcript_summary(
-    conn,
     *,
     parent_table: str,
     parent_key: str,
@@ -341,10 +301,16 @@ def transcript_summary(
     SELECT
         count(*)::bigint AS parent_rows,
         count(*) FILTER (WHERE {transcript_col} IS NOT NULL AND {transcript_col} <> '')::bigint AS with_transcript,
-        count(*) FILTER (WHERE {started_col} IS NOT NULL)::bigint AS started_count,
-        count(*) FILTER (WHERE {updated_col} IS NOT NULL)::bigint AS updated_count,
+        count(*) FILTER (WHERE ({transcript_col} IS NULL OR {transcript_col} = '') AND {started_col} IS NOT NULL)::bigint AS started_but_no_transcript,
+        count(*) FILTER (WHERE {updated_col} IS NOT NULL AND ({transcript_col} IS NULL OR {transcript_col} = ''))::bigint AS updated_but_no_transcript,
+        count(*) FILTER (WHERE ({transcript_col} IS NOT NULL AND {transcript_col} <> '') AND {updated_col} IS NULL)::bigint AS transcript_but_no_updated_at,
         count(*) FILTER (
-            WHERE {transcript_col} IS NOT NULL AND {transcript_col} <> ''
+            WHERE {started_col} IS NOT NULL
+              AND ({transcript_col} IS NULL OR {transcript_col} = '')
+              AND {started_col} < now() - interval '{STALE_HOURS} hours'
+        )::bigint AS stale_started_no_transcript,
+        count(*) FILTER (
+            WHERE ({transcript_col} IS NOT NULL AND {transcript_col} <> '')
               AND NOT EXISTS (
                   SELECT 1
                   FROM {segments_table} s
@@ -359,114 +325,93 @@ def transcript_summary(
         count(DISTINCT {segments_fk})::bigint AS segment_parents
     FROM {segments_table}
     """
-    out = row(conn, parent_sql)
-    out.update(row(conn, seg_sql))
+    out = row(parent_sql)
+    out.update(row(seg_sql))
     return out
 
 
-def sample_rows_old(conn, meta: SourceTable, direction: str) -> list[dict[str, Any]]:
+def sample_rows(meta: SourceTable, direction: str) -> list[dict[str, Any]]:
     assert direction in ("ASC", "DESC")
     sql = f"""
     SELECT {compare_select_sql(meta)}
     FROM {meta.table} t
-    ORDER BY {meta.created_col} {direction} NULLS LAST, {", ".join("t." + k for k in meta.key_cols)} {direction}
+    ORDER BY {meta.created_col} {direction} NULLS LAST
     LIMIT {SAMPLE_LIMIT}
     """
-    return rows(conn, sql)
+    return rows(sql)
 
 
-def fetch_row_by_key(conn, meta: SourceTable, key_row: dict[str, Any]) -> dict[str, Any] | None:
-    where = " AND ".join(f"t.{col} = %s" for col in meta.key_cols)
-    params = tuple(key_row[col] for col in meta.key_cols)
-    sql = f"""
-    SELECT {compare_select_sql(meta)}
-    FROM {meta.table} t
-    WHERE {where}
-    """
-    result = rows(conn, sql, params)
-    return result[0] if result else None
+def print_header(title: str) -> None:
+    print()
+    print("=" * 110)
+    print(title)
+    print("=" * 110)
 
 
-def schema_migrations(conn) -> list[dict[str, Any]]:
-    return rows(
-        conn,
-        "SELECT version, checksum FROM public.schema_migrations ORDER BY version"
-    )
-
-
-def compare_source(old_conn, new_conn, meta: SourceTable) -> list[str]:
+def print_source_checks() -> list[str]:
     issues: list[str] = []
 
-    old = source_summary(old_conn, meta)
-    new = source_summary(new_conn, meta)
+    print_header("SOURCE TABLES / REGISTRY COVERAGE")
 
-    print(f"\n[{meta.label}]")
-    for field in [
-        "total_rows",
-        "platform_registry_rows",
-        "matched_registry_rows",
-        "is_en_true",
-        "is_en_false",
-        "is_en_null",
-    ]:
-        status = "OK" if (new[field] is not None and new[field] >= old[field]) else "LOWER"
-        print(f"  {field:24} old={fmt(old[field]):>12}   new={fmt(new[field]):>12}   {status}")
-        if new[field] < old[field]:
-            issues.append(f"{meta.label}: {field} is lower in new ({new[field]} < {old[field]})")
+    for meta in SOURCE_TABLES:
+        s = source_summary(meta)
+        print(f"\n[{meta.label}]")
+        for field in [
+            "total_rows",
+            "platform_registry_rows",
+            "matched_registry_rows",
+            "source_missing_registry",
+            "registry_orphans",
+            "is_en_true",
+            "is_en_false",
+            "is_en_null",
+            "null_created_at",
+        ]:
+            print(f"  {field:24} {fmt(s[field]):>14}")
 
-    # coverage should not worsen
-    for field in ["source_missing_registry", "registry_orphans"]:
-        status = "OK" if new[field] <= old[field] else "WORSE"
-        print(f"  {field:24} old={fmt(old[field]):>12}   new={fmt(new[field]):>12}   {status}")
-        if new[field] > old[field]:
-            issues.append(f"{meta.label}: {field} got worse in new ({new[field]} > {old[field]})")
+        print(f"  {'min_created_at':24} {s['min_created_at']}")
+        print(f"  {'max_created_at':24} {s['max_created_at']}")
+        print(f"  {'min_date_entered':24} {s['min_date_entered']}")
+        print(f"  {'max_date_entered':24} {s['max_date_entered']}")
 
-    # time boundaries from old data should still be represented in new
-    print(f"  {'min_created_at':24} old={old['min_created_at']}   new={new['min_created_at']}")
-    print(f"  {'max_created_at':24} old={old['max_created_at']}   new={new['max_created_at']}")
-    if old["min_created_at"] is not None and new["min_created_at"] is not None and new["min_created_at"] > old["min_created_at"]:
-        issues.append(f"{meta.label}: new min_created_at is later than old")
-    if old["max_created_at"] is not None and new["max_created_at"] is not None and new["max_created_at"] < old["max_created_at"]:
-        issues.append(f"{meta.label}: new max_created_at is earlier than old")
-
-    # count rows in new up to the old date_entered cutoff
-    cutoff = old["max_date_entered"]
-    upto = count_new_rows_up_to_old_cutoff(new_conn, meta, cutoff)
-    print(f"  {'new_rows_upto_old_max_date_entered':24} old={fmt(old['total_rows']):>12}   new={fmt(upto):>12}")
-    if upto is not None and upto < old["total_rows"]:
-        issues.append(
-            f"{meta.label}: rows in new up to old max(date_entered) are lower than old total "
-            f"({upto} < {old['total_rows']})"
-        )
-
-    # oldest/newest sample comparisons from old -> new
-    for label, direction in [("oldest", "ASC"), ("newest", "DESC")]:
-        old_samples = sample_rows_old(old_conn, meta, direction)
-        print(f"  sample check ({label}): {len(old_samples)} rows")
-        for s in old_samples:
-            new_row = fetch_row_by_key(new_conn, meta, s)
-            key_desc = ", ".join(f"{k}={s[k]}" for k in meta.key_cols)
-            if new_row is None:
-                issues.append(f"{meta.label}: missing sampled {label} row in new ({key_desc})")
-                print(f"    MISSING in new: {key_desc}")
-                continue
-            if new_row != s:
-                issues.append(f"{meta.label}: sampled {label} row mismatch for {key_desc}")
-                print(f"    MISMATCH: {key_desc}")
-                print(f"      old={s}")
-                print(f"      new={new_row}")
-            else:
-                print(f"    OK: {key_desc}")
+        if s["source_missing_registry"] > 0:
+            issues.append(f"{meta.label}: {s['source_missing_registry']} source rows missing post_registry entry")
+        if s["registry_orphans"] > 0:
+            issues.append(f"{meta.label}: {s['registry_orphans']} post_registry rows are orphaned")
+        if s["matched_registry_rows"] != s["total_rows"]:
+            issues.append(f"{meta.label}: matched_registry_rows != total_rows")
+        if s["platform_registry_rows"] != s["total_rows"]:
+            issues.append(f"{meta.label}: platform_registry_rows != total_rows")
 
     return issues
 
 
-def compare_transcripts(old_conn, new_conn) -> list[str]:
+def print_posts_all_checks() -> list[str]:
     issues: list[str] = []
 
-    items = {
-        "youtube_video": transcript_summary(
-            old_conn,
+    print_header("POSTS_ALL VIEW SANITY")
+
+    registry_rows = one("SELECT count(*)::bigint FROM sm.post_registry")
+    posts_all_rows = one("SELECT count(*)::bigint FROM sm.posts_all")
+    posts_all_en_rows = one("SELECT count(*)::bigint FROM sm.post_search_en")
+
+    print(f"{'sm.post_registry rows':30} {fmt(registry_rows):>14}")
+    print(f"{'sm.posts_all rows':30} {fmt(posts_all_rows):>14}")
+    print(f"{'sm.post_search_en rows':30} {fmt(posts_all_en_rows):>14}")
+
+    if posts_all_rows != registry_rows:
+        issues.append(f"sm.posts_all row count != sm.post_registry row count ({posts_all_rows} vs {registry_rows})")
+
+    return issues
+
+
+def print_transcript_checks() -> list[str]:
+    issues: list[str] = []
+
+    print_header("TRANSCRIPT / SEGMENT COMPLETION")
+
+    configs = {
+        "youtube_video": dict(
             parent_table="youtube.video",
             parent_key="video_id",
             transcript_col="transcript",
@@ -475,30 +420,7 @@ def compare_transcripts(old_conn, new_conn) -> list[str]:
             segments_table="youtube.transcript_segments",
             segments_fk="video_id",
         ),
-        "podcast_episode": transcript_summary(
-            old_conn,
-            parent_table="podcasts.episodes",
-            parent_key="id",
-            transcript_col="transcript",
-            started_col="transcription_started_at",
-            updated_col="transcript_updated_at",
-            segments_table="podcasts.transcript_segments",
-            segments_fk="episode_id",
-        ),
-    }
-    items_new = {
-        "youtube_video": transcript_summary(
-            new_conn,
-            parent_table="youtube.video",
-            parent_key="video_id",
-            transcript_col="transcript",
-            started_col="transcription_started_at",
-            updated_col="transcript_updated_at",
-            segments_table="youtube.transcript_segments",
-            segments_fk="video_id",
-        ),
-        "podcast_episode": transcript_summary(
-            new_conn,
+        "podcast_episode": dict(
             parent_table="podcasts.episodes",
             parent_key="id",
             transcript_col="transcript",
@@ -509,91 +431,123 @@ def compare_transcripts(old_conn, new_conn) -> list[str]:
         ),
     }
 
-    print("\n" + "=" * 100)
-    print("TRANSCRIPT / SEGMENT COUNTS (new should not be lower)")
-    print("=" * 100)
-
-    for label in ["youtube_video", "podcast_episode"]:
+    for label, cfg in configs.items():
+        s = transcript_summary(**cfg)
         print(f"\n[{label}]")
-        old = items[label]
-        new = items_new[label]
-
         for field in [
             "parent_rows",
             "with_transcript",
-            "started_count",
-            "updated_count",
+            "started_but_no_transcript",
+            "updated_but_no_transcript",
+            "transcript_but_no_updated_at",
+            "stale_started_no_transcript",
+            "transcript_without_segments",
             "segment_rows",
             "segment_parents",
         ]:
-            status = "OK" if new[field] >= old[field] else "LOWER"
-            print(f"  {field:24} old={fmt(old[field]):>12}   new={fmt(new[field]):>12}   {status}")
-            if new[field] < old[field]:
-                issues.append(f"{label}: {field} is lower in new ({new[field]} < {old[field]})")
+            print(f"  {field:28} {fmt(s[field]):>14}")
 
-        # this one can legitimately rise because new DB kept working;
-        # just print it and only flag if absurdly worse
-        print(
-            f"  {'transcript_without_segments':24} old={fmt(old['transcript_without_segments']):>12}   "
-            f"new={fmt(new['transcript_without_segments']):>12}"
-        )
+        if s["updated_but_no_transcript"] > 0:
+            issues.append(f"{label}: rows with transcript_updated_at but no transcript")
+        if s["transcript_but_no_updated_at"] > 0:
+            issues.append(f"{label}: rows with transcript but no transcript_updated_at")
+        if s["stale_started_no_transcript"] > 0:
+            issues.append(f"{label}: stale rows started > {STALE_HOURS}h ago but still no transcript")
+        if s["transcript_without_segments"] > 0:
+            issues.append(f"{label}: rows with transcript but no transcript segments")
 
     return issues
 
 
-def compare_schema_migrations(old_conn, new_conn) -> list[str]:
+def print_match_checks() -> list[str]:
     issues: list[str] = []
-    old = schema_migrations(old_conn)
-    new = schema_migrations(new_conn)
 
-    print("\n" + "=" * 100)
-    print("SCHEMA MIGRATIONS")
-    print("=" * 100)
-    print(f"  old rows: {len(old)}")
-    print(f"  new rows: {len(new)}")
+    print_header("MATCH / SCRAPE LINK TABLES")
 
-    old_set = {(r["version"], r["checksum"]) for r in old}
-    new_set = {(r["version"], r["checksum"]) for r in new}
+    post_term_hit = one("SELECT count(*)::bigint FROM matches.post_term_hit")
+    matched_posts = one("SELECT count(DISTINCT post_id)::bigint FROM matches.post_term_hit")
+    post_scrape = one("SELECT count(*)::bigint FROM scrape.post_scrape")
+    scrape_jobs = one("SELECT count(*)::bigint FROM scrape.job")
 
-    missing = old_set - new_set
-    if missing:
-        issues.append(f"schema_migrations: new is missing {len(missing)} old migration rows")
-        print("  MISSING in new:")
-        for m in sorted(missing):
-            print(f"    {m}")
-    else:
-        print("  OK: all old schema migrations exist in new")
+    print(f"{'matches.post_term_hit':30} {fmt(post_term_hit):>14}")
+    print(f"{'distinct matched posts':30} {fmt(matched_posts):>14}")
+    print(f"{'scrape.post_scrape':30} {fmt(post_scrape):>14}")
+    print(f"{'scrape.job':30} {fmt(scrape_jobs):>14}")
 
     return issues
 
 
-def main():
-    with connect(OLD_PREFIX) as old_conn, connect(NEW_PREFIX) as new_conn:
-        old_conn.autocommit = True
-        new_conn.autocommit = True
+def print_samples() -> None:
+    print_header("OLDEST / NEWEST SAMPLE ROWS")
 
-        all_issues: list[str] = []
+    for meta in SOURCE_TABLES:
+        print(f"\n[{meta.label}]")
 
-        print("=" * 100)
-        print("SOURCE TABLE SANITY CHECKS")
-        print("=" * 100)
+        oldest = sample_rows(meta, "ASC")
+        newest = sample_rows(meta, "DESC")
 
-        for meta in SOURCE_TABLES:
-            all_issues.extend(compare_source(old_conn, new_conn, meta))
+        print("  oldest:")
+        for r in oldest:
+            print(f"    {r}")
 
-        all_issues.extend(compare_transcripts(old_conn, new_conn))
-        all_issues.extend(compare_schema_migrations(old_conn, new_conn))
+        print("  newest:")
+        for r in newest:
+            print(f"    {r}")
 
-        print("\n" + "=" * 100)
-        print("RESULT")
-        print("=" * 100)
-        if all_issues:
-            print(f"Found {len(all_issues)} issue(s):")
-            for issue in all_issues:
+
+def print_top_transcript_lengths() -> None:
+    print_header("LONGEST TRANSCRIPTS / TEXTS (manual sanity spot-check)")
+
+    queries = {
+        "youtube.video": """
+            SELECT video_id, created_at_ts, length(coalesce(transcript, '')) AS transcript_len, left(title, 100) AS title
+            FROM youtube.video
+            ORDER BY length(coalesce(transcript, '')) DESC NULLS LAST
+            LIMIT 5
+        """,
+        "podcasts.episodes": """
+            SELECT id, created_at_ts, length(coalesce(transcript, '')) AS transcript_len, left(title, 100) AS title
+            FROM podcasts.episodes
+            ORDER BY length(coalesce(transcript, '')) DESC NULLS LAST
+            LIMIT 5
+        """,
+        "news.article": """
+            SELECT id, created_at_ts, length(coalesce(text, '')) AS text_len, left(title, 100) AS title
+            FROM news.article
+            ORDER BY length(coalesce(text, '')) DESC NULLS LAST
+            LIMIT 5
+        """,
+    }
+
+    for label, sql in queries.items():
+        print(f"\n[{label}]")
+        for r in rows(sql):
+            print(f"  {r}")
+
+
+def main() -> None:
+    init_pool(prefix="prod")
+
+    try:
+        issues: list[str] = []
+        issues.extend(print_source_checks())
+        issues.extend(print_posts_all_checks())
+        issues.extend(print_transcript_checks())
+        issues.extend(print_match_checks())
+        print_samples()
+        print_top_transcript_lengths()
+
+        print_header("RESULT")
+        if issues:
+            print(f"Found {len(issues)} issue(s):")
+            for issue in issues:
                 print(f"  - {issue}")
             raise SystemExit(1)
         else:
-            print("No issues found. New DB looks like a superset / faithful carry-forward of old DB for checked data.")
+            print("No internal data-completion issues found in the checked tables.")
+            raise SystemExit(0)
+    finally:
+        close_pool()
 
 
 if __name__ == "__main__":
