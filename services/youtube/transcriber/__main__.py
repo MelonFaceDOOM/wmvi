@@ -3,17 +3,17 @@ from .transcriber import main
 
 """
 TO RUN ON DEV:
-python -m services.youtube_transcriber
+python -m services.youtube.transcriber
 
 TO RUN ON PROD:
-python -m services.youtube_transciber --prod
+python -m services.youtube.transciber --prod
 
 calls must come from root dir (wmvi):
 """
 
 
 def _parse_args():
-    ap = argparse.ArgumentParser(prog="python -m services.youtube_transcriber")
+    ap = argparse.ArgumentParser(prog="python -m services.youtube.transcriber")
     ap.add_argument(
         "--prod",
         action="store_true",

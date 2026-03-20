@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import shutil
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 
 def resolve_yt_dlp_bin() -> str:
     env_bin = os.environ.get("YT_DLP_BIN")
@@ -23,29 +25,43 @@ def resolve_yt_dlp_bin() -> str:
 
     raise RuntimeError("yt-dlp not found; set YT_DLP_BIN or install it in the active venv")
 
+def get_project_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+def get_youtube_cookies_path() -> Path:
+    path = get_project_root() / "private" / "youtube-cookies.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+def get_youtube_user_agent_path() -> Path:
+    path = get_project_root() / "private" / "youtube-agent.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+def load_firefox_user_agent() -> str:
+    path = get_youtube_user_agent_path()
+    if not path.exists():
+        raise RuntimeError(f"Missing YouTube user-agent file: {path}")
+    return path.read_text(encoding="utf-8").strip()
+
 YT_DLP_BIN = resolve_yt_dlp_bin()
+YT_COOKIES_PATH = get_youtube_cookies_path()
+FIREFOX_UA = load_firefox_user_agent()
 
 class DownloadFailed(Exception):
     pass
 
 
 def download_yt_audio(url: str, audio_path: str) -> None:
-    """
-    Download audio-only from a YouTube video into audio_path.
-
-    Produces a file suitable for faster-whisper.
-    Raises DownloadFailed on failure.
-    """
     audio_path = Path(audio_path)
-
-    # yt-dlp wants a template *without* extension
     outtmpl = str(audio_path.with_suffix(""))
 
     cmd = [
         YT_DLP_BIN,
         "--no-playlist",
         "--js-runtimes", "node",
-        "--cookies-from-browser", "firefox",
+        "--cookies", str(YT_COOKIES_PATH),
+        "--add-headers", f"User-Agent:{FIREFOX_UA}",
         "-f", "bestaudio/best",
         "--extract-audio",
         "--audio-format", "mp3",
@@ -64,11 +80,8 @@ def download_yt_audio(url: str, audio_path: str) -> None:
             text=True,
         )
     except subprocess.CalledProcessError as e:
-        raise DownloadFailed(
-            f"yt-dlp failed for {url}\n{e.stderr}"
-        ) from e
+        raise DownloadFailed(f"yt-dlp failed for {url}\n{e.stderr}") from e
 
-    # yt-dlp determines final extension; find it
     produced = None
     for ext in ("mp3", "m4a", "opus", "webm"):
         candidate = audio_path.with_suffix("." + ext)
@@ -81,5 +94,4 @@ def download_yt_audio(url: str, audio_path: str) -> None:
             f"yt-dlp reported success but no audio file was produced for {url}"
         )
 
-    # Normalize to requested output path
     produced.replace(audio_path)

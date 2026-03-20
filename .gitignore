@@ -5,6 +5,7 @@ plan.txt
 
 logs/
 db/snapshots/
+private/
 
 __pycache__/
 venv/

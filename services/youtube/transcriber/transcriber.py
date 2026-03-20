@@ -369,8 +369,11 @@ def claim_and_download_one(
         claimed = claim_next_video_fn(cur)
 
     if claimed is None:
+        logging.info("audio_loader: no claimable video found")
         budget.release_slot()
         return LoaderStepResult(action="stop")
+
+    logging.info("audio_loader: claimed video %s", claimed.video_id)
 
     td = tempfile.TemporaryDirectory()
     _track_tempdir(td)
@@ -379,6 +382,7 @@ def claim_and_download_one(
     try:
         download_audio_fn(claimed.url, audio_path)
     except DownloadFailed:
+        logging.warning("audio_loader: download failed for %s url=%s", claimed.video_id, claimed.url)
         cleanup_tempdir_fn(td)
         return LoaderStepResult(action="retry")
 
@@ -455,7 +459,7 @@ def transcriber_worker(audio_q: queue.Queue, save_q: queue.Queue) -> None:
             if item is None:
                 save_q.put(None)
                 return
-
+            logging.info("transcriber: processing %s", item.video_id)
             result = transcribe_one(model, item)
             save_q.put(result)
         finally:
