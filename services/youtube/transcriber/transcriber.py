@@ -381,8 +381,22 @@ def claim_and_download_one(
 
     try:
         download_audio_fn(claimed.url, audio_path)
-    except DownloadFailed:
-        logging.warning("audio_loader: download failed for %s url=%s", claimed.video_id, claimed.url)
+    # TODO clean up this logging a bit.
+    except DownloadFailed as e:
+        err_text = str(e)
+        logging.warning(
+            "audio_loader: download failed for %s url=%s err=%s",
+            claimed.video_id,
+            claimed.url,
+            err_text,
+        )
+        if (
+                "Sign in to confirm you’re not a bot" in err_text
+                or "Use --cookies-from-browser or --cookies" in err_text
+                or "HTTP Error 403" in err_text
+        ):
+            logging.warning("audio_loader: likely auth/captcha issue for %s", claimed.video_id)
+
         cleanup_tempdir_fn(td)
         return LoaderStepResult(action="retry")
 
