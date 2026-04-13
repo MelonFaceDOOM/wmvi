@@ -1,0 +1,6 @@
+# Coreference step for apps/claim_extractor/coreference_resolution.py
+# Install on top of repo requirements.txt (needs spaCy + en_core_web_lg).
+#
+# transformers v5.x breaks fastcoref model loading; keep 4.x until upstream fixes.
+fastcoref==2.1.6
+transformers>=4.44.0,<5.0.0

@@ -1,0 +1,204 @@
+{
+  "generated_at_utc": "2026-04-10T12:00:00+00:00",
+  "terms": [
+    "measles",
+    "mmr vaccine",
+    "mumps vaccine",
+    "rubella vaccine"
+  ],
+  "post_count": 4,
+  "posts": [
+    {
+      "post_id": 10001,
+      "platform": "reddit_submission",
+      "key1": "abc123x",
+      "key2": "",
+      "date_entered": "2026-04-09T15:30:00+00:00",
+      "created_at_ts": "2026-04-09T15:28:00+00:00",
+      "text": "I've been reading conflicting studies lately. Some parents worry about long-term effects. The MMR vaccine schedule seems aggressive to them. I am trying to understand the actual risk tradeoffs. Thanks for any pointers.",
+      "tsv_en": "'aggress':5 'effect':12 'mmr':16 'parent':8 'pointer':35 'read':3 'risk':30 'schedul':17 'studie':5 'thank':32 'tradeoff':31 'try':24 'understand':26 'vaccin':17 'worry':9",
+      "is_en": true,
+      "primary_metric": 42,
+      "url": "https://www.reddit.com/r/example/comments/abc123x/title_here/",
+      "hits": [
+        {
+          "term_id": 101,
+          "term_name": "mmr vaccine",
+          "match_start": 94,
+          "match_end": 105
+        }
+      ]
+    },
+    {
+      "post_id": 20002,
+      "platform": "youtube_video",
+      "key1": "dQw4w9WgXcQ",
+      "key2": "",
+      "date_entered": "2026-04-08T10:00:00+00:00",
+      "created_at_ts": "2026-04-08T09:55:00+00:00",
+      "text": "Welcome back to the channel. Today we have a long discussion lined up. First we cover recent policy news. Then we dig into historical outbreaks. After that we summarize what changed in the last decade. Many viewers asked about childhood immunization trends. Public health officials emphasize routine shots. Some communities still see lower uptake than targets. In the middle segment we compare notes with a pediatric nurse. She explains how clinics handle vaccine hesitancy. We also touch on school requirements in several states. Later we discuss travel and import risks. Measles cases abroad can affect local clusters. Clinics watch for fever and rash presentations. We wrap with resources for families. Thanks for watching and see you next week.",
+      "tsv_en": "'abroad':101 'ask':58 'case':102 'channel':4 'childhood':59 'clinic':88,113 'cluster':106 'communiti':71 'compar':79 'cover':17 'decad':35 'discuss':121 'discuss':11 'emphas':66 'explain':90 'famili':118 'fever':108 'first':15 'handl':92 'health':64 'hesitanci':94 'histor':22 'immun':60 'import':100 'last':33 'line':14 'local':105 'lower':73 'measl':102 'middle':77 'news':19 'next':125 'note':81 'nurs':83 'offici':65 'outbreak':23 'pediatr':82 'polici':18 'present':110 'public':63 'rash':110 'recent':17 'requir':97 'resourc':116 'risk':99 'routin':67 'school':96 'segment':78 'sever':98 'shot':68 'state':99 'still':70 'summar':28 'target':75 'today':8 'touch':95 'travel':98 'trend':61 'uptak':74 'viewer':57 'watch':104,123 'week':126 'wrap':114",
+      "is_en": true,
+      "primary_metric": 150000,
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "hits": [
+        {
+          "term_id": 202,
+          "term_name": "measles",
+          "match_start": 573,
+          "match_end": 580
+        }
+      ]
+    },
+    {
+      "post_id": 30003,
+      "platform": "podcast_episode",
+      "key1": "999",
+      "key2": "",
+      "date_entered": "2026-04-07T12:00:00+00:00",
+      "created_at_ts": "2026-04-07T11:55:00+00:00",
+      "text": "This transcript opens with general framing about vaccine confidence in twenty twenty four. Early on we cite measles outbreaks overseas as a wake up call for local clinics. The host then pivots to mmr vaccine uptake data from the last national survey cycle. A guest notes mumps vaccine reminders are often bundled with school sports physicals. Rubella vaccine history gets a short tangent on congenital exposure risks. We pause for listener mail about travel shots before returning to measles case counts. The producer slips in a mmr vaccine myth checklist borrowed from a state health PDF. Another segment compares mumps vaccine titers for college athletes versus staff. Rubella vaccine stockouts appear briefly as a supply chain footnote. Mid show we revisit measles headlines and ask whether messaging overshot the evidence. The panel argues mmr vaccine timing is less controversial than social threads suggest. A nurse explains mumps vaccine side effects using plain language without alarmism. Rubella vaccine reminders for partners of pregnant patients close that chapter. Toward the end measles importation risk is tied to airport screening anecdotes. We summarize mmr vaccine talking points for caregivers who only skim captions. Final thoughts mention mumps vaccine boosters for certain outbreak response teams. The outro thanks sponsors and plugs rubella vaccine resources on the show website. No medical advice is implied listeners should consult their own licensed clinicians.",
+      "tsv_en": "'podcast':1 'transcript':2",
+      "is_en": true,
+      "primary_metric": null,
+      "url": "https://example.com/pod/episode-999",
+      "hits": [
+        {
+          "term_id": 301,
+          "term_name": "measles",
+          "match_start": 108,
+          "match_end": 125
+        },
+        {
+          "term_id": 302,
+          "term_name": "mmr vaccine",
+          "match_start": 196,
+          "match_end": 214
+        },
+        {
+          "term_id": 303,
+          "term_name": "mumps vaccine",
+          "match_start": 271,
+          "match_end": 294
+        },
+        {
+          "term_id": 304,
+          "term_name": "rubella vaccine",
+          "match_start": 343,
+          "match_end": 366
+        },
+        {
+          "term_id": 301,
+          "term_name": "measles",
+          "match_start": 484,
+          "match_end": 503
+        },
+        {
+          "term_id": 302,
+          "term_name": "mmr vaccine",
+          "match_start": 529,
+          "match_end": 545
+        },
+        {
+          "term_id": 303,
+          "term_name": "mumps vaccine",
+          "match_start": 615,
+          "match_end": 635
+        },
+        {
+          "term_id": 304,
+          "term_name": "rubella vaccine",
+          "match_start": 671,
+          "match_end": 696
+        },
+        {
+          "term_id": 301,
+          "term_name": "measles",
+          "match_start": 760,
+          "match_end": 777
+        },
+        {
+          "term_id": 302,
+          "term_name": "mmr vaccine",
+          "match_start": 844,
+          "match_end": 862
+        },
+        {
+          "term_id": 303,
+          "term_name": "mumps vaccine",
+          "match_start": 931,
+          "match_end": 957
+        },
+        {
+          "term_id": 304,
+          "term_name": "rubella vaccine",
+          "match_start": 997,
+          "match_end": 1022
+        },
+        {
+          "term_id": 301,
+          "term_name": "measles",
+          "match_start": 1092,
+          "match_end": 1111
+        },
+        {
+          "term_id": 302,
+          "term_name": "mmr vaccine",
+          "match_start": 1170,
+          "match_end": 1196
+        },
+        {
+          "term_id": 303,
+          "term_name": "mumps vaccine",
+          "match_start": 1259,
+          "match_end": 1281
+        },
+        {
+          "term_id": 304,
+          "term_name": "rubella vaccine",
+          "match_start": 1355,
+          "match_end": 1380
+        }
+      ]
+    },
+    {
+      "post_id": 40004,
+      "platform": "reddit_comment",
+      "key1": "cm_xyz",
+      "key2": "",
+      "date_entered": "2026-04-06T09:00:00+00:00",
+      "created_at_ts": "2026-04-06T08:58:00+00:00",
+      "text": "Mrs. Alvarez opened with \"wait...is measles really back\" without catching her breath. Dr. Ng countered that the mmr vaccine data vs. anecdotes are not the same evidence class. A chart showed p<0.05 (rough) and U.S. vs. U.K. labels which confused the live chat. Someone typed http://example.org/foo.bar/baz?x=1.2 and the host misread it aloud. No space after this period.Sometimes editors forget which trips naive splitters. Elipsis mid thought ... then mumps vaccine talk resumes on a cleaner line. The rubella vaccine line got cut???But the transcript kept the triple question marks. Version 2.0 rollout vs. version 1.9 stability was a tangent nobody asked for.",
+      "tsv_en": "'comment':1 'reddit':2",
+      "is_en": true,
+      "primary_metric": 7,
+      "url": "https://www.reddit.com/r/vax/comments/abc/c/cm_xyz/",
+      "hits": [
+        {
+          "term_id": 401,
+          "term_name": "measles",
+          "match_start": 36,
+          "match_end": 50
+        },
+        {
+          "term_id": 402,
+          "term_name": "mmr vaccine",
+          "match_start": 112,
+          "match_end": 128
+        },
+        {
+          "term_id": 403,
+          "term_name": "mumps vaccine",
+          "match_start": 453,
+          "match_end": 471
+        },
+        {
+          "term_id": 404,
+          "term_name": "rubella vaccine",
+          "match_start": 503,
+          "match_end": 523
+        }
+      ]
+    }
+  ]
+}

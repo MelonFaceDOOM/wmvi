@@ -49,6 +49,7 @@ colorama==0.4.6
 lingua-language-detector==2.1.1
 
 # --- NLP (spaCy) ---
+syntok==1.4.4
 spacy==3.8.11
 spacy-legacy==3.0.12
 spacy-loggers==1.0.5
