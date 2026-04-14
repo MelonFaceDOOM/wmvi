@@ -31,7 +31,6 @@ Full sample test (from repo root; coref needs ``pip install -r apps/claim_extrac
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -401,31 +400,34 @@ def build_contexts_for_post(
 
 
 def process_payload(data: dict[str, Any], *, progress: bool = False) -> dict[str, Any]:
-    out = copy.deepcopy(data)
+    del progress  # single global progress bar is handled by caller
+    out = data
     posts = out.get("posts")
     if not isinstance(posts, list):
         return out
-    post_iter = posts
-    if progress and posts:
-        from tqdm import tqdm
-
-        post_iter = tqdm(posts, desc="contexts", unit="post", leave=True)
-    for post in post_iter:
+    for post in posts:
         if not isinstance(post, dict):
             continue
-        original = post.get("text")
-        if not isinstance(original, str):
-            original = ""
-        resolved = post.get("text_coreference_resolved")
-        if isinstance(resolved, str) and resolved.strip():
-            body = resolved
-        else:
-            body = original
-        hits = post.get("hits")
-        if not isinstance(hits, list):
+        try:
+            original = post.get("text")
+            if not isinstance(original, str):
+                original = ""
+            resolved = post.get("text_coreference_resolved")
+            if isinstance(resolved, str) and resolved.strip():
+                body = resolved
+            else:
+                body = original
+            hits = post.get("hits")
+            if not isinstance(hits, list):
+                post["contexts"] = []
+                continue
+            post["contexts"] = build_contexts_for_post(body, original, hits)
+        except Exception as e:
+            print(
+                f"[warn] contexts failed for post_id={post.get('post_id', '<unknown>')}: {e}",
+                flush=True,
+            )
             post["contexts"] = []
-            continue
-        post["contexts"] = build_contexts_for_post(body, original, hits)
     return out
 
 

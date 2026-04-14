@@ -18,7 +18,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import copy
 import importlib.metadata
 import json
 import sys
@@ -72,28 +71,52 @@ def _load_nlp():
     return _NLP
 
 
-def _resolve_batch(texts: list[str], *, progress: bool = False) -> list[str]:
+def _resolve_batch(texts: list[str]) -> list[str]:
     nlp = _load_nlp()
     cfg = {"fastcoref": {"resolve_text": True}}
     out: list[str] = []
-    iterator = nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg)
-    if progress and texts:
-        from tqdm import tqdm
-
-        iterator = tqdm(
-            iterator,
-            total=len(texts),
-            desc="coref",
-            unit="post",
-            leave=True,
-        )
-    for doc in iterator:
+    for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
         out.append(doc._.resolved_text or doc.text)
     return out
 
 
+def _resolve_with_fallback(texts: list[str]) -> tuple[list[str], int]:
+    """
+    Resolve a batch; if batch inference fails, retry per-item and keep original text on failure.
+    Returns (resolved_texts, num_failed_items).
+    """
+    if not texts:
+        return [], 0
+    try:
+        return _resolve_batch(texts), 0
+    except Exception as e:
+        print(f"[warn] coref batch failed ({len(texts)} texts): {e}", file=sys.stderr, flush=True)
+    out: list[str] = []
+    failed = 0
+    for t in texts:
+        try:
+            one, _ = _resolve_with_fallback_single(t)
+            out.append(one)
+        except Exception as e:
+            failed += 1
+            print(f"[warn] coref item failed; using original text: {e}", file=sys.stderr, flush=True)
+            out.append(t)
+    return out, failed
+
+
+def _resolve_with_fallback_single(text: str) -> tuple[str, int]:
+    for _ in range(2):
+        try:
+            resolved = _resolve_batch([text])
+            return (resolved[0] if resolved else text), 0
+        except Exception:
+            continue
+    raise RuntimeError("single-item coref failed after retries")
+
+
 def process_payload(data: dict[str, Any], *, progress: bool = False) -> dict[str, Any]:
-    out = copy.deepcopy(data)
+    del progress  # single global progress bar is handled by caller
+    out = data
     posts = out.get("posts")
     if not isinstance(posts, list):
         return out
@@ -111,7 +134,7 @@ def process_payload(data: dict[str, Any], *, progress: bool = False) -> dict[str
         texts.append(raw)
 
     if texts:
-        resolved_list = _resolve_batch(texts, progress=progress)
+        resolved_list, _ = _resolve_with_fallback(texts)
         for idx, resolved in zip(indices, resolved_list):
             posts[idx]["text_coreference_resolved"] = resolved
 
