@@ -31,7 +31,7 @@ DEFAULT_OUTPUT = SCRIPT_DIR / "sample_coref.json"
 SPACY_MODEL = "en_core_web_lg"
 # "cpu", "cuda", "cuda:0", or None to let fastcoref pick (GPU when available).
 DEVICE: str | None = None
-PIPE_BATCH_SIZE = 16
+PIPE_BATCH_SIZE = 2
 # spaCy pipes not needed for POS-based head picking in fastcoref’s resolver.
 SPACY_EXCLUDE = ("parser", "lemmatizer", "ner", "textcat")
 
@@ -63,6 +63,12 @@ def _load_nlp():
             file=sys.stderr,
         )
         raise e
+    try:
+        import datasets
+
+        datasets.disable_progress_bars()
+    except Exception:
+        pass
     _NLP = spacy.load(SPACY_MODEL, exclude=list(SPACY_EXCLUDE))
     cfg: dict[str, Any] = {"enable_progress_bar": False}
     if DEVICE is not None:
