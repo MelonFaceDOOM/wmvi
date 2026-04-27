@@ -4,6 +4,8 @@ import psycopg2
 from psycopg2 import sql
 from db.db import init_pool, getcursor
 
+pytestmark = pytest.mark.db
+
 
 @pytest.fixture
 def temp_schema(prepared_fresh_db):

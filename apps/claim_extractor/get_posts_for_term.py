@@ -13,10 +13,10 @@ Requires claim-extractor NLP deps (see repo ``requirements.txt``) plus coref ext
   pip install -r apps/claim_extractor/requirements-coref.txt
 
 Usage:
-  python -m scripts.get_posts_for_term
-  python -m scripts.get_posts_for_term --prod --out data/mm.json
-  python -m scripts.get_posts_for_term --terms measles mmr --terms-file more_terms.txt
-  python -m scripts.get_posts_for_term --no-progress
+  python -m apps.claim_extractor.get_posts_for_term
+  python -m apps.claim_extractor.get_posts_for_term --prod --out data/mm.json
+  python -m apps.claim_extractor.get_posts_for_term --terms measles mmr --terms-file more_terms.txt
+  python -m apps.claim_extractor.get_posts_for_term --no-progress
 """
 
 from __future__ import annotations

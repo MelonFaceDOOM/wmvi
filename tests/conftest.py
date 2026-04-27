@@ -23,6 +23,24 @@ def pytest_configure(config):
     if not config.option.markexpr:
         config.option.markexpr = "not transcription"
 
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--with-db",
+        action="store_true",
+        default=False,
+        help="Enable DB-marked tests and run fresh test DB setup.",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--with-db"):
+        return
+    skip_db = pytest.mark.skip(reason="DB tests disabled; pass --with-db to enable.")
+    for item in items:
+        if "db" in item.keywords:
+            item.add_marker(skip_db)
+
 def _admin_creds(admin_prefix: str = "TEST", admin_db: str = "postgres") -> str:
     """Connect to the admin DB (usually 'postgres') so we can drop/create the test DB."""
     return (
@@ -52,12 +70,17 @@ def _drop_and_recreate_database(dbname: str) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def prepared_fresh_db():
+def prepared_fresh_db(request):
     """Fresh test DB for this test session; runs migrations and basic sanity checks."""
+    # No-op unless user explicitly enables DB tests.
+    if not request.config.getoption("--with-db"):
+        return
+
     missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
     if missing:
-        pytest.skip(
-            "Set TEST_PGHOST/TEST_PGUSER/TEST_PGPASSWORD/TEST_PGPORT/TEST_PGDATABASE to run DB tests."
+        pytest.fail(
+            "Missing TEST_* DB env vars while --with-db is enabled. "
+            "Set TEST_PGHOST/TEST_PGUSER/TEST_PGPASSWORD/TEST_PGPORT/TEST_PGDATABASE."
         )
 
     test_db = os.environ["TEST_PGDATABASE"]
