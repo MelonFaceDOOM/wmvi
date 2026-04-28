@@ -17,6 +17,10 @@ Usage:
   python -m apps.claim_extractor.get_posts_for_term --prod --out data/mm.json
   python -m apps.claim_extractor.get_posts_for_term --terms measles mmr --terms-file more_terms.txt
   python -m apps.claim_extractor.get_posts_for_term --no-progress
+
+
+If memory issues, try:
+  PGOPTIONS='-c work_mem=256MB' python -m apps.claim_extractor.get_posts_for_term --prod --out data/mmr.json --terms mmr
 """
 
 from __future__ import annotations
@@ -184,7 +188,7 @@ def _sql_fetch_rows() -> str:
         LEFT JOIN podcasts.shows ps_meta
           ON p.platform = 'podcast_episode'
          AND pe_meta.podcast_id = ps_meta.id
-        ORDER BY p.date_entered DESC NULLS LAST, p.post_id, h.match_start, h.match_end, t.id
+        ORDER BY p.post_id, h.match_start, h.match_end, t.id
     """
 
 
