@@ -40,6 +40,51 @@ def stable_task_id(post_id: Any, text: str) -> str:
     return f"{post_id}:{digest}"
 
 
+def format_input_text(post: dict[str, Any], text: str) -> str:
+    platform = str(post.get("platform", "unknown"))
+
+    if platform == "reddit_submission":
+        title = str(post.get("reddit_submission_title") or post.get("title") or "Unknown title")
+        return (
+            f"This is a segment from a Reddit Submission with the title {title}. "
+            f"Here is the Reddit Submission segment:\n{text}"
+        )
+
+    if platform == "reddit_comment":
+        submission_title = str(
+            post.get("reddit_comment_submission_title")
+            or post.get("submission_title")
+            or "Unknown submission title"
+        )
+        return (
+            "This is a segment from a Reddit Comment that was made in a Submission "
+            f"titled {submission_title}. Here is the Reddit Comment segment:\n{text}"
+        )
+
+    if platform == "telegram_post":
+        telegram_channel = str(post.get("telegram_channel") or "Unknown channel")
+        return (
+            "This is a segment from a Telegram message that was made in a channel "
+            f"called {telegram_channel}. Here is the Telegram message segment:\n{text}"
+        )
+
+    if platform == "youtube_video":
+        title = str(post.get("youtube_video_title") or post.get("title") or "Unknown title")
+        return (
+            "This is a segment from a transcript of a YouTube video with the title "
+            f"{title}. Here is the YouTube Video transcript segment:\n{text}"
+        )
+
+    if platform == "podcast_episode":
+        podcast_name = str(post.get("podcast_name") or "Unknown podcast")
+        return (
+            "This is a segment from a transcript of a podcast called "
+            f"{podcast_name}. Here is the Podcast transcript segment:\n{text}"
+        )
+
+    return f"text from {platform}: {text}"
+
+
 def build_context_tasks(
     batch_posts: list[dict[str, Any]],
 ) -> tuple[list[dict[str, str]], dict[str, dict[str, Any]]]:
@@ -50,7 +95,6 @@ def build_context_tasks(
             LOG.warning("Skipping non-dict post in batch.")
             continue
         post_id = post.get("post_id", "unknown")
-        platform = str(post.get("platform", "unknown"))
         contexts = post.get("contexts", [])
         if not isinstance(contexts, list):
             raise ValueError(f"post_id={post_id} has non-list contexts.")
@@ -65,7 +109,7 @@ def build_context_tasks(
             tasks.append(
                 {
                     "task_id": task_id,
-                    "input_text": f"text from {platform}: {text}",
+                    "input_text": format_input_text(post, text),
                 }
             )
             if task_id in ctx_by_task_id:

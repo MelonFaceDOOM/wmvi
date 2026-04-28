@@ -114,9 +114,24 @@ def _collect_terms(cli_terms: list[str], terms_file: Optional[Path]) -> list[str
                 out.append(t)
     return out
 
-
+# TODO: create cleaner solution (maybe just update posts_all to include more)
 def _sql_fetch_rows() -> str:
     return """
+        WITH term_ids AS (
+            SELECT id, name
+            FROM taxonomy.vaccine_term
+            WHERE name = ANY(%s)
+        ),
+        matched_hits AS (
+            SELECT
+                ph.post_id,
+                ph.term_id,
+                ph.match_start,
+                ph.match_end
+            FROM matches.post_term_hit ph
+            JOIN term_ids t
+              ON t.id = ph.term_id
+        )
         SELECT
             p.post_id,
             p.platform,
@@ -129,17 +144,47 @@ def _sql_fetch_rows() -> str:
             p.is_en,
             p.primary_metric,
             p.url,
-            vt.id AS term_id,
-            vt.name AS term_name,
-            ph.match_start,
-            ph.match_end
-        FROM sm.posts_all p
-        JOIN matches.post_term_hit ph
-          ON ph.post_id = p.post_id
-        JOIN taxonomy.vaccine_term vt
-          ON vt.id = ph.term_id
-        WHERE vt.name = ANY(%s)
-        ORDER BY p.date_entered DESC NULLS LAST, p.post_id, ph.match_start, ph.match_end, vt.id
+            rs_meta.title AS reddit_submission_title,
+            rc_sub.title AS reddit_comment_submission_title,
+            tp_meta.channel_id::text AS telegram_channel,
+            yv_meta.title AS youtube_video_title,
+            ps_meta.title AS podcast_name,
+            t.id AS term_id,
+            t.name AS term_name,
+            h.match_start,
+            h.match_end
+        FROM matched_hits h
+        JOIN sm.posts_all p
+          ON p.post_id = h.post_id
+        JOIN term_ids t
+          ON t.id = h.term_id
+        LEFT JOIN sm.reddit_submission rs_meta
+          ON p.platform = 'reddit_submission'
+         AND p.key1 = rs_meta.id
+         AND p.key2 = ''
+        LEFT JOIN sm.reddit_comment rc_meta
+          ON p.platform = 'reddit_comment'
+         AND p.key1 = rc_meta.id
+         AND p.key2 = ''
+        LEFT JOIN sm.reddit_submission rc_sub
+          ON p.platform = 'reddit_comment'
+         AND rc_sub.id = regexp_replace(rc_meta.link_id, '^t3_', '')
+        LEFT JOIN sm.telegram_post tp_meta
+          ON p.platform = 'telegram_post'
+         AND p.key1 = tp_meta.channel_id::text
+         AND p.key2 = tp_meta.message_id::text
+        LEFT JOIN youtube.video yv_meta
+          ON p.platform = 'youtube_video'
+         AND p.key1 = yv_meta.video_id
+         AND p.key2 = ''
+        LEFT JOIN podcasts.episodes pe_meta
+          ON p.platform = 'podcast_episode'
+         AND p.key1 = pe_meta.id
+         AND p.key2 = ''
+        LEFT JOIN podcasts.shows ps_meta
+          ON p.platform = 'podcast_episode'
+         AND pe_meta.podcast_id = ps_meta.id
+        ORDER BY p.date_entered DESC NULLS LAST, p.post_id, h.match_start, h.match_end, t.id
     """
 
 
@@ -147,13 +192,14 @@ def count_posts_with_hits(terms: list[str]) -> int:
     if not terms:
         return 0
     sql = """
-        SELECT count(DISTINCT p.post_id)
-        FROM sm.posts_all p
-        JOIN matches.post_term_hit ph
-          ON ph.post_id = p.post_id
-        JOIN taxonomy.vaccine_term vt
-          ON vt.id = ph.term_id
-        WHERE vt.name = ANY(%s)
+        WITH term_ids AS (
+            SELECT id
+            FROM taxonomy.vaccine_term
+            WHERE name = ANY(%s)
+        )
+        SELECT count(DISTINCT ph.post_id)
+        FROM matches.post_term_hit ph
+        WHERE ph.term_id IN (SELECT id FROM term_ids)
     """
     with getcursor() as cur:
         cur.execute(sql, (terms,))
@@ -194,6 +240,11 @@ def iter_post_chunks(
                         is_en,
                         primary_metric,
                         url,
+                        reddit_submission_title,
+                        reddit_comment_submission_title,
+                        telegram_channel,
+                        youtube_video_title,
+                        podcast_name,
                         term_id,
                         term_name,
                         match_start,
@@ -229,6 +280,11 @@ def iter_post_chunks(
                         "is_en": is_en,
                         "primary_metric": primary_metric,
                         "url": url,
+                        "reddit_submission_title": reddit_submission_title,
+                        "reddit_comment_submission_title": reddit_comment_submission_title,
+                        "telegram_channel": telegram_channel,
+                        "youtube_video_title": youtube_video_title,
+                        "podcast_name": podcast_name,
                         "hits": [hit],
                     }
                 else:
