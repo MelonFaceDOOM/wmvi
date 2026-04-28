@@ -56,6 +56,8 @@ def _silence_third_party_progress() -> None:
     os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BARS", "1")
     os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    # Disable library-owned tqdm bars; our own tqdm explicitly opts back in.
+    os.environ.setdefault("TQDM_DISABLE", "1")
     try:
         import datasets
 
@@ -118,24 +120,25 @@ def _collect_terms(cli_terms: list[str], terms_file: Optional[Path]) -> list[str
                 out.append(t)
     return out
 
-# TODO: create cleaner solution (maybe just update posts_all to include more)
-def _sql_fetch_rows() -> str:
+def _sql_fetch_post_id_page() -> str:
     return """
         WITH term_ids AS (
-            SELECT id, name
+            SELECT id
             FROM taxonomy.vaccine_term
             WHERE name = ANY(%s)
-        ),
-        matched_hits AS (
-            SELECT
-                ph.post_id,
-                ph.term_id,
-                ph.match_start,
-                ph.match_end
-            FROM matches.post_term_hit ph
-            JOIN term_ids t
-              ON t.id = ph.term_id
         )
+        SELECT DISTINCT ph.post_id
+        FROM matches.post_term_hit ph
+        JOIN term_ids t
+          ON t.id = ph.term_id
+        WHERE ph.post_id > %s
+        ORDER BY ph.post_id
+        LIMIT %s
+    """
+
+
+def _sql_fetch_posts_for_ids() -> str:
+    return """
         SELECT
             p.post_id,
             p.platform,
@@ -152,16 +155,8 @@ def _sql_fetch_rows() -> str:
             rc_sub.title AS reddit_comment_submission_title,
             tp_meta.channel_id::text AS telegram_channel,
             yv_meta.title AS youtube_video_title,
-            ps_meta.title AS podcast_name,
-            t.id AS term_id,
-            t.name AS term_name,
-            h.match_start,
-            h.match_end
-        FROM matched_hits h
-        JOIN sm.posts_all p
-          ON p.post_id = h.post_id
-        JOIN term_ids t
-          ON t.id = h.term_id
+            ps_meta.title AS podcast_name
+        FROM sm.posts_all p
         LEFT JOIN sm.reddit_submission rs_meta
           ON p.platform = 'reddit_submission'
          AND p.key1 = rs_meta.id
@@ -188,7 +183,29 @@ def _sql_fetch_rows() -> str:
         LEFT JOIN podcasts.shows ps_meta
           ON p.platform = 'podcast_episode'
          AND pe_meta.podcast_id = ps_meta.id
-        ORDER BY p.post_id, h.match_start, h.match_end, t.id
+        WHERE p.post_id = ANY(%s)
+        ORDER BY p.post_id
+    """
+
+
+def _sql_fetch_hits_for_ids() -> str:
+    return """
+        WITH term_ids AS (
+            SELECT id, name
+            FROM taxonomy.vaccine_term
+            WHERE name = ANY(%s)
+        )
+        SELECT
+            ph.post_id,
+            ph.term_id,
+            t.name AS term_name,
+            ph.match_start,
+            ph.match_end
+        FROM matches.post_term_hit ph
+        JOIN term_ids t
+          ON t.id = ph.term_id
+        WHERE ph.post_id = ANY(%s)
+        ORDER BY ph.post_id, ph.match_start, ph.match_end, ph.term_id
     """
 
 
@@ -219,18 +236,26 @@ def iter_post_chunks(
 ) -> Iterator[list[dict[str, Any]]]:
     if not terms:
         return
-    sql = _sql_fetch_rows()
-    current_post_id: Optional[int] = None
-    current_post: Optional[dict[str, Any]] = None
+    sql_post_id_page = _sql_fetch_post_id_page()
+    sql_posts_for_ids = _sql_fetch_posts_for_ids()
+    sql_hits_for_ids = _sql_fetch_hits_for_ids()
     chunk: list[dict[str, Any]] = []
+    last_post_id = 0
 
-    with getcursor() as cur:
-        cur.execute(sql, (terms,))
+    with getcursor() as cur_ids, getcursor() as cur_posts, getcursor() as cur_hits:
         while True:
-            rows = cur.fetchmany(row_fetch_size)
-            if not rows:
+            cur_ids.execute(sql_post_id_page, (terms, last_post_id, row_fetch_size))
+            id_rows = cur_ids.fetchall()
+            if not id_rows:
                 break
-            for row in rows:
+            post_ids = [int(r[0]) for r in id_rows if r and r[0] is not None]
+            if not post_ids:
+                break
+            last_post_id = post_ids[-1]
+
+            cur_posts.execute(sql_posts_for_ids, (post_ids,))
+            posts_by_id: dict[int, dict[str, Any]] = {}
+            for row in cur_posts.fetchall():
                 try:
                     (
                         post_id,
@@ -249,60 +274,65 @@ def iter_post_chunks(
                         telegram_channel,
                         youtube_video_title,
                         podcast_name,
-                        term_id,
-                        term_name,
-                        match_start,
-                        match_end,
                     ) = row
                 except Exception as e:
-                    print(f"[warn] skipping malformed DB row: {e}", file=sys.stderr, flush=True)
+                    print(f"[warn] skipping malformed DB post row: {e}", file=sys.stderr, flush=True)
                     continue
-
-                hit = {
-                    "term_id": term_id,
-                    "term_name": term_name,
-                    "match_start": match_start,
-                    "match_end": match_end,
+                posts_by_id[int(post_id)] = {
+                    "post_id": post_id,
+                    "platform": platform,
+                    "key1": key1,
+                    "key2": key2,
+                    "date_entered": _json_val(_ensure_utc(date_entered)),
+                    "created_at_ts": _json_val(_ensure_utc(created_at_ts)),
+                    "text": text,
+                    "tsv_en": str(tsv_en) if tsv_en is not None else None,
+                    "is_en": is_en,
+                    "primary_metric": primary_metric,
+                    "url": url,
+                    "reddit_submission_title": reddit_submission_title,
+                    "reddit_comment_submission_title": reddit_comment_submission_title,
+                    "telegram_channel": telegram_channel,
+                    "youtube_video_title": youtube_video_title,
+                    "podcast_name": podcast_name,
+                    "hits": [],
                 }
 
-                if current_post_id != post_id:
-                    if current_post is not None:
-                        chunk.append(current_post)
-                        if len(chunk) >= posts_per_chunk:
-                            yield chunk
-                            chunk = []
-                    current_post_id = post_id
-                    current_post = {
-                        "post_id": post_id,
-                        "platform": platform,
-                        "key1": key1,
-                        "key2": key2,
-                        "date_entered": _json_val(_ensure_utc(date_entered)),
-                        "created_at_ts": _json_val(_ensure_utc(created_at_ts)),
-                        "text": text,
-                        "tsv_en": str(tsv_en) if tsv_en is not None else None,
-                        "is_en": is_en,
-                        "primary_metric": primary_metric,
-                        "url": url,
-                        "reddit_submission_title": reddit_submission_title,
-                        "reddit_comment_submission_title": reddit_comment_submission_title,
-                        "telegram_channel": telegram_channel,
-                        "youtube_video_title": youtube_video_title,
-                        "podcast_name": podcast_name,
-                        "hits": [hit],
+            cur_hits.execute(sql_hits_for_ids, (terms, post_ids))
+            for row in cur_hits.fetchall():
+                try:
+                    post_id, term_id, term_name, match_start, match_end = row
+                except Exception as e:
+                    print(f"[warn] skipping malformed DB hit row: {e}", file=sys.stderr, flush=True)
+                    continue
+                post = posts_by_id.get(int(post_id))
+                if post is None:
+                    print(
+                        f"[warn] skipping orphaned hit row for post_id={post_id}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    continue
+                post["hits"].append(
+                    {
+                        "term_id": term_id,
+                        "term_name": term_name,
+                        "match_start": match_start,
+                        "match_end": match_end,
                     }
-                else:
-                    if current_post is None:
-                        print(
-                            f"[warn] skipping orphaned hit row for post_id={post_id}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                        continue
-                    current_post["hits"].append(hit)
+                )
 
-    if current_post is not None:
-        chunk.append(current_post)
+            for post_id in post_ids:
+                post = posts_by_id.get(int(post_id))
+                if post is None:
+                    continue
+                if not post["hits"]:
+                    continue
+                chunk.append(post)
+                if len(chunk) >= posts_per_chunk:
+                    yield chunk
+                    chunk = []
+
     if chunk:
         yield chunk
 
@@ -338,6 +368,7 @@ class PostsJsonStreamWriter:
         self.tmp_path = final_path.with_suffix(final_path.suffix + ".tmp")
         self._f = self.tmp_path.open("w", encoding="utf-8")
         self._first_post = True
+        self._json_closed = False
         self.written_posts = 0
         self.context_count = 0
         lines = [
@@ -363,6 +394,8 @@ class PostsJsonStreamWriter:
         self._f.flush()
 
     def finalize(self, *, skipped_post_count: int) -> None:
+        if self._json_closed:
+            return
         tail = [
             "",
             "  ],",
@@ -374,10 +407,15 @@ class PostsJsonStreamWriter:
         self._f.write("\n".join(tail))
         self._f.flush()
         self._f.close()
+        self._json_closed = True
         self.tmp_path.replace(self.final_path)
 
     def abort_keep_partial(self) -> None:
         try:
+            if not self._json_closed:
+                # Keep partial data recoverable as valid JSON.
+                self._f.write("\n  ]\n}\n")
+                self._json_closed = True
             self._f.flush()
             self._f.close()
         except Exception:
@@ -491,6 +529,7 @@ def stream_fetch_enrich_and_write(
             mininterval=0.5,
             dynamic_ncols=True,
             file=sys.stderr,
+            disable=False,
         )
     try:
         for chunk in iter_post_chunks(
