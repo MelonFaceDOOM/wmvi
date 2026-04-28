@@ -16,7 +16,7 @@ Usage:
   python -m apps.claim_extractor.get_posts_for_term
   python -m apps.claim_extractor.get_posts_for_term --prod --out data/mm.json
   python -m apps.claim_extractor.get_posts_for_term --terms measles mmr --terms-file more_terms.txt
-  python -m apps.claim_extractor.get_posts_for_term --no-progress
+  python -m apps.claim_extractor.get_posts_for_term --progress-every 200
 
 
 If memory issues, try:
@@ -26,9 +26,12 @@ If memory issues, try:
 from __future__ import annotations
 
 import argparse
+import gc
+import importlib
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
@@ -49,14 +52,16 @@ DEFAULT_TERMS: tuple[str, ...] = (
     "rubella vaccine",
 )
 
+DEFAULT_PROGRESS_EVERY = 100
+
 
 def _silence_third_party_progress() -> None:
-    """Stop HF/datasets/transformers from spawning tqdm bars that fight our single bar."""
+    """Stop HF/datasets/transformers from spawning third-party progress bars."""
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
     os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BARS", "1")
     os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-    # Disable library-owned tqdm bars; our own tqdm explicitly opts back in.
+    # Disable library-owned tqdm bars.
     os.environ.setdefault("TQDM_DISABLE", "1")
     try:
         import datasets
@@ -426,11 +431,22 @@ class PostsJsonStreamWriter:
         )
 
 
+def _reset_coref_runtime(coref_module: Any) -> None:
+    try:
+        if hasattr(coref_module, "_NLP"):
+            coref_module._NLP = None
+    except Exception:
+        pass
+    _maybe_cuda_gc()
+    gc.collect()
+
+
 def _process_microbatch_with_fallback(
     posts: list[dict[str, Any]],
     *,
     coref_payload,
     trim_payload,
+    coref_module: Any,
 ) -> tuple[list[dict[str, Any]], int]:
     if not posts:
         return [], 0
@@ -441,7 +457,8 @@ def _process_microbatch_with_fallback(
         out = payload.get("posts")
         return (out if isinstance(out, list) else []), 0
     except Exception as e:
-        print(f"[warn] microbatch failed ({len(posts)} posts), retrying per-post: {e}", file=sys.stderr, flush=True)
+        print(f"[warn] microbatch failed ({len(posts)} posts), resetting coref + retrying per-post: {e}", file=sys.stderr, flush=True)
+        _reset_coref_runtime(coref_module)
     out_posts: list[dict[str, Any]] = []
     skipped = 0
     for post in posts:
@@ -455,6 +472,18 @@ def _process_microbatch_with_fallback(
             else:
                 skipped += 1
         except Exception as e:
+            # One more chance after forcing a full coref reload.
+            try:
+                _reset_coref_runtime(coref_module)
+                pld = {"posts": [post]}
+                pld = coref_payload(pld, progress=False)
+                pld = trim_payload(pld, progress=False)
+                rows = pld.get("posts")
+                if isinstance(rows, list) and rows:
+                    out_posts.append(rows[0])
+                    continue
+            except Exception:
+                pass
             skipped += 1
             print(
                 f"[warn] skipping post_id={post.get('post_id', '<unknown>')} after retry failure: {e}",
@@ -478,17 +507,19 @@ def stream_fetch_enrich_and_write(
     terms: list[str],
     out_path: Path,
     *,
-    show_progress: bool,
     db_posts_per_chunk: int,
     row_fetch_size: int,
     micro_batch: int,
+    progress_every: int,
 ) -> tuple[int, int]:
     """
     Stream DB → micro-batch coref+trim → append JSON. Returns (written_posts, skipped_posts).
     """
     try:
-        from apps.claim_extractor.coreference_resolution import process_payload as coref_payload
-        from apps.claim_extractor.trim_transcripts import process_payload as trim_payload
+        coref_module = importlib.import_module("apps.claim_extractor.coreference_resolution")
+        trim_module = importlib.import_module("apps.claim_extractor.trim_transcripts")
+        coref_payload = coref_module.process_payload
+        trim_payload = trim_module.process_payload
     except ImportError as e:
         print(
             "Import failed (claim_extractor pipeline). From repo root, install deps:\n"
@@ -517,20 +548,21 @@ def stream_fetch_enrich_and_write(
         matched_post_count=matched_total,
     )
     skipped_total = 0
-    pbar = None
-    if show_progress:
-        from tqdm import tqdm
+    started = time.monotonic()
+    processed_total = 0
+    next_progress_mark = max(1, int(progress_every))
 
-        pbar = tqdm(
-            total=matched_total,
-            desc="pipeline",
-            unit="post",
-            leave=True,
-            mininterval=0.5,
-            dynamic_ncols=True,
-            file=sys.stderr,
-            disable=False,
+    def _print_progress() -> None:
+        elapsed = max(0.001, time.monotonic() - started)
+        rate = processed_total / elapsed
+        remaining = max(0, matched_total - processed_total)
+        eta_s = int(remaining / rate) if rate > 0 else -1
+        eta_txt = f"{eta_s}s" if eta_s >= 0 else "unknown"
+        print(
+            f"[progress] {processed_total}/{matched_total} posts complete; eta={eta_txt}",
+            flush=True,
         )
+
     try:
         for chunk in iter_post_chunks(
             terms,
@@ -540,13 +572,18 @@ def stream_fetch_enrich_and_write(
             for i in range(0, len(chunk), micro_batch):
                 micro = chunk[i : i + micro_batch]
                 processed, skipped = _process_microbatch_with_fallback(
-                    micro, coref_payload=coref_payload, trim_payload=trim_payload
+                    micro,
+                    coref_payload=coref_payload,
+                    trim_payload=trim_payload,
+                    coref_module=coref_module,
                 )
                 skipped_total += skipped
                 for post in processed:
                     writer.write_post(post)
-                if pbar is not None:
-                    pbar.update(len(micro))
+                processed_total += len(micro)
+                if processed_total >= next_progress_mark:
+                    _print_progress()
+                    next_progress_mark += max(1, int(progress_every))
                 del micro, processed
                 _maybe_cuda_gc()
             del chunk
@@ -554,9 +591,7 @@ def stream_fetch_enrich_and_write(
     except BaseException:
         writer.abort_keep_partial()
         raise
-    finally:
-        if pbar is not None:
-            pbar.close()
+    _print_progress()
     return writer.written_posts, skipped_total
 
 
@@ -588,9 +623,11 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         help="Do not use the built-in default term list when --terms / --terms-file are empty.",
     )
     ap.add_argument(
-        "--no-progress",
-        action="store_true",
-        help="Disable the single global progress bar.",
+        "--progress-every",
+        type=int,
+        default=DEFAULT_PROGRESS_EVERY,
+        metavar="N",
+        help=f"Print progress + ETA every N processed posts (default: {DEFAULT_PROGRESS_EVERY}).",
     )
     ap.add_argument(
         "--db-chunk-posts",
@@ -620,16 +657,15 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         terms = list(DEFAULT_TERMS)
 
     _silence_third_party_progress()
-    show_progress = not args.no_progress
     init_pool(prefix="prod" if args.prod else "dev")
     try:
         written, skipped = stream_fetch_enrich_and_write(
             terms,
             args.out,
-            show_progress=show_progress,
             db_posts_per_chunk=max(1, int(args.db_chunk_posts)),
             row_fetch_size=max(1, int(args.db_fetch_rows)),
             micro_batch=max(1, int(args.micro_batch)),
+            progress_every=max(1, int(args.progress_every)),
         )
         if skipped:
             print(f"[warn] skipped {skipped} posts after retries", flush=True)
