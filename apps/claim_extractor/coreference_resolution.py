@@ -19,10 +19,14 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import gc
 import io
 import importlib.metadata
 import json
+import logging
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -33,12 +37,41 @@ DEFAULT_OUTPUT = SCRIPT_DIR / "sample_coref.json"
 SPACY_MODEL = "en_core_web_lg"
 # "cpu", "cuda", "cuda:0", or None to let fastcoref pick (GPU when available).
 DEVICE: str | None = None
-PIPE_BATCH_SIZE = 2
+PIPE_BATCH_SIZE = max(1, int(os.getenv("COREF_PIPE_BATCH_SIZE", "8")))
+COREF_RESET_EVERY_BATCHES = max(0, int(os.getenv("COREF_RESET_EVERY_BATCHES", "200")))
+COREF_DEBUG_PERF = os.getenv("COREF_DEBUG_PERF", "").strip().lower() in ("1", "true", "yes", "on")
+COREF_DEBUG_EVERY = int(os.getenv("COREF_DEBUG_EVERY", "25"))
 # spaCy pipes not needed for POS-based head picking in fastcoref’s resolver.
 SPACY_EXCLUDE = ("parser", "lemmatizer", "ner", "textcat")
 
 _NLP = None
+_RESOLVE_BATCH_CALLS = 0
+_QUIET_SINK = io.StringIO()
 QUIET_INFERENCE = True
+
+
+def _maybe_cuda_gc() -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def _reset_runtime_state() -> None:
+    global _NLP
+    _NLP = None
+    gc.collect()
+    _maybe_cuda_gc()
+
+
+def _maybe_periodic_reset() -> None:
+    global _RESOLVE_BATCH_CALLS
+    _RESOLVE_BATCH_CALLS += 1
+    if COREF_RESET_EVERY_BATCHES > 0 and _RESOLVE_BATCH_CALLS % COREF_RESET_EVERY_BATCHES == 0:
+        _reset_runtime_state()
 
 
 def _load_nlp():
@@ -72,6 +105,9 @@ def _load_nlp():
         datasets.disable_progress_bars()
     except Exception:
         pass
+    # Suppress noisy tokenizer/inference info logs from third-party libs.
+    for name in ("fastcoref", "transformers", "tokenizers", "sentence_transformers"):
+        logging.getLogger(name).setLevel(logging.ERROR)
     _NLP = spacy.load(SPACY_MODEL, exclude=list(SPACY_EXCLUDE))
     cfg: dict[str, Any] = {"enable_progress_bar": False}
     if DEVICE is not None:
@@ -81,17 +117,38 @@ def _load_nlp():
 
 
 def _resolve_batch(texts: list[str]) -> list[str]:
+    _maybe_periodic_reset()
     nlp = _load_nlp()
     cfg = {"fastcoref": {"resolve_text": True}}
     out: list[str] = []
+    debug_every = max(1, int(COREF_DEBUG_EVERY))
+    t0 = None
+    if COREF_DEBUG_PERF:
+        t0 = time.monotonic()
+    try:
+        import torch
+
+        inference_ctx: Any = torch.inference_mode()
+    except Exception:
+        inference_ctx = contextlib.nullcontext()
     if QUIET_INFERENCE:
-        sink = io.StringIO()
-        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        _QUIET_SINK.seek(0)
+        _QUIET_SINK.truncate(0)
+        with contextlib.redirect_stdout(_QUIET_SINK), contextlib.redirect_stderr(_QUIET_SINK), inference_ctx:
             for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
                 out.append(doc._.resolved_text or doc.text)
     else:
-        for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
-            out.append(doc._.resolved_text or doc.text)
+        with inference_ctx:
+            for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
+                out.append(doc._.resolved_text or doc.text)
+    if COREF_DEBUG_PERF and t0 is not None and _RESOLVE_BATCH_CALLS % debug_every == 0:
+        dt = max(0.001, time.monotonic() - t0)
+        rate = len(texts) / dt
+        print(
+            f"[debug] coref batch_calls={_RESOLVE_BATCH_CALLS} size={len(texts)} elapsed={dt:.3f}s rate={rate:.2f} texts/s",
+            file=sys.stderr,
+            flush=True,
+        )
     return out
 
 

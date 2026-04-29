@@ -46,6 +46,8 @@ DEFAULT_OUT = PROJECT_ROOT / "data" / "posts_for_term.json"
 DEFAULT_RAW_OUT = PROJECT_ROOT / "data" / "posts_for_term_raw.json"
 DEFAULT_ENRICH_WINDOW = 100
 DEFAULT_ENRICH_TIMEOUT_SEC = 1200
+DEFAULT_WORKER_CLEANUP_EVERY = 8
+DEFAULT_DEBUG_EVERY = 20
 
 DEFAULT_TERMS: tuple[str, ...] = (
     "priorix",
@@ -594,12 +596,19 @@ def _enrich_worker_entry(
     posts: list[dict[str, Any]],
     micro_batch: int,
     result_q: mp.Queue,
+    cleanup_every: int,
+    debug_perf: bool,
+    debug_every: int,
 ) -> None:
     try:
         _silence_third_party_progress()
         coref_module, coref_payload, trim_payload = _load_pipeline_processors()
         processed_all: list[dict[str, Any]] = []
         skipped_total = 0
+        cleanup_every = max(1, int(cleanup_every))
+        debug_every = max(1, int(debug_every))
+        batches = 0
+        t0 = time.monotonic()
         for i in range(0, len(posts), micro_batch):
             micro = posts[i : i + micro_batch]
             processed, skipped = _process_microbatch_with_fallback(
@@ -610,8 +619,21 @@ def _enrich_worker_entry(
             )
             processed_all.extend(processed)
             skipped_total += skipped
+            batches += 1
+            if batches % cleanup_every == 0:
+                gc.collect()
+                _maybe_cuda_gc()
+            if debug_perf and batches % debug_every == 0:
+                elapsed = max(0.001, time.monotonic() - t0)
+                rate = len(processed_all) / elapsed
+                print(
+                    f"[debug] worker batches={batches} processed={len(processed_all)} rate={rate:.2f} posts/s",
+                    file=sys.stderr,
+                    flush=True,
+                )
             del micro, processed
-            _maybe_cuda_gc()
+        gc.collect()
+        _maybe_cuda_gc()
         result_q.put({"ok": True, "posts": processed_all, "skipped": skipped_total})
     except BaseException as e:
         result_q.put({"ok": False, "error": f"{type(e).__name__}: {e}"})
@@ -622,10 +644,17 @@ def _run_enrich_worker_with_timeout(
     *,
     micro_batch: int,
     timeout_sec: int,
+    cleanup_every: int,
+    debug_perf: bool,
+    debug_every: int,
 ) -> tuple[bool, list[dict[str, Any]], int, str]:
     ctx = mp.get_context("spawn")
     q: mp.Queue = ctx.Queue(maxsize=1)
-    proc = ctx.Process(target=_enrich_worker_entry, args=(posts, micro_batch, q), daemon=True)
+    proc = ctx.Process(
+        target=_enrich_worker_entry,
+        args=(posts, micro_batch, q, cleanup_every, debug_perf, debug_every),
+        daemon=True,
+    )
     proc.start()
     proc.join(timeout=max(1, int(timeout_sec)))
     if proc.is_alive():
@@ -722,6 +751,9 @@ def enrich_from_raw_and_write(
     jsonl_path: Path,
     restart_enrich: bool,
     worker_timeout_sec: int,
+    worker_cleanup_every: int,
+    debug_perf: bool,
+    debug_every: int,
 ) -> tuple[int, int]:
     raw_payload = json.loads(raw_in_path.read_text(encoding="utf-8"))
     if not isinstance(raw_payload, dict):
@@ -749,7 +781,10 @@ def enrich_from_raw_and_write(
             if isinstance(state, dict):
                 start_index = int(state.get("next_index", 0))
                 skipped_total = int(state.get("skipped_total", 0))
-                print(f"[enrich] resuming at post index {start_index}", flush=True)
+                print(
+                    f"[enrich] resume detected: {start_index}/{matched_total} already done",
+                    flush=True,
+                )
         except Exception as e:
             print(f"[warn] ignoring unreadable enrich state file: {e}", file=sys.stderr, flush=True)
 
@@ -775,16 +810,21 @@ def enrich_from_raw_and_write(
 
     window_size = max(1, int(enrich_window))
     i = start_index
+    window_count = 0
     while i < matched_total:
         remaining = matched_total - i
         size = min(window_size, remaining)
         success = False
+        window_t0 = time.monotonic()
         while size >= 1:
             window_posts = posts[i : i + size]
             ok, processed_posts, skipped, err = _run_enrich_worker_with_timeout(
                 window_posts,
                 micro_batch=micro_batch,
                 timeout_sec=worker_timeout_sec,
+                cleanup_every=worker_cleanup_every,
+                debug_perf=debug_perf,
+                debug_every=debug_every,
             )
             if ok:
                 _append_posts_jsonl(jsonl_path, processed_posts)
@@ -805,6 +845,15 @@ def enrich_from_raw_and_write(
                 if processed_total >= next_progress_mark:
                     _print_progress()
                     next_progress_mark += max(1, int(progress_every))
+                window_count += 1
+                if debug_perf and window_count % max(1, int(debug_every)) == 0:
+                    dt = max(0.001, time.monotonic() - window_t0)
+                    print(
+                        f"[debug] window={window_count} size={size} elapsed={dt:.2f}s "
+                        f"throughput={size / dt:.2f} posts/s",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                 success = True
                 break
             print(
@@ -943,6 +992,28 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         action="store_true",
         help="Discard existing enrich state/jsonl/output and restart enrich from index 0.",
     )
+    ap.add_argument(
+        "--worker-cleanup-every",
+        type=int,
+        default=DEFAULT_WORKER_CLEANUP_EVERY,
+        metavar="N",
+        help=(
+            "Run GC/CUDA cleanup every N micro-batches inside each enrich worker "
+            f"(default: {DEFAULT_WORKER_CLEANUP_EVERY})."
+        ),
+    )
+    ap.add_argument(
+        "--debug-performance",
+        action="store_true",
+        help="Enable optional performance diagnostics (timing/throughput) on stderr.",
+    )
+    ap.add_argument(
+        "--debug-every",
+        type=int,
+        default=DEFAULT_DEBUG_EVERY,
+        metavar="N",
+        help=f"Emit debug diagnostics every N windows/micro-batches when enabled (default: {DEFAULT_DEBUG_EVERY}).",
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     terms = _collect_terms(list(args.terms), args.terms_file)
@@ -956,6 +1027,9 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     progress_every = max(1, int(args.progress_every))
     enrich_window = max(1, int(args.enrich_window))
     worker_timeout_sec = max(30, int(args.worker_timeout_sec))
+    worker_cleanup_every = max(1, int(args.worker_cleanup_every))
+    debug_every = max(1, int(args.debug_every))
+    debug_perf = bool(args.debug_performance)
     enrich_state_path = args.enrich_state if args.enrich_state is not None else _default_enrich_state_path(args.out)
     enrich_jsonl_path = _default_enrich_jsonl_path(args.out)
 
@@ -992,6 +1066,9 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             jsonl_path=enrich_jsonl_path,
             restart_enrich=bool(args.restart_enrich),
             worker_timeout_sec=worker_timeout_sec,
+            worker_cleanup_every=worker_cleanup_every,
+            debug_perf=debug_perf,
+            debug_every=debug_every,
         )
         if skipped:
             print(f"[warn] skipped {skipped} posts after retries", flush=True)
