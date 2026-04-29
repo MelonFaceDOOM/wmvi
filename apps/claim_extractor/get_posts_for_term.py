@@ -31,6 +31,7 @@ import argparse
 import gc
 import importlib
 import json
+import multiprocessing as mp
 import os
 import sys
 import time
@@ -43,6 +44,8 @@ from db.db import close_pool, getcursor, init_pool
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = PROJECT_ROOT / "data" / "posts_for_term.json"
 DEFAULT_RAW_OUT = PROJECT_ROOT / "data" / "posts_for_term_raw.json"
+DEFAULT_ENRICH_WINDOW = 100
+DEFAULT_ENRICH_TIMEOUT_SEC = 1200
 
 DEFAULT_TERMS: tuple[str, ...] = (
     "priorix",
@@ -521,6 +524,131 @@ def _load_pipeline_processors() -> tuple[Any, Any, Any]:
         raise e
 
 
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def _default_enrich_state_path(out_path: Path) -> Path:
+    return out_path.with_suffix(out_path.suffix + ".enrich_state.json")
+
+
+def _default_enrich_jsonl_path(out_path: Path) -> Path:
+    return out_path.with_suffix(out_path.suffix + ".enrich.jsonl")
+
+
+def _append_posts_jsonl(path: Path, posts: list[dict[str, Any]]) -> int:
+    if not posts:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        for post in posts:
+            f.write(json.dumps(post, ensure_ascii=False) + "\n")
+    return len(posts)
+
+
+def _finalize_enrich_json_from_jsonl(
+    *,
+    jsonl_path: Path,
+    out_path: Path,
+    terms: list[str],
+    matched_post_count: int,
+    skipped_post_count: int,
+) -> int:
+    writer = PostsJsonStreamWriter(
+        out_path,
+        generated_at_utc=_utc_now().isoformat(),
+        terms=terms,
+        matched_post_count=matched_post_count,
+    )
+    written = 0
+    try:
+        if jsonl_path.exists():
+            with jsonl_path.open("r", encoding="utf-8") as f:
+                for line_no, line in enumerate(f, start=1):
+                    s = line.strip()
+                    if not s:
+                        continue
+                    try:
+                        post = json.loads(s)
+                    except Exception as e:
+                        print(
+                            f"[warn] skipping invalid enrich jsonl line {line_no}: {e}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        continue
+                    if isinstance(post, dict):
+                        writer.write_post(post)
+                        written += 1
+        writer.finalize(skipped_post_count=skipped_post_count)
+    except BaseException:
+        writer.abort_keep_partial()
+        raise
+    return written
+
+
+def _enrich_worker_entry(
+    posts: list[dict[str, Any]],
+    micro_batch: int,
+    result_q: mp.Queue,
+) -> None:
+    try:
+        _silence_third_party_progress()
+        coref_module, coref_payload, trim_payload = _load_pipeline_processors()
+        processed_all: list[dict[str, Any]] = []
+        skipped_total = 0
+        for i in range(0, len(posts), micro_batch):
+            micro = posts[i : i + micro_batch]
+            processed, skipped = _process_microbatch_with_fallback(
+                micro,
+                coref_payload=coref_payload,
+                trim_payload=trim_payload,
+                coref_module=coref_module,
+            )
+            processed_all.extend(processed)
+            skipped_total += skipped
+            del micro, processed
+            _maybe_cuda_gc()
+        result_q.put({"ok": True, "posts": processed_all, "skipped": skipped_total})
+    except BaseException as e:
+        result_q.put({"ok": False, "error": f"{type(e).__name__}: {e}"})
+
+
+def _run_enrich_worker_with_timeout(
+    posts: list[dict[str, Any]],
+    *,
+    micro_batch: int,
+    timeout_sec: int,
+) -> tuple[bool, list[dict[str, Any]], int, str]:
+    ctx = mp.get_context("spawn")
+    q: mp.Queue = ctx.Queue(maxsize=1)
+    proc = ctx.Process(target=_enrich_worker_entry, args=(posts, micro_batch, q), daemon=True)
+    proc.start()
+    proc.join(timeout=max(1, int(timeout_sec)))
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(5)
+        return False, [], 0, "worker timeout"
+    if proc.exitcode not in (0, None):
+        return False, [], 0, f"worker exit code {proc.exitcode}"
+    try:
+        msg = q.get_nowait()
+    except Exception:
+        return False, [], 0, "worker returned no result"
+    if not isinstance(msg, dict):
+        return False, [], 0, "worker returned malformed result"
+    if not msg.get("ok"):
+        return False, [], 0, str(msg.get("error", "worker failed"))
+    posts_out = msg.get("posts")
+    skipped = msg.get("skipped", 0)
+    if not isinstance(posts_out, list):
+        return False, [], 0, "worker result missing posts list"
+    return True, posts_out, int(skipped), ""
+
+
 def stream_fetch_only_and_write_raw(
     terms: list[str],
     raw_out_path: Path,
@@ -587,11 +715,14 @@ def enrich_from_raw_and_write(
     raw_in_path: Path,
     out_path: Path,
     *,
-    db_posts_per_chunk: int,
+    enrich_window: int,
     micro_batch: int,
     progress_every: int,
+    state_path: Path,
+    jsonl_path: Path,
+    restart_enrich: bool,
+    worker_timeout_sec: int,
 ) -> tuple[int, int]:
-    coref_module, coref_payload, trim_payload = _load_pipeline_processors()
     raw_payload = json.loads(raw_in_path.read_text(encoding="utf-8"))
     if not isinstance(raw_payload, dict):
         raise ValueError(f"Raw input must be a JSON object: {raw_in_path}")
@@ -602,18 +733,34 @@ def enrich_from_raw_and_write(
     if not isinstance(terms, list):
         terms = []
     matched_total = len(posts)
+    terms_out = [str(t) for t in terms]
     print(f"[enrich] {matched_total} raw posts loaded from {raw_in_path.resolve()}", flush=True)
 
-    writer = PostsJsonStreamWriter(
-        out_path,
-        generated_at_utc=_utc_now().isoformat(),
-        terms=[str(t) for t in terms],
-        matched_post_count=matched_total,
-    )
+    if restart_enrich:
+        for p in (state_path, jsonl_path, out_path):
+            if p.exists():
+                p.unlink()
+
+    start_index = 0
     skipped_total = 0
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            if isinstance(state, dict):
+                start_index = int(state.get("next_index", 0))
+                skipped_total = int(state.get("skipped_total", 0))
+                print(f"[enrich] resuming at post index {start_index}", flush=True)
+        except Exception as e:
+            print(f"[warn] ignoring unreadable enrich state file: {e}", file=sys.stderr, flush=True)
+
+    if start_index > matched_total:
+        start_index = matched_total
+
     started = time.monotonic()
-    processed_total = 0
+    processed_total = start_index
     next_progress_mark = max(1, int(progress_every))
+    while next_progress_mark <= processed_total:
+        next_progress_mark += max(1, int(progress_every))
 
     def _print_progress() -> None:
         elapsed = max(0.001, time.monotonic() - started)
@@ -626,33 +773,77 @@ def enrich_from_raw_and_write(
             flush=True,
         )
 
-    try:
-        for j in range(0, len(posts), db_posts_per_chunk):
-            chunk = posts[j : j + db_posts_per_chunk]
-            for i in range(0, len(chunk), micro_batch):
-                micro = chunk[i : i + micro_batch]
-                processed, skipped = _process_microbatch_with_fallback(
-                    micro,
-                    coref_payload=coref_payload,
-                    trim_payload=trim_payload,
-                    coref_module=coref_module,
-                )
+    window_size = max(1, int(enrich_window))
+    i = start_index
+    while i < matched_total:
+        remaining = matched_total - i
+        size = min(window_size, remaining)
+        success = False
+        while size >= 1:
+            window_posts = posts[i : i + size]
+            ok, processed_posts, skipped, err = _run_enrich_worker_with_timeout(
+                window_posts,
+                micro_batch=micro_batch,
+                timeout_sec=worker_timeout_sec,
+            )
+            if ok:
+                _append_posts_jsonl(jsonl_path, processed_posts)
                 skipped_total += skipped
-                for post in processed:
-                    writer.write_post(post)
-                processed_total += len(micro)
+                i += size
+                processed_total = i
+                _atomic_write_json(
+                    state_path,
+                    {
+                        "next_index": i,
+                        "skipped_total": skipped_total,
+                        "matched_total": matched_total,
+                        "raw_in_path": str(raw_in_path),
+                        "jsonl_path": str(jsonl_path),
+                        "out_path": str(out_path),
+                    },
+                )
                 if processed_total >= next_progress_mark:
                     _print_progress()
                     next_progress_mark += max(1, int(progress_every))
-                del micro, processed
-                _maybe_cuda_gc()
-            del chunk
-        writer.finalize(skipped_post_count=skipped_total)
-    except BaseException:
-        writer.abort_keep_partial()
-        raise
+                success = True
+                break
+            print(
+                f"[warn] enrich worker failed at index={i} size={size}: {err}",
+                file=sys.stderr,
+                flush=True,
+            )
+            if size == 1:
+                skipped_total += 1
+                i += 1
+                processed_total = i
+                _atomic_write_json(
+                    state_path,
+                    {
+                        "next_index": i,
+                        "skipped_total": skipped_total,
+                        "matched_total": matched_total,
+                        "raw_in_path": str(raw_in_path),
+                        "jsonl_path": str(jsonl_path),
+                        "out_path": str(out_path),
+                    },
+                )
+                success = True
+                break
+            size = max(1, size // 2)
+        if not success:
+            raise RuntimeError("enrich loop made no progress")
+
+    written = _finalize_enrich_json_from_jsonl(
+        jsonl_path=jsonl_path,
+        out_path=out_path,
+        terms=terms_out,
+        matched_post_count=matched_total,
+        skipped_post_count=skipped_total,
+    )
+    if state_path.exists():
+        state_path.unlink()
     _print_progress()
-    return writer.written_posts, skipped_total
+    return written, skipped_total
 
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
@@ -727,6 +918,31 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         metavar="N",
         help="Posts per coref+trim GPU/CPU batch (default: 2; lower uses less RAM).",
     )
+    ap.add_argument(
+        "--enrich-window",
+        type=int,
+        default=DEFAULT_ENRICH_WINDOW,
+        metavar="N",
+        help=f"Posts per enrich worker process before restart (default: {DEFAULT_ENRICH_WINDOW}).",
+    )
+    ap.add_argument(
+        "--worker-timeout-sec",
+        type=int,
+        default=DEFAULT_ENRICH_TIMEOUT_SEC,
+        metavar="SEC",
+        help=f"Per enrich worker timeout seconds (default: {DEFAULT_ENRICH_TIMEOUT_SEC}).",
+    )
+    ap.add_argument(
+        "--enrich-state",
+        type=Path,
+        default=None,
+        help="Optional enrich state file path for resume (default: <out>.enrich_state.json).",
+    )
+    ap.add_argument(
+        "--restart-enrich",
+        action="store_true",
+        help="Discard existing enrich state/jsonl/output and restart enrich from index 0.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     terms = _collect_terms(list(args.terms), args.terms_file)
@@ -738,6 +954,10 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     row_fetch_size = max(1, int(args.db_fetch_rows))
     micro_batch = max(1, int(args.micro_batch))
     progress_every = max(1, int(args.progress_every))
+    enrich_window = max(1, int(args.enrich_window))
+    worker_timeout_sec = max(30, int(args.worker_timeout_sec))
+    enrich_state_path = args.enrich_state if args.enrich_state is not None else _default_enrich_state_path(args.out)
+    enrich_jsonl_path = _default_enrich_jsonl_path(args.out)
 
     need_fetch = args.stage in ("all", "fetch") and (args.recheck_fetch or not args.raw_out.exists())
 
@@ -765,9 +985,13 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         written, skipped = enrich_from_raw_and_write(
             args.raw_out,
             args.out,
-            db_posts_per_chunk=db_posts_per_chunk,
+            enrich_window=enrich_window,
             micro_batch=micro_batch,
             progress_every=progress_every,
+            state_path=enrich_state_path,
+            jsonl_path=enrich_jsonl_path,
+            restart_enrich=bool(args.restart_enrich),
+            worker_timeout_sec=worker_timeout_sec,
         )
         if skipped:
             print(f"[warn] skipped {skipped} posts after retries", flush=True)

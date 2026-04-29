@@ -18,6 +18,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import importlib.metadata
 import json
 import sys
@@ -36,6 +38,7 @@ PIPE_BATCH_SIZE = 2
 SPACY_EXCLUDE = ("parser", "lemmatizer", "ner", "textcat")
 
 _NLP = None
+QUIET_INFERENCE = True
 
 
 def _load_nlp():
@@ -81,8 +84,14 @@ def _resolve_batch(texts: list[str]) -> list[str]:
     nlp = _load_nlp()
     cfg = {"fastcoref": {"resolve_text": True}}
     out: list[str] = []
-    for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
-        out.append(doc._.resolved_text or doc.text)
+    if QUIET_INFERENCE:
+        sink = io.StringIO()
+        with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+            for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
+                out.append(doc._.resolved_text or doc.text)
+    else:
+        for doc in nlp.pipe(texts, batch_size=PIPE_BATCH_SIZE, component_cfg=cfg):
+            out.append(doc._.resolved_text or doc.text)
     return out
 
 
