@@ -33,6 +33,7 @@ import importlib
 import json
 import multiprocessing as mp
 import os
+import queue
 import sys
 import time
 from datetime import datetime, timezone
@@ -653,7 +654,7 @@ def _run_enrich_worker_with_timeout(
     proc = ctx.Process(
         target=_enrich_worker_entry,
         args=(posts, micro_batch, q, cleanup_every, debug_perf, debug_every),
-        daemon=True,
+        daemon=False,
     )
     proc.start()
     proc.join(timeout=max(1, int(timeout_sec)))
@@ -664,9 +665,12 @@ def _run_enrich_worker_with_timeout(
     if proc.exitcode not in (0, None):
         return False, [], 0, f"worker exit code {proc.exitcode}"
     try:
-        msg = q.get_nowait()
-    except Exception:
+        # Small blocking wait avoids race where child exits before queue flush is visible.
+        msg = q.get(timeout=5)
+    except queue.Empty:
         return False, [], 0, "worker returned no result"
+    except Exception as e:
+        return False, [], 0, f"worker queue read failed: {e}"
     if not isinstance(msg, dict):
         return False, [], 0, "worker returned malformed result"
     if not msg.get("ok"):
@@ -782,11 +786,16 @@ def enrich_from_raw_and_write(
                 start_index = int(state.get("next_index", 0))
                 skipped_total = int(state.get("skipped_total", 0))
                 print(
-                    f"[enrich] resume detected: {start_index}/{matched_total} already done",
+                    f"[enrich] existing coref data found -- {start_index}/{matched_total} completed",
                     flush=True,
                 )
         except Exception as e:
             print(f"[warn] ignoring unreadable enrich state file: {e}", file=sys.stderr, flush=True)
+    else:
+        print(
+            f"[enrich] no existing coref data found -- 0/{matched_total} completed",
+            flush=True,
+        )
 
     if start_index > matched_total:
         start_index = matched_total
