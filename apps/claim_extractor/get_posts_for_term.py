@@ -14,7 +14,9 @@ Requires claim-extractor NLP deps (see repo ``requirements.txt``) plus coref ext
 
 Usage:
   python -m apps.claim_extractor.get_posts_for_term
-  python -m apps.claim_extractor.get_posts_for_term --prod --out data/mm.json
+  python -m apps.claim_extractor.get_posts_for_term --prod --out data/mmr.json
+  python -m apps.claim_extractor.get_posts_for_term --prod --stage fetch --raw-out data/mmr_raw.json
+  python -m apps.claim_extractor.get_posts_for_term --prod --stage enrich --raw-out data/mmr_raw.json --out data/mmr.json
   python -m apps.claim_extractor.get_posts_for_term --terms measles mmr --terms-file more_terms.txt
   python -m apps.claim_extractor.get_posts_for_term --progress-every 200
 
@@ -40,6 +42,7 @@ from db.db import close_pool, getcursor, init_pool
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = PROJECT_ROOT / "data" / "posts_for_term.json"
+DEFAULT_RAW_OUT = PROJECT_ROOT / "data" / "posts_for_term_raw.json"
 
 DEFAULT_TERMS: tuple[str, ...] = (
     "priorix",
@@ -503,23 +506,11 @@ def _maybe_cuda_gc() -> None:
         pass
 
 
-def stream_fetch_enrich_and_write(
-    terms: list[str],
-    out_path: Path,
-    *,
-    db_posts_per_chunk: int,
-    row_fetch_size: int,
-    micro_batch: int,
-    progress_every: int,
-) -> tuple[int, int]:
-    """
-    Stream DB → micro-batch coref+trim → append JSON. Returns (written_posts, skipped_posts).
-    """
+def _load_pipeline_processors() -> tuple[Any, Any, Any]:
     try:
         coref_module = importlib.import_module("apps.claim_extractor.coreference_resolution")
         trim_module = importlib.import_module("apps.claim_extractor.trim_transcripts")
-        coref_payload = coref_module.process_payload
-        trim_payload = trim_module.process_payload
+        return coref_module, coref_module.process_payload, trim_module.process_payload
     except ImportError as e:
         print(
             "Import failed (claim_extractor pipeline). From repo root, install deps:\n"
@@ -529,22 +520,94 @@ def stream_fetch_enrich_and_write(
         )
         raise e
 
+
+def stream_fetch_only_and_write_raw(
+    terms: list[str],
+    raw_out_path: Path,
+    *,
+    db_posts_per_chunk: int,
+    row_fetch_size: int,
+    progress_every: int,
+) -> int:
     matched_total = count_posts_with_hits(terms)
-    print(f"[fetch] {matched_total} posts (matched in DB)", flush=True)
+    print(f"[fetch] {matched_total} posts (matched in DB); writing raw file", flush=True)
     if matched_total == 0:
         writer = PostsJsonStreamWriter(
-            out_path,
+            raw_out_path,
             generated_at_utc=_utc_now().isoformat(),
             terms=terms,
             matched_post_count=0,
         )
         writer.finalize(skipped_post_count=0)
-        return 0, 0
+        return 0
+
+    writer = PostsJsonStreamWriter(
+        raw_out_path,
+        generated_at_utc=_utc_now().isoformat(),
+        terms=terms,
+        matched_post_count=matched_total,
+    )
+    started = time.monotonic()
+    fetched_total = 0
+    next_progress_mark = max(1, int(progress_every))
+
+    def _print_progress() -> None:
+        elapsed = max(0.001, time.monotonic() - started)
+        rate = fetched_total / elapsed
+        remaining = max(0, matched_total - fetched_total)
+        eta_s = int(remaining / rate) if rate > 0 else -1
+        eta_txt = f"{eta_s}s" if eta_s >= 0 else "unknown"
+        print(
+            f"[progress] fetch {fetched_total}/{matched_total} posts; eta={eta_txt}",
+            flush=True,
+        )
+
+    try:
+        for chunk in iter_post_chunks(
+            terms,
+            posts_per_chunk=db_posts_per_chunk,
+            row_fetch_size=row_fetch_size,
+        ):
+            for post in chunk:
+                writer.write_post(post)
+            fetched_total += len(chunk)
+            if fetched_total >= next_progress_mark:
+                _print_progress()
+                next_progress_mark += max(1, int(progress_every))
+            del chunk
+        writer.finalize(skipped_post_count=0)
+    except BaseException:
+        writer.abort_keep_partial()
+        raise
+    _print_progress()
+    return writer.written_posts
+
+
+def enrich_from_raw_and_write(
+    raw_in_path: Path,
+    out_path: Path,
+    *,
+    db_posts_per_chunk: int,
+    micro_batch: int,
+    progress_every: int,
+) -> tuple[int, int]:
+    coref_module, coref_payload, trim_payload = _load_pipeline_processors()
+    raw_payload = json.loads(raw_in_path.read_text(encoding="utf-8"))
+    if not isinstance(raw_payload, dict):
+        raise ValueError(f"Raw input must be a JSON object: {raw_in_path}")
+    posts = raw_payload.get("posts")
+    if not isinstance(posts, list):
+        raise ValueError(f"Raw input missing top-level posts list: {raw_in_path}")
+    terms = raw_payload.get("terms")
+    if not isinstance(terms, list):
+        terms = []
+    matched_total = len(posts)
+    print(f"[enrich] {matched_total} raw posts loaded from {raw_in_path.resolve()}", flush=True)
 
     writer = PostsJsonStreamWriter(
         out_path,
         generated_at_utc=_utc_now().isoformat(),
-        terms=terms,
+        terms=[str(t) for t in terms],
         matched_post_count=matched_total,
     )
     skipped_total = 0
@@ -559,16 +622,13 @@ def stream_fetch_enrich_and_write(
         eta_s = int(remaining / rate) if rate > 0 else -1
         eta_txt = f"{eta_s}s" if eta_s >= 0 else "unknown"
         print(
-            f"[progress] {processed_total}/{matched_total} posts complete; eta={eta_txt}",
+            f"[progress] enrich {processed_total}/{matched_total} posts; eta={eta_txt}",
             flush=True,
         )
 
     try:
-        for chunk in iter_post_chunks(
-            terms,
-            posts_per_chunk=db_posts_per_chunk,
-            row_fetch_size=row_fetch_size,
-        ):
+        for j in range(0, len(posts), db_posts_per_chunk):
+            chunk = posts[j : j + db_posts_per_chunk]
             for i in range(0, len(chunk), micro_batch):
                 micro = chunk[i : i + micro_batch]
                 processed, skipped = _process_microbatch_with_fallback(
@@ -599,10 +659,27 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     ap = argparse.ArgumentParser(prog="python -m scripts.get_posts_for_term")
     ap.add_argument("--prod", action="store_true", help="Use prod DB credentials (DEV_* vs PROD_*).")
     ap.add_argument(
+        "--stage",
+        choices=("all", "fetch", "enrich"),
+        default="all",
+        help="Pipeline stage to run: all (default), fetch (DB-only), or enrich (coref+trim from raw).",
+    )
+    ap.add_argument(
+        "--raw-out",
+        type=Path,
+        default=DEFAULT_RAW_OUT,
+        help=f"Raw DB fetch JSON path (default: {DEFAULT_RAW_OUT}).",
+    )
+    ap.add_argument(
         "--out",
         type=Path,
         default=DEFAULT_OUT,
-        help=f"Output JSON path (default: {DEFAULT_OUT}).",
+        help=f"Final enriched JSON path (default: {DEFAULT_OUT}).",
+    )
+    ap.add_argument(
+        "--recheck-fetch",
+        action="store_true",
+        help="Force re-running DB fetch and overwrite --raw-out even if it exists.",
     )
     ap.add_argument(
         "--terms",
@@ -657,24 +734,47 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         terms = list(DEFAULT_TERMS)
 
     _silence_third_party_progress()
-    init_pool(prefix="prod" if args.prod else "dev")
-    try:
-        written, skipped = stream_fetch_enrich_and_write(
-            terms,
+    db_posts_per_chunk = max(1, int(args.db_chunk_posts))
+    row_fetch_size = max(1, int(args.db_fetch_rows))
+    micro_batch = max(1, int(args.micro_batch))
+    progress_every = max(1, int(args.progress_every))
+
+    need_fetch = args.stage in ("all", "fetch") and (args.recheck_fetch or not args.raw_out.exists())
+
+    if args.stage == "enrich" and not args.raw_out.exists():
+        raise SystemExit(f"--stage enrich requires raw input file: {args.raw_out}")
+
+    if args.stage in ("all", "fetch"):
+        if need_fetch:
+            init_pool(prefix="prod" if args.prod else "dev")
+            try:
+                fetched = stream_fetch_only_and_write_raw(
+                    terms,
+                    args.raw_out,
+                    db_posts_per_chunk=db_posts_per_chunk,
+                    row_fetch_size=row_fetch_size,
+                    progress_every=progress_every,
+                )
+            finally:
+                close_pool()
+            print(f"[ok] fetched {fetched} raw posts → {args.raw_out.resolve()}", flush=True)
+        else:
+            print(f"[fetch] reusing existing raw file (skip DB fetch): {args.raw_out.resolve()}", flush=True)
+
+    if args.stage in ("all", "enrich"):
+        written, skipped = enrich_from_raw_and_write(
+            args.raw_out,
             args.out,
-            db_posts_per_chunk=max(1, int(args.db_chunk_posts)),
-            row_fetch_size=max(1, int(args.db_fetch_rows)),
-            micro_batch=max(1, int(args.micro_batch)),
-            progress_every=max(1, int(args.progress_every)),
+            db_posts_per_chunk=db_posts_per_chunk,
+            micro_batch=micro_batch,
+            progress_every=progress_every,
         )
         if skipped:
             print(f"[warn] skipped {skipped} posts after retries", flush=True)
         print(
-            f"[ok] wrote {written} posts, see context_count in JSON → {args.out.resolve()}",
+            f"[ok] wrote {written} enriched posts, see context_count in JSON → {args.out.resolve()}",
             flush=True,
         )
-    finally:
-        close_pool()
 
 
 if __name__ == "__main__":
