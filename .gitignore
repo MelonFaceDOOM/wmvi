@@ -6,6 +6,7 @@ plan.txt
 logs/
 db/snapshots/
 private/
+.cursor/
 
 __pycache__/
 venv/
@@ -29,4 +30,5 @@ podcast_samples.txt
 # ensures the repo stores/checkout as LF consistently across machines.
 db/migrations/*.sql text eol=lf
 
-data/*.json
+data/
+apps/claim_extractor/data/

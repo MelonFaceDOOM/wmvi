@@ -1,59 +1,28 @@
 """
-Build per-post ``contexts``: merged, sentence-bounded text windows for LLM input.
-
-Reads JSON like ``scripts.get_posts_for_term`` (``posts`` with ``hits``). Uses
-``text_coreference_resolved`` when present (offsets are remapped from ``text``).
-
-For each post, **syntok** segments the body once. Each hit maps to a sentence index;
-sentence windows ``[idx - SENTENCES_BEFORE, idx + SENTENCES_AFTER]`` (clamped) are
-merged when overlapping or adjacent, then split if longer than ``MAX_SENTENCES`` using
-sliding windows with ``CONTEXT_SENTENCE_OVERLAP``. If syntok yields at most one
-sentence, falls back to merged character windows around hits.
-
-Each context includes ``text``, ``start_sentence_idx``, ``end_sentence_idx``,
-``term_ids``, and ``hit_spans`` for traceability. Per-hit ``trimmed_text`` is not used.
-
-Usage:
-  python apps/claim_extractor/trim_transcripts.py
-  python apps/claim_extractor/coreference_resolution.py --input sample.json --output sample_coref.json
-  python apps/claim_extractor/trim_transcripts.py --input sample_coref.json --output out_trimmed.json
-
-Full sample test (from repo root; coref needs ``pip install -r apps/claim_extractor/requirements-coref.txt``):
-
-  cd /path/to/wmvi
-  pip install -r requirements.txt
-  pip install -r apps/claim_extractor/requirements-coref.txt
-  python apps/claim_extractor/coreference_resolution.py --input apps/claim_extractor/sample.json --output /tmp/sample_coref.json
-  python apps/claim_extractor/trim_transcripts.py --input /tmp/sample_coref.json --output /tmp/sample_contexts.json
-  python3 -c "import json; d=json.load(open('/tmp/sample_contexts.json')); print(sum(len(p.get('contexts', [])) for p in d['posts']))"
+Sentence-boundary trimming helpers for search-term hit context extraction.
 """
 
 from __future__ import annotations
 
-import argparse
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Optional
 
 from syntok.segmenter import analyze
 
-SENTENCES_BEFORE = 2
-SENTENCES_AFTER = 2
-MAX_CHARS_BEFORE = 400
-MAX_CHARS_AFTER = 400
+SENTENCES_BEFORE = 4
+SENTENCES_AFTER = 4
+MAX_CHARS_BEFORE = 1000
+MAX_CHARS_AFTER = 1000
 
 # After merging hit windows, cap context length in sentences; split with overlap if larger.
-MAX_SENTENCES = 5
-CONTEXT_SENTENCE_OVERLAP = 2
+MAX_SENTENCES = 16
+CONTEXT_SENTENCE_OVERLAP = 4
 
 # Fallback when syntok yields ≤1 sentence: cap merged char slice; split with overlap if larger.
-MAX_CONTEXT_CHARS = MAX_SENTENCES * 500
-CONTEXT_CHAR_OVERLAP = 300
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_INPUT = SCRIPT_DIR / "sample.json"
-DEFAULT_OUTPUT = SCRIPT_DIR / "out_trimmed.json"
+MAX_CONTEXT_CHARS = MAX_SENTENCES * 700
+CONTEXT_CHAR_OVERLAP = 1200
+MAX_TRIMMED_CHARS = 12000
+TRIMMED_CHAR_OVERLAP = 400
 
 
 def syntok_sentence_spans(text: str) -> list[tuple[int, int]]:
@@ -398,58 +367,106 @@ def build_contexts_for_post(
         return _build_contexts_fallback_chars(body, metas)
     return _build_contexts_sentence_mode(body, sent_spans, metas)
 
+def trim_sentence_boundary(
+    text: str,
+    hits: list[Any],
+    *,
+    sentences_before: int = SENTENCES_BEFORE,
+    sentences_after: int = SENTENCES_AFTER,
+    max_sentences: int = MAX_SENTENCES,
+    max_chars_before: int = MAX_CHARS_BEFORE,
+    max_chars_after: int = MAX_CHARS_AFTER,
+    max_context_chars: int = MAX_CONTEXT_CHARS,
+    max_trimmed_chars: int = MAX_TRIMMED_CHARS,
+) -> list[str]:
+    """
+    Return merged sentence-boundary chunks around hit spans for one text body.
+    """
+    if not isinstance(text, str) or not text.strip() or not isinstance(hits, list):
+        return []
 
-def process_payload(data: dict[str, Any], *, progress: bool = False) -> dict[str, Any]:
-    del progress  # single global progress bar is handled by caller
-    out = data
-    posts = out.get("posts")
-    if not isinstance(posts, list):
-        return out
-    for post in posts:
-        if not isinstance(post, dict):
+    sent_spans = syntok_sentence_spans(text)
+    if not sent_spans:
+        return []
+
+    ranges: list[tuple[int, int]] = []
+    for hit in hits:
+        if not isinstance(hit, dict):
             continue
-        try:
-            original = post.get("text")
-            if not isinstance(original, str):
-                original = ""
-            resolved = post.get("text_coreference_resolved")
-            if isinstance(resolved, str) and resolved.strip():
-                body = resolved
-            else:
-                body = original
-            hits = post.get("hits")
-            if not isinstance(hits, list):
-                post["contexts"] = []
+        ms = int(hit.get("match_start", 0) or 0)
+        me = int(hit.get("match_end", 0) or 0)
+        ms = max(0, min(ms, len(text)))
+        me = max(ms, min(me, len(text)))
+        idx = _anchor_sentence_index(sent_spans, ms, me)
+        lo = max(0, idx - max(0, int(sentences_before)))
+        hi = min(len(sent_spans) - 1, idx + max(0, int(sentences_after)))
+        ranges.append((lo, hi))
+
+    if not ranges:
+        return []
+
+    def _append_capped_chunk(chunks_out: list[str], raw_chunk: str) -> None:
+        chunk = raw_chunk.strip()
+        if not chunk:
+            return
+        hard_cap = max(1, int(max_trimmed_chars))
+        if len(chunk) <= hard_cap:
+            chunks_out.append(chunk)
+            return
+        step = max(1, hard_cap - TRIMMED_CHAR_OVERLAP)
+        start = 0
+        while start < len(chunk):
+            end = min(start + hard_cap, len(chunk))
+            piece = chunk[start:end].strip()
+            if piece:
+                chunks_out.append(piece)
+            if end >= len(chunk):
+                break
+            start += step
+
+    chunks: list[str] = []
+    if len(sent_spans) <= 1:
+        char_ranges: list[tuple[int, int]] = []
+        for hit in hits:
+            if not isinstance(hit, dict):
                 continue
-            post["contexts"] = build_contexts_for_post(body, original, hits)
-        except Exception as e:
-            print(
-                f"[warn] contexts failed for post_id={post.get('post_id', '<unknown>')}: {e}",
-                flush=True,
-            )
-            post["contexts"] = []
-    return out
+            ms = int(hit.get("match_start", 0) or 0)
+            me = int(hit.get("match_end", 0) or 0)
+            ms = max(0, min(ms, len(text)))
+            me = max(ms, min(me, len(text)))
+            char_ranges.append((max(0, ms - max_chars_before), min(len(text), me + max_chars_after)))
+        merged_chars = _merge_char_ranges(char_ranges)
+        local_max_chars = max(1, int(max_context_chars))
+        for a, b in merged_chars:
+            cur = a
+            while cur < b:
+                end_win = min(cur + local_max_chars, b)
+                _append_capped_chunk(chunks, text[cur:end_win])
+                if end_win >= b:
+                    break
+                step = max(1, local_max_chars - CONTEXT_CHAR_OVERLAP)
+                cur += step
+        return chunks
 
+    merged = _merge_inclusive_ranges(ranges)
+    final_ranges: list[tuple[int, int]] = []
+    local_max_sentences = max(1, int(max_sentences))
+    for s, e in merged:
+        length = e - s + 1
+        if length <= local_max_sentences:
+            final_ranges.append((s, e))
+            continue
+        cur = s
+        while cur <= e:
+            end_win = min(cur + local_max_sentences - 1, e)
+            final_ranges.append((cur, end_win))
+            if end_win >= e:
+                break
+            step = max(1, local_max_sentences - CONTEXT_SENTENCE_OVERLAP)
+            cur += step
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Add merged sentence contexts per post.")
-    ap.add_argument("--input", type=Path, default=DEFAULT_INPUT)
-    ap.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    args = ap.parse_args()
-
-    raw = json.loads(args.input.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise SystemExit("input JSON must be an object")
-    processed = process_payload(raw)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps(processed, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    n_posts = len(processed.get("posts", []))
-    n_ctx = sum(len(p.get("contexts", [])) for p in processed.get("posts", []) if isinstance(p, dict))
-    print(f"[ok] wrote {n_posts} posts, {n_ctx} contexts total, to {args.output.resolve()}")
-
-
-if __name__ == "__main__":
-    main()
+    for cs, ce in final_ranges:
+        a = sent_spans[cs][0]
+        b = sent_spans[ce][1]
+        _append_capped_chunk(chunks, text[a:b])
+    return chunks
