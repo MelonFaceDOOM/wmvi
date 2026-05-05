@@ -1,7 +1,7 @@
 --------------------------------------------------
 INSTRUCTIONS
 --------------------------------------------------
-Extract {{max_claims}} vaccine-related claims
+Extract 0-{{max_claims}} vaccine-related claims
 
 
 --------------------------------------------------
@@ -18,9 +18,9 @@ Return JSON only with this shape:
   "claims": [
     {
       "claim": "...",
-      "claim_stance_to_vaccines": pro | anti | neutral | unclear,
-      "author_stance_to_claim": support | reject | neutral | unclear,
-      "attribution": self | personal relation | authority | common knowledge | unknown
+      "claim_stance_to_vaccines": "pro" | "anti" | "neutral" | "unclear",
+      "author_stance_to_claim": "support" | "reject" | "neutral" | "unclear",
+      "attribution": "self" | "personal relation" | "authority" | "common knowledge" | "unknown"
     }
   ]
 }

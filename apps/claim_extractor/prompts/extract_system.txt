@@ -20,7 +20,7 @@ GENERAL EXTRACTION RULES
 --------------------------------------------------
 
 - Extract 0 to {{max_claims}} claims per input.
-- If more than {{max_claims}} claims exist, return the [[max_claims]] claims that best represent the author's intent
+- If more than {{max_claims}} claims exist, return the {{max_claims}} claims that best represent the author's intent
 - If no valid claims exist, return:
   {"claims": []}
 - Extract only vaccine-related claims.
