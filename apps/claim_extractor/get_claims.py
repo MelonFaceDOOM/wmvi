@@ -3,223 +3,418 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import logging
+import os
+import random
+import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from threading import local
+from typing import Any, Iterable, Iterator, Optional
 
-from apps.claim_extractor.vaccine_claim_extractor import extract_vaccine_claims
+from dotenv import load_dotenv
+from openai import AzureOpenAI
+from openai._exceptions import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
-"""
-Batch claim extraction over precomputed post contexts.
-
-Examples:
-  python -m apps.claim_extractor.get_claims
-  python -m apps.claim_extractor.get_claims --input-file data/mmr.json --out-file data/mmr_claims.jsonl
-  python -m apps.claim_extractor.get_claims --batch-count 50 --max-workers 6 --max-claims 8
-"""
-
-DEFAULT_INPUT_FILE = Path("data/mmr.json")
-DEFAULT_OUT_FILE = Path("data/mmr_claims.jsonl")
-DEFAULT_BATCH_COUNT = 50
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_INPUT_FILE = REPO_ROOT / "data" / "posts_for_term.json"
+DEFAULT_OUT_FILE = REPO_ROOT / "data" / "posts_with_claims_full.json"
+DEFAULT_BATCH_COUNT = 100
 DEFAULT_MAX_WORKERS = 6
-DEFAULT_MAX_CLAIMS = 4
+DEFAULT_MAX_CLAIMS = 8
+DEFAULT_MAX_RETRIES = 3
 DEFAULT_MAX_TASKS = 0
+DEFAULT_N_POSTS = 0
 
-LOG = logging.getLogger(__name__)
+load_dotenv()
+
+MODEL_NAME = "gpt-5-mini"
+PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+SYSTEM_PROMPT = (PROMPTS_DIR / "extract_system.txt").read_text(encoding="utf-8-sig")
+USER_PROMPT = (PROMPTS_DIR / "extract_user.txt").read_text(encoding="utf-8-sig")
+
+AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
+
+CLAIM_STANCE_VALUES = ("pro", "anti", "neutral", "unclear")
+AUTHOR_STANCE_VALUES = ("support", "reject", "neutral", "unclear")
+ATTRIBUTION_VALUES = ("self", "personal relation", "authority", "common knowledge", "unknown")
+
+CLAIMS_JSON_SCHEMA: dict[str, Any] = {
+    "name": "vaccine_claim_extraction",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "claims": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "claim": {"type": "string"},
+                        "claim_stance_to_vaccines": {"type": "string", "enum": list(CLAIM_STANCE_VALUES)},
+                        "author_stance_to_claim": {"type": "string", "enum": list(AUTHOR_STANCE_VALUES)},
+                        "attribution": {"type": "string", "enum": list(ATTRIBUTION_VALUES)},
+                    },
+                    "required": [
+                        "claim",
+                        "claim_stance_to_vaccines",
+                        "author_stance_to_claim",
+                        "attribution",
+                    ],
+                },
+            }
+        },
+        "required": ["claims"],
+    },
+}
+
+RETRYABLE_ERROR_MARKERS = (
+    "apiconnectionerror",
+    "apitimeouterror",
+    "ratelimiterror",
+    "connection error",
+    "timeout",
+)
+NON_RETRYABLE_ERROR_MARKERS = (
+    "content_filter",
+    "content policy",
+    "content policy violation",
+    "responsible ai",
+    "invalid claim_stance_to_vaccines",
+    "invalid author_stance_to_claim",
+    "invalid attribution",
+)
+
+_thread_local = local()
 
 
-def batched(seq: list[dict[str, Any]], size: int) -> Iterator[list[dict[str, Any]]]:
-    size = max(1, int(size))
-    for i in range(0, len(seq), size):
-        yield seq[i : i + size]
+class PostsJsonStreamWriter:
+    def __init__(self, final_path: Path, *, meta: dict[str, Any]) -> None:
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        self.final_path = final_path
+        self.tmp_path = final_path.with_suffix(final_path.suffix + ".tmp")
+        self._f = self.tmp_path.open("w", encoding="utf-8")
+        self._first_post = True
+        self.written_posts = 0
+
+        header = {k: v for k, v in meta.items() if k != "posts"}
+        self._f.write("{\n")
+        for k, v in header.items():
+            self._f.write(f'  "{k}": {json.dumps(v, ensure_ascii=False)},\n')
+        self._f.write('  "posts": [\n')
+
+    def write_post(self, post: dict[str, Any]) -> None:
+        if not self._first_post:
+            self._f.write(",\n")
+        self._first_post = False
+        blob = json.dumps(post, ensure_ascii=False, indent=2)
+        self._f.write("\n".join("    " + line for line in blob.splitlines()))
+        self.written_posts += 1
+        self._f.flush()
+
+    def finalize(self) -> None:
+        self._f.write("\n  ],\n")
+        self._f.write(f'  "post_count": {self.written_posts}\n')
+        self._f.write("}\n")
+        self._f.flush()
+        self._f.close()
+        self.tmp_path.replace(self.final_path)
 
 
-def stable_task_id(post_id: Any, text: str) -> str:
-    base = f"{post_id}|{text}"
-    digest = hashlib.sha256(base.encode("utf-8")).hexdigest()[:32]
+def _build_client() -> AzureOpenAI:
+    if not AZURE_OPENAI_KEY:
+        raise RuntimeError("Missing AZURE_OPENAI_KEY in environment.")
+    if not AZURE_OPENAI_ENDPOINT:
+        raise RuntimeError("Missing AZURE_OPENAI_ENDPOINT in environment.")
+    return AzureOpenAI(
+        api_key=AZURE_OPENAI_KEY,
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_version=AZURE_OPENAI_API_VERSION,
+    )
+
+
+def _get_client() -> AzureOpenAI:
+    client = getattr(_thread_local, "client", None)
+    if client is None:
+        client = _build_client()
+        _thread_local.client = client
+    return client
+
+
+def _build_system_prompt(*, max_claims: int) -> str:
+    return SYSTEM_PROMPT.replace("{{max_claims}}", str(max_claims)).replace("[[max_claims]]", str(max_claims))
+
+
+def _build_user_prompt(input_text: str, *, max_claims: int) -> str:
+    return (
+        USER_PROMPT.replace("{{max_claims}}", str(max_claims))
+        .replace("[[max_claims]]", str(max_claims))
+        .replace("{{text_input}}", input_text)
+    )
+
+
+def _format_exception_details(exc: BaseException) -> str:
+    parts: list[str] = [f"{type(exc).__name__}: {exc}"]
+    status = getattr(exc, "status_code", None)
+    if status is not None:
+        parts.append(f"status={status}")
+    req = getattr(exc, "request", None)
+    if req is not None:
+        method = getattr(req, "method", None)
+        url = getattr(req, "url", None)
+        if method or url:
+            parts.append(f"request={method or '?'} {url or '?'}")
+    return " | ".join(parts)
+
+
+def _parse_and_validate_output(content: str) -> dict[str, Any]:
+    parsed = json.loads(content.strip())
+    if not isinstance(parsed, dict):
+        raise ValueError("model output JSON top-level is not an object")
+    claims = parsed.get("claims")
+    if not isinstance(claims, list):
+        raise ValueError("model output missing list field 'claims'")
+    return parsed
+
+
+def _call_extract_with_retries(client: AzureOpenAI, *, input_text: str, max_claims: int, max_retries: int) -> dict[str, Any]:
+    last_err: Optional[BaseException] = None
+    for attempt in range(max_retries):
+        try:
+            resp = client.chat.completions.create(
+                model=MODEL_NAME,
+                temperature=0,
+                response_format={"type": "json_schema", "json_schema": CLAIMS_JSON_SCHEMA},
+                messages=[
+                    {"role": "system", "content": _build_system_prompt(max_claims=max_claims)},
+                    {"role": "user", "content": _build_user_prompt(input_text, max_claims=max_claims)},
+                ],
+            )
+            content = getattr(resp.choices[0].message, "content", None)
+            if not isinstance(content, str) or not content.strip():
+                raise RuntimeError("Model response content is empty.")
+            return _parse_and_validate_output(content)
+        except (RateLimitError, APITimeoutError, APIConnectionError) as e:
+            last_err = e
+            sleep_s = min(30.0, (2**attempt) * 0.75) + random.random() * 0.5
+            print(f"[warn] retryable error: {_format_exception_details(e)}", flush=True)
+            print(f"[retry] retrying in {sleep_s:.2f}s", flush=True)
+            time.sleep(sleep_s)
+        except APIStatusError as e:
+            last_err = e
+            status = getattr(e, "status_code", None)
+            print(f"[warn] api status error: {_format_exception_details(e)}", flush=True)
+            if status is not None and 500 <= int(status) <= 599:
+                sleep_s = min(30.0, (2**attempt) * 0.75) + random.random() * 0.5
+                print(f"[retry] retrying in {sleep_s:.2f}s", flush=True)
+                time.sleep(sleep_s)
+                continue
+            raise
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            last_err = e
+            print(f"[warn] parse/schema error: {_format_exception_details(e)}", flush=True)
+            if attempt >= 1:
+                raise
+            sleep_s = min(5.0, (2**attempt) * 0.5) + random.random() * 0.25
+            print(f"[retry] retrying in {sleep_s:.2f}s", flush=True)
+            time.sleep(sleep_s)
+    if last_err is None:
+        raise RuntimeError("Unknown error after retries")
+    print(f"[error] max retries reached; last error: {_format_exception_details(last_err)}", flush=True)
+    raise RuntimeError(f"{type(last_err).__name__}: {last_err}")
+
+
+def _stable_task_id(row: dict[str, Any]) -> str:
+    src = row.get("source_post_id")
+    idx = row.get("sentence_boundary_chunk_index")
+    if src is not None and idx is not None:
+        return f"{src}:{idx}"
+    post_id = row.get("post_id", "unknown")
+    text = str(row.get("text_coreference_resolved") or row.get("text") or "")
+    digest = hashlib.sha256(f"{post_id}|{text}".encode("utf-8")).hexdigest()[:16]
     return f"{post_id}:{digest}"
 
 
-def format_input_text(post: dict[str, Any], text: str) -> str:
-    platform = str(post.get("platform", "unknown"))
-
+def _format_input_text(row: dict[str, Any], text: str) -> str:
+    platform = str(row.get("platform", "unknown"))
     if platform == "reddit_submission":
-        title = str(post.get("reddit_submission_title") or post.get("title") or "Unknown title")
-        return (
-            f"This is a segment from a Reddit Submission with the title {title}. "
-            f"Here is the Reddit Submission segment:\n{text}"
-        )
-
+        return f"Submission title: {row.get('reddit_submission_title') or 'Unknown'}\n\n{text}"
     if platform == "reddit_comment":
-        submission_title = str(
-            post.get("reddit_comment_submission_title")
-            or post.get("submission_title")
-            or "Unknown submission title"
-        )
-        return (
-            "This is a segment from a Reddit Comment that was made in a Submission "
-            f"titled {submission_title}. Here is the Reddit Comment segment:\n{text}"
-        )
-
-    if platform == "telegram_post":
-        telegram_channel = str(post.get("telegram_channel") or "Unknown channel")
-        return (
-            "This is a segment from a Telegram message that was made in a channel "
-            f"called {telegram_channel}. Here is the Telegram message segment:\n{text}"
-        )
-
+        return f"Reddit comment context title: {row.get('reddit_comment_submission_title') or 'Unknown'}\n\n{text}"
     if platform == "youtube_video":
-        title = str(post.get("youtube_video_title") or post.get("title") or "Unknown title")
-        return (
-            "This is a segment from a transcript of a YouTube video with the title "
-            f"{title}. Here is the YouTube Video transcript segment:\n{text}"
-        )
-
+        return f"YouTube video title: {row.get('youtube_video_title') or 'Unknown'}\n\n{text}"
     if platform == "podcast_episode":
-        podcast_name = str(post.get("podcast_name") or "Unknown podcast")
-        return (
-            "This is a segment from a transcript of a podcast called "
-            f"{podcast_name}. Here is the Podcast transcript segment:\n{text}"
+        return f"Podcast name: {row.get('podcast_name') or 'Unknown'}\n\n{text}"
+    return text
+
+
+def _error_class(error_text: str) -> str:
+    e = (error_text or "").lower()
+    if any(m in e for m in NON_RETRYABLE_ERROR_MARKERS):
+        return "terminal"
+    if any(m in e for m in RETRYABLE_ERROR_MARKERS):
+        return "retryable"
+    return "retryable"
+
+
+def _normalize_row_state(row: dict[str, Any]) -> tuple[str, Optional[str]]:
+    disposition = row.get("claim_extraction_disposition")
+    if disposition == "success":
+        return "completed", None
+    if disposition == "terminal_failure":
+        err = str(row.get("claim_extraction_error") or "")
+        return "terminal_failed", err
+    if disposition == "retryable_failure":
+        err = str(row.get("claim_extraction_error") or "")
+        return "retryable_failed", err
+
+    status = row.get("claim_extraction_status")
+    if status == "success":
+        out = row.get("claim_extraction_output")
+        if isinstance(out, dict) and isinstance(out.get("claims"), list):
+            row["claim_extraction_disposition"] = "success"
+            return "completed", None
+    if status == "failed":
+        err = str(row.get("claim_extraction_error") or "")
+        if _error_class(err) == "terminal":
+            row["claim_extraction_disposition"] = "terminal_failure"
+            return "terminal_failed", err
+        row["claim_extraction_disposition"] = "retryable_failure"
+        return "retryable_failed", err
+
+    # Legacy shape support: {output:{claims}} or {output:{failed,error}}
+    legacy = row.get("output")
+    if isinstance(legacy, dict):
+        if legacy.get("failed") is True:
+            err = str(legacy.get("error") or "")
+            if _error_class(err) == "terminal":
+                row["claim_extraction_disposition"] = "terminal_failure"
+                return "terminal_failed", err
+            row["claim_extraction_disposition"] = "retryable_failure"
+            return "retryable_failed", err
+        if isinstance(legacy.get("claims"), list):
+            row["claim_extraction_status"] = "success"
+            row["claim_extraction_output"] = {"claims": legacy.get("claims", [])}
+            row["claim_extraction_error"] = None
+            row["claim_extraction_disposition"] = "success"
+            return "completed", None
+
+    row["claim_extraction_disposition"] = "unprocessed"
+    return "unprocessed", None
+
+
+def _worker(task: dict[str, Any], *, max_claims: int, max_retries: int) -> dict[str, Any]:
+    row = task["row"]
+    task_id = task["task_id"]
+    input_text = task["input_text"]
+    client = _get_client()
+    try:
+        output = _call_extract_with_retries(
+            client,
+            input_text=input_text,
+            max_claims=max_claims,
+            max_retries=max_retries,
         )
-
-    return f"text from {platform}: {text}"
-
-
-def build_context_tasks(
-    batch_posts: list[dict[str, Any]],
-) -> tuple[list[dict[str, str]], dict[str, dict[str, Any]]]:
-    tasks: list[dict[str, str]] = []
-    ctx_by_task_id: dict[str, dict[str, Any]] = {}
-    for post in batch_posts:
-        if not isinstance(post, dict):
-            LOG.warning("Skipping non-dict post in batch.")
-            continue
-        post_id = post.get("post_id", "unknown")
-        contexts = post.get("contexts", [])
-        if not isinstance(contexts, list):
-            raise ValueError(f"post_id={post_id} has non-list contexts.")
-        for ctx in contexts:
-            if not isinstance(ctx, dict):
-                LOG.warning("post_id=%s has non-dict context; skipping.", post_id)
-                continue
-            if "text" not in ctx:
-                raise ValueError(f"post_id={post_id} context missing required key 'text'.")
-            text = str(ctx["text"])
-            task_id = stable_task_id(post_id, text)
-            tasks.append(
-                {
-                    "task_id": task_id,
-                    "input_text": format_input_text(post, text),
-                }
-            )
-            if task_id in ctx_by_task_id:
-                LOG.warning("Duplicate task_id detected for post_id=%s task_id=%s", post_id, task_id)
-            ctx_by_task_id[task_id] = ctx
-    return tasks, ctx_by_task_id
+        row["claim_extraction_status"] = "success"
+        row["claim_extraction_error"] = None
+        row["claim_extraction_output"] = output
+        row["claim_extraction_disposition"] = "success"
+    except Exception as e:
+        err = f"{type(e).__name__}: {e}"
+        row["claim_extraction_status"] = "failed"
+        row["claim_extraction_error"] = err
+        row["claim_extraction_output"] = None
+        row["claim_extraction_disposition"] = (
+            "terminal_failure" if _error_class(err) == "terminal" else "retryable_failure"
+        )
+        print(f"[error] task_id={task_id} extraction failed: {_format_exception_details(e)}", flush=True)
+    row["task_id"] = task_id
+    return row
 
 
-def merge_outputs_into_posts(
-    ctx_by_task_id: dict[str, dict[str, Any]],
-    claim_outputs: list[dict[str, Any]],
-) -> None:
-    unmatched_outputs = 0
-    for row in claim_outputs:
+def _extract_tasks(tasks: list[dict[str, Any]], *, max_workers: int, max_claims: int, max_retries: int) -> Iterator[dict[str, Any]]:
+    if not tasks:
+        return
+    futures: dict[Future[dict[str, Any]], dict[str, Any]] = {}
+    executor = ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
+    try:
+        for task in tasks:
+            fut = executor.submit(_worker, task, max_claims=max_claims, max_retries=max_retries)
+            futures[fut] = task
+        for fut in as_completed(futures):
+            yield fut.result()
+    finally:
+        executor.shutdown(wait=True, cancel_futures=False)
+
+
+def _build_tasks(posts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    skipped: list[dict[str, Any]] = []
+    pending: list[dict[str, Any]] = []
+    for row in posts:
         if not isinstance(row, dict):
-            LOG.warning("Skipping non-dict extractor row.")
             continue
-        task_id = str(row.get("task_id", "")).strip()
-        if not task_id:
-            LOG.warning("Extractor row missing task_id: %s", row)
+        task_id = _stable_task_id(row)
+        row["task_id"] = task_id
+        text = row.get("text_coreference_resolved")
+        if not isinstance(text, str) or not text.strip():
+            text = row.get("text")
+        if not isinstance(text, str) or not text.strip():
+            row["claim_extraction_status"] = "failed"
+            row["claim_extraction_error"] = "RuntimeError: missing text input"
+            row["claim_extraction_output"] = None
+            row["claim_extraction_disposition"] = "terminal_failure"
+            skipped.append(row)
             continue
-        ctx = ctx_by_task_id.get(task_id)
-        if ctx is None:
-            unmatched_outputs += 1
-            LOG.warning("No matching context found for task_id=%s", task_id)
+        state, _ = _normalize_row_state(row)
+        if state in ("completed", "terminal_failed"):
+            skipped.append(row)
             continue
-        if "output" not in row:
-            LOG.warning("Extractor row missing output for task_id=%s", task_id)
-            continue
-        if isinstance(row["output"], dict):
-            ctx["output"] = row["output"]
-        else:
-            LOG.warning("Extractor row has non-dict output for task_id=%s", task_id)
-            ctx["output"] = {
-                "parse_error": "non-dict output",
-                "raw_output": row["output"],
+        pending.append(
+            {
+                "task_id": task_id,
+                "input_text": _format_input_text(row, text),
+                "row": row,
             }
-    if unmatched_outputs:
-        LOG.warning("Unmatched extractor outputs in batch: %d", unmatched_outputs)
-
-    # Traceability warning for contexts that did not receive output.
-    missing_outputs = [tid for tid, ctx in ctx_by_task_id.items() if "output" not in ctx]
-
-    if missing_outputs:
-        if len(missing_outputs) == len(ctx_by_task_id):
-            LOG.warning("No outputs produced for entire batch.")
-        else:
-            LOG.debug("Contexts missing outputs in batch: %d", len(missing_outputs))
+        )
+    return skipped, pending
 
 
-def append_posts_jsonl(path: Path, posts: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        for post in posts:
-            f.write(json.dumps(post, ensure_ascii=False) + "\n")
-
-
-def load_completed_task_ids(path: Path) -> set[str]:
-    out: set[str] = set()
+def _load_existing_output_rows(path: Path) -> tuple[set[str], list[dict[str, Any]]]:
     if not path.exists():
-        return out
-    with path.open("r", encoding="utf-8") as f:
-        for line_no, line in enumerate(f, start=1):
-            s = line.strip()
-            if not s:
-                continue
-            try:
-                post = json.loads(s)
-            except json.JSONDecodeError:
-                LOG.warning("Skipping invalid JSONL line %d in %s", line_no, path)
-                continue
-            if not isinstance(post, dict):
-                continue
-            post_id = post.get("post_id", "unknown")
-            contexts = post.get("contexts", [])
-            if not isinstance(contexts, list):
-                continue
-            for ctx in contexts:
-                if not isinstance(ctx, dict):
-                    continue
-                if "output" not in ctx or "text" not in ctx:
-                    continue
-                task_id = stable_task_id(post_id, str(ctx["text"]))
-                out.add(task_id)
-    return out
+        return set(), []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return set(), []
+    posts = payload.get("posts")
+    if not isinstance(posts, list):
+        return set(), []
+    rows = [p for p in posts if isinstance(p, dict)]
+    task_ids: set[str] = set()
+    for row in rows:
+        task_id = str(row.get("task_id") or _stable_task_id(row))
+        row["task_id"] = task_id
+        task_ids.add(task_id)
+    return task_ids, rows
 
 
-def select_posts_with_task_ids(
-    batch_posts: list[dict[str, Any]],
-    selected_task_ids: set[str],
-) -> list[dict[str, Any]]:
-    selected_posts: list[dict[str, Any]] = []
-    for post in batch_posts:
-        if not isinstance(post, dict):
-            continue
-        post_id = post.get("post_id", "unknown")
-        contexts = post.get("contexts", [])
-        if not isinstance(contexts, list):
-            continue
-        keep = False
-        for ctx in contexts:
-            if not isinstance(ctx, dict) or "text" not in ctx:
-                continue
-            task_id = stable_task_id(post_id, str(ctx["text"]))
-            if task_id in selected_task_ids:
-                keep = True
-                break
-        if keep:
-            selected_posts.append(post)
-    return selected_posts
+def _load_payload(input_file: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    payload = json.loads(input_file.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Input JSON must be an object with top-level 'posts'.")
+    posts = payload.get("posts")
+    if not isinstance(posts, list):
+        raise ValueError("Input JSON must have top-level 'posts' list.")
+    rows = [p for p in posts if isinstance(p, dict)]
+    return payload, rows
+
+
+def batched(seq: list[dict[str, Any]], size: int) -> Iterator[list[dict[str, Any]]]:
+    step = max(1, int(size))
+    for i in range(0, len(seq), step):
+        yield seq[i : i + step]
 
 
 def run(
@@ -229,116 +424,92 @@ def run(
     batch_count: int,
     max_workers: int,
     max_claims: int,
+    max_retries: int,
     max_tasks: int,
-    extractor_fn: Callable[..., Iterator[dict[str, Any]]] = extract_vaccine_claims,
+    n_posts: int,
 ) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    payload = json.loads(input_file.read_text(encoding="utf-8"))
-    posts = payload.get("posts", [])
-    if not isinstance(posts, list):
-        raise ValueError("Input JSON must have top-level 'posts' list.")
+    payload, rows = _load_payload(input_file)
+    existing_ids, existing_rows = _load_existing_output_rows(out_file)
+    print(
+        f"[resume] {len(existing_ids)} existing rows found in output; removing from input pool",
+        flush=True,
+    )
 
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    completed_task_ids = load_completed_task_ids(out_file)
-    if not out_file.exists():
-        out_file.write_text("", encoding="utf-8")
-
-    total_posts = len(posts)
-    done_posts = 0
-    completed_this_run = 0
-    remaining_tasks = max(0, int(max_tasks))
-
-    for batch in batched(posts, batch_count):
-        tasks, ctx_by_task_id = build_context_tasks(batch)
-        pending_tasks = [t for t in tasks if t["task_id"] not in completed_task_ids]
-        if remaining_tasks > 0:
-            pending_tasks = pending_tasks[:remaining_tasks]
-        if not pending_tasks:
-            done_posts += len(batch)
-            print(f"[batch] skipped {done_posts}/{total_posts} posts (no pending tasks)")
+    total_input_rows = len(rows)
+    filtered_input: list[dict[str, Any]] = []
+    removed_by_existing = 0
+    for row in rows:
+        task_id = str(row.get("task_id") or _stable_task_id(row))
+        row["task_id"] = task_id
+        if task_id in existing_ids:
+            removed_by_existing += 1
             continue
+        filtered_input.append(row)
 
-        claim_outputs = list(
-            extractor_fn(
-                pending_tasks,
-                max_workers=max_workers,
-                max_claims=max_claims,
-            )
-        )
-        merge_outputs_into_posts(ctx_by_task_id, claim_outputs)
-        claimed_task_ids = {t["task_id"] for t in pending_tasks}
-        posts_to_append = select_posts_with_task_ids(batch, claimed_task_ids)
-        append_posts_jsonl(out_file, posts_to_append)
-        successful_ids = {
-            row["task_id"]
-            for row in claim_outputs
-            if isinstance(row, dict) and "output" in row
-        }
+    skipped_rows, pending_tasks = _build_tasks(filtered_input)
+    pending_before_limit = len(pending_tasks)
+    limit = max(0, int(n_posts))
+    if limit == 0:
+        limit = max(0, int(max_tasks))
+    if limit > 0:
+        pending_tasks = pending_tasks[:limit]
 
-        completed_task_ids.update(successful_ids)
-        completed_this_run += len(claimed_task_ids)
-        if remaining_tasks > 0:
-            remaining_tasks -= len(claimed_task_ids)
+    print(
+        "[startup] "
+        f"total_input_rows={total_input_rows} "
+        f"removed_due_to_existing={removed_by_existing} "
+        f"existing_rows_kept={len(existing_rows)} "
+        f"skipped_pre_dump={len(skipped_rows)} "
+        f"pending_before_limit={pending_before_limit} "
+        f"pending_after_limit={len(pending_tasks)}",
+        flush=True,
+    )
+    meta = {k: v for k, v in payload.items() if k != "posts"}
+    writer = PostsJsonStreamWriter(out_file, meta=meta)
 
-        done_posts += len(batch)
-        print(
-            f"[batch] wrote {done_posts}/{total_posts} posts to {out_file} "
-            f"(tasks completed this run: {completed_this_run})"
-        )
-        if max_tasks > 0 and remaining_tasks <= 0:
-            break
+    # Requirement: filtered rows are dumped first before prompting starts.
+    for row in existing_rows:
+        writer.write_post(row)
+    for row in skipped_rows:
+        writer.write_post(row)
+    print(
+        f"[filter] pre-dumped {len(existing_rows) + len(skipped_rows)} rows to {out_file.resolve()}",
+        flush=True,
+    )
 
-    print(f"[ok] finished. output: {out_file.resolve()}")
+    completed = 0
+    for batch in batched(pending_tasks, batch_count):
+        for row in _extract_tasks(batch, max_workers=max_workers, max_claims=max_claims, max_retries=max_retries):
+            writer.write_post(row)
+            completed += 1
+        print(f"[progress] extracted {completed}/{len(pending_tasks)} pending rows", flush=True)
+    writer.finalize()
+    print(f"[ok] wrote {writer.written_posts} total rows -> {out_file.resolve()}", flush=True)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(prog="python -m apps.claim_extractor.get_claims")
-    ap.add_argument(
-        "--input-file",
-        type=Path,
-        default=DEFAULT_INPUT_FILE,
-        help=f"Input JSON file (default: {DEFAULT_INPUT_FILE}).",
-    )
-    ap.add_argument(
-        "--out-file",
-        type=Path,
-        default=DEFAULT_OUT_FILE,
-        help=f"Output JSONL file (default: {DEFAULT_OUT_FILE}).",
-    )
-    ap.add_argument(
-        "--batch-count",
-        type=int,
-        default=DEFAULT_BATCH_COUNT,
-        help=f"Posts per batch (default: {DEFAULT_BATCH_COUNT}).",
-    )
-    ap.add_argument(
-        "--max-workers",
-        type=int,
-        default=DEFAULT_MAX_WORKERS,
-        help=f"Thread workers for extraction (default: {DEFAULT_MAX_WORKERS}).",
-    )
-    ap.add_argument(
-        "--max-claims",
-        type=int,
-        default=DEFAULT_MAX_CLAIMS,
-        help=f"Max claims requested per context (default: {DEFAULT_MAX_CLAIMS}).",
-    )
+    ap.add_argument("--input-file", type=Path, default=DEFAULT_INPUT_FILE)
+    ap.add_argument("--out-file", type=Path, default=DEFAULT_OUT_FILE)
+    ap.add_argument("--batch-count", type=int, default=DEFAULT_BATCH_COUNT)
+    ap.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
+    ap.add_argument("--max-claims", type=int, default=DEFAULT_MAX_CLAIMS)
+    ap.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     ap.add_argument(
         "--max-tasks",
         type=int,
         default=DEFAULT_MAX_TASKS,
-        help=(
-            "Max number of context tasks to process this run "
-            f"(default: {DEFAULT_MAX_TASKS}; 0 means unlimited)."
-        ),
+        help="Deprecated alias for --n-posts (0 means unlimited).",
     )
+    ap.add_argument("--n-posts", type=int, default=DEFAULT_N_POSTS, help="Process at most N pending rows.")
     args = ap.parse_args()
-
     run(
         input_file=args.input_file,
         out_file=args.out_file,
         batch_count=max(1, int(args.batch_count)),
         max_workers=max(1, int(args.max_workers)),
         max_claims=max(1, int(args.max_claims)),
+        max_retries=max(1, int(args.max_retries)),
         max_tasks=max(0, int(args.max_tasks)),
+        n_posts=max(0, int(args.n_posts)),
     )
