@@ -4,16 +4,23 @@ import argparse
 import hashlib
 import json
 import os
-import random
-import time
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from threading import local
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from dotenv import load_dotenv
-from openai import AzureOpenAI
 from openai._exceptions import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+
+from apps.claim_extractor.api_requester import (
+    AzureClaimsClient,
+    ConcurrentApiRequester,
+    RequestResult,
+    RequestStatus,
+    RequestTask,
+    RetryPolicy,
+    ThrottlePolicy,
+    classify_error_text,
+    default_is_retryable_exception,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT_FILE = REPO_ROOT / "data" / "posts_for_term.json"
@@ -24,6 +31,8 @@ DEFAULT_MAX_CLAIMS = 8
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_MAX_TASKS = 0
 DEFAULT_N_POSTS = 0
+DEFAULT_TARGET_RPM = 90
+DEFAULT_429_COOLDOWN_S = 20.0
 
 load_dotenv()
 
@@ -71,26 +80,6 @@ CLAIMS_JSON_SCHEMA: dict[str, Any] = {
     },
 }
 
-RETRYABLE_ERROR_MARKERS = (
-    "apiconnectionerror",
-    "apitimeouterror",
-    "ratelimiterror",
-    "connection error",
-    "timeout",
-)
-NON_RETRYABLE_ERROR_MARKERS = (
-    "content_filter",
-    "content policy",
-    "content policy violation",
-    "responsible ai",
-    "invalid claim_stance_to_vaccines",
-    "invalid author_stance_to_claim",
-    "invalid attribution",
-)
-
-_thread_local = local()
-
-
 class PostsJsonStreamWriter:
     def __init__(self, final_path: Path, *, meta: dict[str, Any]) -> None:
         final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,24 +113,23 @@ class PostsJsonStreamWriter:
         self.tmp_path.replace(self.final_path)
 
 
-def _build_client() -> AzureOpenAI:
+def _build_client() -> AzureClaimsClient:
     if not AZURE_OPENAI_KEY:
         raise RuntimeError("Missing AZURE_OPENAI_KEY in environment.")
     if not AZURE_OPENAI_ENDPOINT:
         raise RuntimeError("Missing AZURE_OPENAI_ENDPOINT in environment.")
-    return AzureOpenAI(
+    return AzureClaimsClient(
         api_key=AZURE_OPENAI_KEY,
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_version=AZURE_OPENAI_API_VERSION,
+        model=MODEL_NAME,
+        system_prompt_builder=lambda payload: _build_system_prompt(max_claims=int(payload["max_claims"])),
+        user_prompt_builder=lambda payload: _build_user_prompt(
+            str(payload["input_text"]), max_claims=int(payload["max_claims"])
+        ),
+        response_schema=CLAIMS_JSON_SCHEMA,
+        output_parser=_parse_and_validate_output,
     )
-
-
-def _get_client() -> AzureOpenAI:
-    client = getattr(_thread_local, "client", None)
-    if client is None:
-        client = _build_client()
-        _thread_local.client = client
-    return client
 
 
 def _build_system_prompt(*, max_claims: int) -> str:
@@ -156,20 +144,6 @@ def _build_user_prompt(input_text: str, *, max_claims: int) -> str:
     )
 
 
-def _format_exception_details(exc: BaseException) -> str:
-    parts: list[str] = [f"{type(exc).__name__}: {exc}"]
-    status = getattr(exc, "status_code", None)
-    if status is not None:
-        parts.append(f"status={status}")
-    req = getattr(exc, "request", None)
-    if req is not None:
-        method = getattr(req, "method", None)
-        url = getattr(req, "url", None)
-        if method or url:
-            parts.append(f"request={method or '?'} {url or '?'}")
-    return " | ".join(parts)
-
-
 def _parse_and_validate_output(content: str) -> dict[str, Any]:
     parsed = json.loads(content.strip())
     if not isinstance(parsed, dict):
@@ -178,53 +152,6 @@ def _parse_and_validate_output(content: str) -> dict[str, Any]:
     if not isinstance(claims, list):
         raise ValueError("model output missing list field 'claims'")
     return parsed
-
-
-def _call_extract_with_retries(client: AzureOpenAI, *, input_text: str, max_claims: int, max_retries: int) -> dict[str, Any]:
-    last_err: Optional[BaseException] = None
-    for attempt in range(max_retries):
-        try:
-            resp = client.chat.completions.create(
-                model=MODEL_NAME,
-                temperature=0,
-                response_format={"type": "json_schema", "json_schema": CLAIMS_JSON_SCHEMA},
-                messages=[
-                    {"role": "system", "content": _build_system_prompt(max_claims=max_claims)},
-                    {"role": "user", "content": _build_user_prompt(input_text, max_claims=max_claims)},
-                ],
-            )
-            content = getattr(resp.choices[0].message, "content", None)
-            if not isinstance(content, str) or not content.strip():
-                raise RuntimeError("Model response content is empty.")
-            return _parse_and_validate_output(content)
-        except (RateLimitError, APITimeoutError, APIConnectionError) as e:
-            last_err = e
-            sleep_s = min(30.0, (2**attempt) * 0.75) + random.random() * 0.5
-            print(f"[warn] retryable error: {_format_exception_details(e)}", flush=True)
-            print(f"[retry] retrying in {sleep_s:.2f}s", flush=True)
-            time.sleep(sleep_s)
-        except APIStatusError as e:
-            last_err = e
-            status = getattr(e, "status_code", None)
-            print(f"[warn] api status error: {_format_exception_details(e)}", flush=True)
-            if status is not None and 500 <= int(status) <= 599:
-                sleep_s = min(30.0, (2**attempt) * 0.75) + random.random() * 0.5
-                print(f"[retry] retrying in {sleep_s:.2f}s", flush=True)
-                time.sleep(sleep_s)
-                continue
-            raise
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
-            last_err = e
-            print(f"[warn] parse/schema error: {_format_exception_details(e)}", flush=True)
-            if attempt >= 1:
-                raise
-            sleep_s = min(5.0, (2**attempt) * 0.5) + random.random() * 0.25
-            print(f"[retry] retrying in {sleep_s:.2f}s", flush=True)
-            time.sleep(sleep_s)
-    if last_err is None:
-        raise RuntimeError("Unknown error after retries")
-    print(f"[error] max retries reached; last error: {_format_exception_details(last_err)}", flush=True)
-    raise RuntimeError(f"{type(last_err).__name__}: {last_err}")
 
 
 def _stable_task_id(row: dict[str, Any]) -> str:
@@ -251,15 +178,6 @@ def _format_input_text(row: dict[str, Any], text: str) -> str:
     return text
 
 
-def _error_class(error_text: str) -> str:
-    e = (error_text or "").lower()
-    if any(m in e for m in NON_RETRYABLE_ERROR_MARKERS):
-        return "terminal"
-    if any(m in e for m in RETRYABLE_ERROR_MARKERS):
-        return "retryable"
-    return "retryable"
-
-
 def _normalize_row_state(row: dict[str, Any]) -> tuple[str, Optional[str]]:
     disposition = row.get("claim_extraction_disposition")
     if disposition == "success":
@@ -279,75 +197,37 @@ def _normalize_row_state(row: dict[str, Any]) -> tuple[str, Optional[str]]:
             return "completed", None
     if status == "failed":
         err = str(row.get("claim_extraction_error") or "")
-        if _error_class(err) == "terminal":
+        if classify_error_text(err) == RequestStatus.FAILED_TERMINAL:
             row["claim_extraction_disposition"] = "terminal_failure"
             return "terminal_failed", err
         row["claim_extraction_disposition"] = "retryable_failure"
         return "retryable_failed", err
 
-    # Legacy shape support: {output:{claims}} or {output:{failed,error}}
-    legacy = row.get("output")
-    if isinstance(legacy, dict):
-        if legacy.get("failed") is True:
-            err = str(legacy.get("error") or "")
-            if _error_class(err) == "terminal":
-                row["claim_extraction_disposition"] = "terminal_failure"
-                return "terminal_failed", err
-            row["claim_extraction_disposition"] = "retryable_failure"
-            return "retryable_failed", err
-        if isinstance(legacy.get("claims"), list):
-            row["claim_extraction_status"] = "success"
-            row["claim_extraction_output"] = {"claims": legacy.get("claims", [])}
-            row["claim_extraction_error"] = None
-            row["claim_extraction_disposition"] = "success"
-            return "completed", None
-
     row["claim_extraction_disposition"] = "unprocessed"
     return "unprocessed", None
 
 
-def _worker(task: dict[str, Any], *, max_claims: int, max_retries: int) -> dict[str, Any]:
-    row = task["row"]
-    task_id = task["task_id"]
-    input_text = task["input_text"]
-    client = _get_client()
-    try:
-        output = _call_extract_with_retries(
-            client,
-            input_text=input_text,
-            max_claims=max_claims,
-            max_retries=max_retries,
-        )
+def _is_retryable_exception(exc: BaseException) -> bool:
+    return default_is_retryable_exception(exc)
+
+
+def _apply_request_result(row: dict[str, Any], result: RequestResult) -> dict[str, Any]:
+    row["task_id"] = result.task_id
+    if result.status == RequestStatus.SUCCESS:
         row["claim_extraction_status"] = "success"
         row["claim_extraction_error"] = None
-        row["claim_extraction_output"] = output
+        row["claim_extraction_output"] = result.output
         row["claim_extraction_disposition"] = "success"
-    except Exception as e:
-        err = f"{type(e).__name__}: {e}"
-        row["claim_extraction_status"] = "failed"
-        row["claim_extraction_error"] = err
-        row["claim_extraction_output"] = None
-        row["claim_extraction_disposition"] = (
-            "terminal_failure" if _error_class(err) == "terminal" else "retryable_failure"
-        )
-        print(f"[error] task_id={task_id} extraction failed: {_format_exception_details(e)}", flush=True)
-    row["task_id"] = task_id
+        return row
+
+    row["claim_extraction_status"] = "failed"
+    row["claim_extraction_error"] = result.error
+    row["claim_extraction_output"] = None
+    if result.status == RequestStatus.FAILED_RETRYABLE:
+        row["claim_extraction_disposition"] = "retryable_failure"
+    else:
+        row["claim_extraction_disposition"] = "terminal_failure"
     return row
-
-
-def _extract_tasks(tasks: list[dict[str, Any]], *, max_workers: int, max_claims: int, max_retries: int) -> Iterator[dict[str, Any]]:
-    if not tasks:
-        return
-    futures: dict[Future[dict[str, Any]], dict[str, Any]] = {}
-    executor = ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
-    try:
-        for task in tasks:
-            fut = executor.submit(_worker, task, max_claims=max_claims, max_retries=max_retries)
-            futures[fut] = task
-        for fut in as_completed(futures):
-            yield fut.result()
-    finally:
-        executor.shutdown(wait=True, cancel_futures=False)
 
 
 def _build_tasks(posts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -477,10 +357,36 @@ def run(
         flush=True,
     )
 
+    client = _build_client()
+    throttle = ThrottlePolicy(
+        target_requests_per_minute=max(1, int(os.getenv("CLAIMS_TARGET_RPM", str(DEFAULT_TARGET_RPM)))),
+        global_429_cooldown_s=max(0.0, float(os.getenv("CLAIMS_429_COOLDOWN_S", str(DEFAULT_429_COOLDOWN_S)))),
+    )
+    retry_policy = RetryPolicy(max_retries=max_retries)
+    requester = ConcurrentApiRequester(
+        client=client,
+        max_workers=max_workers,
+        retry_policy=retry_policy,
+        throttle_policy=throttle,
+        is_retryable=_is_retryable_exception,
+        on_log=lambda msg: print(msg, flush=True),
+    )
+
     completed = 0
     for batch in batched(pending_tasks, batch_count):
-        for row in _extract_tasks(batch, max_workers=max_workers, max_claims=max_claims, max_retries=max_retries):
-            writer.write_post(row)
+        request_tasks = [
+            RequestTask(
+                task_id=t["task_id"],
+                payload={"input_text": t["input_text"], "max_claims": max_claims},
+            )
+            for t in batch
+        ]
+        row_by_task_id = {str(t["task_id"]): t["row"] for t in batch}
+        for result in requester.run(request_tasks):
+            row = row_by_task_id.get(result.task_id)
+            if row is None:
+                continue
+            writer.write_post(_apply_request_result(row, result))
             completed += 1
         print(f"[progress] extracted {completed}/{len(pending_tasks)} pending rows", flush=True)
     writer.finalize()
