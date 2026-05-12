@@ -18,9 +18,13 @@ Return JSON only with this shape:
   "claims": [
     {
       "claim": "...",
-      "claim_stance_to_vaccines": "pro" | "anti" | "neutral" | "unclear",
-      "author_stance_to_claim": "support" | "reject" | "neutral" | "unclear",
-      "attribution": "self" | "personal relation" | "authority" | "common knowledge" | "unknown"
+      "claim_vaccine_alignment_score": <number 0..1>,
+      "author_claim_agreement_score": <number 0..1>,
+      "attribution_anecdote_score": <number 0..1>,
+      "attribution_authority_score": <number 0..1>,
+      "attribution_common_knowledge_score": <number 0..1>
     }
   ]
 }
+
+All five scores must be numbers between 0 and 1 inclusive. Use decimals (e.g. 0.65) not words.

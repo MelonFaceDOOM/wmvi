@@ -21,6 +21,7 @@ from apps.claim_extractor.api_requester import (
     classify_error_text,
     default_is_retryable_exception,
 )
+from apps.claim_extractor.model_common import SCORE_FIELD_NAMES, parse_score_01
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT_FILE = REPO_ROOT / "data" / "posts_for_term.json"
@@ -45,9 +46,9 @@ AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
 
-CLAIM_STANCE_VALUES = ("pro", "anti", "neutral", "unclear")
-AUTHOR_STANCE_VALUES = ("support", "reject", "neutral", "unclear")
-ATTRIBUTION_VALUES = ("self", "personal relation", "authority", "common knowledge", "unknown")
+_SCORE_PROPS: dict[str, Any] = {
+    name: {"type": "number", "minimum": 0.0, "maximum": 1.0} for name in SCORE_FIELD_NAMES
+}
 
 CLAIMS_JSON_SCHEMA: dict[str, Any] = {
     "name": "vaccine_claim_extraction",
@@ -63,16 +64,9 @@ CLAIMS_JSON_SCHEMA: dict[str, Any] = {
                     "additionalProperties": False,
                     "properties": {
                         "claim": {"type": "string"},
-                        "claim_stance_to_vaccines": {"type": "string", "enum": list(CLAIM_STANCE_VALUES)},
-                        "author_stance_to_claim": {"type": "string", "enum": list(AUTHOR_STANCE_VALUES)},
-                        "attribution": {"type": "string", "enum": list(ATTRIBUTION_VALUES)},
+                        **_SCORE_PROPS,
                     },
-                    "required": [
-                        "claim",
-                        "claim_stance_to_vaccines",
-                        "author_stance_to_claim",
-                        "attribution",
-                    ],
+                    "required": ["claim", *SCORE_FIELD_NAMES],
                 },
             }
         },
@@ -151,6 +145,15 @@ def _parse_and_validate_output(content: str) -> dict[str, Any]:
     claims = parsed.get("claims")
     if not isinstance(claims, list):
         raise ValueError("model output missing list field 'claims'")
+    for i, c in enumerate(claims):
+        if not isinstance(c, dict):
+            raise ValueError(f"claims[{i}] is not an object")
+        if not isinstance(c.get("claim"), str):
+            raise ValueError(f"claims[{i}].claim must be a string")
+        for key in SCORE_FIELD_NAMES:
+            v, bad = parse_score_01(c.get(key))
+            if v is None or bad:
+                raise ValueError(f"claims[{i}].{key} must be a number in [0, 1]")
     return parsed
 
 

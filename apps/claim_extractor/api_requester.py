@@ -129,9 +129,11 @@ TERMINAL_ERROR_MARKERS = (
     "content policy",
     "content policy violation",
     "responsible ai",
-    "invalid claim_stance_to_vaccines",
-    "invalid author_stance_to_claim",
-    "invalid attribution",
+    "invalid claim_vaccine_alignment_score",
+    "invalid author_claim_agreement_score",
+    "invalid attribution_anecdote_score",
+    "invalid attribution_authority_score",
+    "invalid attribution_common_knowledge_score",
     "badrequesterror",
 )
 
