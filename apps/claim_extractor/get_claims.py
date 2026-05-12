@@ -37,7 +37,7 @@ DEFAULT_429_COOLDOWN_S = 20.0
 
 load_dotenv()
 
-MODEL_NAME = "gpt-5-mini"
+MODEL_NAME = "gpt-5.4-mini"
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 SYSTEM_PROMPT = (PROMPTS_DIR / "extract_system.txt").read_text(encoding="utf-8-sig")
 USER_PROMPT = (PROMPTS_DIR / "extract_user.txt").read_text(encoding="utf-8-sig")
