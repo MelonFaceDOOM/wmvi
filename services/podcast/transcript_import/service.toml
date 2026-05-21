@@ -1,0 +1,10 @@
+[service]
+description = "Import podcast transcript JSONL exports into prod (newer-wins merge)"
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+on_boot_sec = "10min"
+on_unit_inactive_sec = "24h"
+persistent = false

@@ -44,22 +44,22 @@ def stop_all(project_root: Path, user: bool) -> int:
         st = row.status
         if st.has_timer_unit:
             rc |= _try_run(
-                systemctl + ["disable", "--now", f"{row.name}.timer"])
+                systemctl + ["disable", "--now", f"{row.unit_name}.timer"])
 
     # 2) Stop services
     for row in installed:
         st = row.status
         if st.has_service_unit:
             rc |= _try_run(
-                systemctl + ["disable", "--now", f"{row.name}.service"])
+                systemctl + ["disable", "--now", f"{row.unit_name}.service"])
 
     # 3) Clean up failed states (optional but keeps status output clean)
     for row in installed:
         st = row.status
         if st.has_service_unit:
-            rc |= _try_run(systemctl + ["reset-failed", f"{row.name}.service"])
+            rc |= _try_run(systemctl + ["reset-failed", f"{row.unit_name}.service"])
         if st.has_timer_unit:
-            rc |= _try_run(systemctl + ["reset-failed", f"{row.name}.timer"])
+            rc |= _try_run(systemctl + ["reset-failed", f"{row.unit_name}.timer"])
 
     print("[done] stop-all complete")
     return rc
@@ -88,10 +88,10 @@ def start_all(project_root: Path, user: bool) -> int:
         st = row.status
         if st.has_timer_unit:
             rc |= _try_run(
-                systemctl + ["enable", "--now", f"{row.name}.timer"])
+                systemctl + ["enable", "--now", f"{row.unit_name}.timer"])
         elif st.has_service_unit:
             rc |= _try_run(
-                systemctl + ["enable", "--now", f"{row.name}.service"])
+                systemctl + ["enable", "--now", f"{row.unit_name}.service"])
 
     print("[done] start-all complete")
     return rc

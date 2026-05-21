@@ -1,0 +1,10 @@
+[service]
+description = "Export incremental podcast transcripts (id, transcript, updated_at) to JSONL for sync to prod"
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+on_boot_sec = "5min"
+on_unit_inactive_sec = "24h"
+persistent = false

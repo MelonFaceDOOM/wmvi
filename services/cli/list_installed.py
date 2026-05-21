@@ -8,6 +8,7 @@ from pathlib import Path
 
 from services.cli.lib.discover import discover_services
 from services.cli.lib.config import load_toml, parse_service_config
+from services.cli.lib.naming import normalize_service_id, unit_name_from_service_id
 from services.cli.lib.systemd import (
     SystemdNotAvailable,
     InstalledStatus,
@@ -35,31 +36,31 @@ def die(msg: str) -> None:
 
 def compute_installed_status(
     *,
-    service_name: str,
+    unit_name: str,
     has_timer_declared: bool,
     user: bool,
 ) -> InstalledStatus:
-    has_service_unit = unit_file_exists(service_name, "service", user=user)
-    has_timer_unit = unit_file_exists(service_name, "timer", user=user)
+    has_service_unit = unit_file_exists(unit_name, "service", user=user)
+    has_timer_unit = unit_file_exists(unit_name, "timer", user=user)
 
     # If not installed, don't waste systemctl calls
     service_enabled = service_active = None
     timer_enabled = timer_active = None
 
     if has_service_unit:
-        service_enabled = is_enabled(f"{service_name}.service", user=user)
-        service_active = is_active(f"{service_name}.service", user=user)
+        service_enabled = is_enabled(f"{unit_name}.service", user=user)
+        service_active = is_active(f"{unit_name}.service", user=user)
 
     # Timer states are only meaningful if timer is present (and usually only for oneshot+timer services)
     if has_timer_declared or has_timer_unit:
         if has_timer_unit:
-            timer_enabled = is_enabled(f"{service_name}.timer", user=user)
-            timer_active = is_active(f"{service_name}.timer", user=user)
+            timer_enabled = is_enabled(f"{unit_name}.timer", user=user)
+            timer_active = is_active(f"{unit_name}.timer", user=user)
         else:
             timer_enabled = timer_active = None
 
     return InstalledStatus(
-        name=service_name,
+        unit_name=unit_name,
         has_service_unit=has_service_unit,
         has_timer_unit=has_timer_unit,
         service_enabled=service_enabled,
@@ -75,7 +76,8 @@ class InstalledServiceInfo:
     Represents a service that is considered "installed" because at least one unit
     file exists in the target systemd unit directory.
     """
-    name: str
+    service_id: str
+    unit_name: str
     cfg: object | None
     cfg_err: str | None
     status: InstalledStatus
@@ -106,12 +108,13 @@ def get_installed_services(project_root: Path, user: bool) -> list[InstalledServ
     out: list[InstalledServiceInfo] = []
 
     for svc in discovered:
-        service_name = svc.name
+        service_id = normalize_service_id(svc.name)
+        unit_name = unit_name_from_service_id(service_id)
 
         try:
             data = load_toml(svc.toml_path)
             cfg = parse_service_config(
-                data=data, service_name=service_name, runtimes=RUNTIMES)
+                data=data, service_name=service_id, runtimes=RUNTIMES)
             cfg_err = None
         except Exception as e:
             # Still let it show up if unit files exist, but flag config parse error
@@ -121,7 +124,7 @@ def get_installed_services(project_root: Path, user: bool) -> list[InstalledServ
         has_timer_declared = bool(
             getattr(cfg, "timer", None)) if cfg is not None else False
         st = compute_installed_status(
-            service_name=service_name,
+            unit_name=unit_name,
             has_timer_declared=has_timer_declared,
             user=user,
         )
@@ -132,14 +135,15 @@ def get_installed_services(project_root: Path, user: bool) -> list[InstalledServ
 
         out.append(
             InstalledServiceInfo(
-                name=service_name,
+                service_id=service_id,
+                unit_name=unit_name,
                 cfg=cfg,
                 cfg_err=cfg_err,
                 status=st,
             )
         )
 
-    out.sort(key=lambda x: x.name)
+    out.sort(key=lambda x: x.service_id)
     return out
 
 
@@ -152,12 +156,12 @@ def list_installed(project_root: Path, user: bool) -> int:
 
     print("INSTALLED services:")
     for row in installed:
-        name = row.name
         cfg = row.cfg
         cfg_err = row.cfg_err
         st = row.status
 
-        print(f"- {name}")
+        print(f"- {row.service_id}")
+        print(f"    unit: {row.unit_name}")
 
         # Config summary (if parsable)
         if cfg is not None:
@@ -172,18 +176,15 @@ def list_installed(project_root: Path, user: bool) -> int:
 
         # Unit file presence
         print(
-            f"    unit files: service={
-                'yes' if st.has_service_unit else 'no'}, "
+            f"    unit files: service={'yes' if st.has_service_unit else 'no'}, "
             f"timer={'yes' if st.has_timer_unit else 'no'}"
         )
 
         # systemctl states (only if unit exists)
         if st.has_service_unit:
-            print(f"    service: enabled={
-                  st.service_enabled}, active={st.service_active}")
+            print(f"    service: enabled={st.service_enabled}, active={st.service_active}")
         if st.has_timer_unit:
-            print(f"    timer: enabled={
-                  st.timer_enabled}, active={st.timer_active}")
+            print(f"    timer: enabled={st.timer_enabled}, active={st.timer_active}")
 
     return 0
 

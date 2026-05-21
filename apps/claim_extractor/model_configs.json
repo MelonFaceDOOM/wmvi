@@ -1,32 +1,5 @@
 {
-  "profiles": {
-    "baseline": {
-      "claim_vaccine_alignment_score": "lexical_v1",
-      "author_claim_agreement_score": "rules_v1",
-      "attribution_anecdote_score": "rules_v1",
-      "attribution_authority_score": "rules_v1",
-      "attribution_common_knowledge_score": "rules_v1"
-    }
-  },
-  "variants": {
-    "claim_vaccine_alignment_score": {
-      "lexical_v1": {
-        "min_margin": 0.15
-      }
-    },
-    "author_claim_agreement_score": {
-      "rules_v1": {
-        "use_llm": false
-      }
-    },
-    "attribution_anecdote_score": {
-      "rules_v1": {}
-    },
-    "attribution_authority_score": {
-      "rules_v1": {}
-    },
-    "attribution_common_knowledge_score": {
-      "rules_v1": {}
-    }
-  }
+  "_note": "Batch pred_* merge via run_label_models was removed. Use apps/claim_extractor/labeler_lab Streamlit app for Ridge heads.",
+  "profiles": {},
+  "variants": {}
 }

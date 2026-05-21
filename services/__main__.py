@@ -92,13 +92,13 @@ def main() -> None:
 
     elif args.cmd == "stop-installed":
         from services.cli.bulk_control import stop_all
-        stop_all(Path.cwd().resolve(), user=args.user)
-        return
+
+        raise SystemExit(stop_all(Path.cwd().resolve(), user=args.user))
 
     elif args.cmd == "start-installed":
         from services.cli.bulk_control import start_all
-        start_all(Path.cwd().resolve(), user=args.user)
-        return
+
+        raise SystemExit(start_all(Path.cwd().resolve(), user=args.user))
 
     else:
         print(f"[error] unknown command: {args.cmd}", file=sys.stderr)

@@ -80,7 +80,7 @@ def is_enabled(unit: str, user: bool) -> str:
 
 @dataclass(frozen=True)
 class InstalledStatus:
-    name: str
+    unit_name: str
     has_service_unit: bool
     has_timer_unit: bool
     service_enabled: Optional[str]

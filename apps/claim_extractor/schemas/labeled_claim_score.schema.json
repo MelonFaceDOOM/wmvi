@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LabeledClaimScoreRow",
+  "description": "One JSONL line: supervised targets for claim-score models. Append new rows over time; merge key is (task_id, claim_index).",
+  "type": "object",
+  "required": ["task_id", "claim_index", "claim", "text_coreference_resolved"],
+  "properties": {
+    "task_id": { "type": "string" },
+    "claim_index": { "type": "integer", "minimum": 0 },
+    "claim": { "type": "string" },
+    "text_coreference_resolved": {
+      "type": "string",
+      "description": "Coref-resolved body or fallback to plain post text"
+    },
+    "claim_vaccine_alignment_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "author_claim_agreement_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "attribution_anecdote_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "attribution_authority_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "attribution_common_knowledge_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "label_source": {
+      "type": "string",
+      "enum": ["llm", "manual", "mixed"]
+    },
+    "post_id": {},
+    "platform": { "type": "string" },
+    "labeled_at": { "type": "string", "description": "ISO-8601 timestamp" },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": true
+}
