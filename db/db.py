@@ -42,12 +42,18 @@ def close_pool() -> None:
         _POOL = None
 
 
+def _should_tunnel(prefix: str, force_tunnel: bool) -> bool:
+    if force_tunnel:
+        return True
+    if os.environ.get("USE_SSH_TUNNEL") == "1":
+        return True
+    return os.environ.get(f"{prefix}_USE_SSH_TUNNEL") == "1"
+
+
 def close_tunnel() -> None:
-    """
-    No-op kept for compatibility with older code paths that may still call it.
-    SSH tunneling is no longer used.
-    """
-    return
+    from storage.ssh.tunnel import close_tunnel as _close_ssh_tunnel
+
+    _close_ssh_tunnel()
 
 
 def init_pool(
@@ -57,20 +63,9 @@ def init_pool(
     force_tunnel: bool = False,
     recreate: bool = False,
 ):
-    """
-    Initialize (or reinitialize) the global DB pool.
-
-    `force_tunnel` is retained for backward compatibility but is ignored.
-    """
+    """Initialize (or reinitialize) the global DB pool; optionally via SSH tunnel."""
     prefix = prefix.upper()
     global _POOL
-
-    if force_tunnel or os.environ.get("USE_SSH_TUNNEL") == "1":
-        logger.warning(
-            "SSH tunneling is no longer supported by db.db; ignoring tunnel request "
-            "(prefix=%s).",
-            prefix,
-        )
 
     if _POOL and not recreate:
         logger.info(
@@ -82,16 +77,29 @@ def init_pool(
     if recreate:
         logger.info("Recreating DB pool (prefix=%s).", prefix)
         close_pool()
+        close_tunnel()
 
     creds = _base_creds(prefix)
+    use_tunnel = _should_tunnel(prefix, force_tunnel)
+
+    if use_tunnel:
+        from storage.ssh.tunnel import open_tunnel
+
+        open_tunnel(creds["host"], creds["port"])
+        from storage.ssh.tunnel import local_bind_port
+
+        creds = dict(creds)
+        creds["host"] = "127.0.0.1"
+        creds["port"] = local_bind_port()
 
     logger.info(
-        "Initializing DB pool (prefix=%s, db=%s, host=%s, minconn=%d, maxconn=%d).",
+        "Initializing DB pool (prefix=%s, db=%s, host=%s, minconn=%d, maxconn=%d, tunnel=%s).",
         prefix,
         creds["database"],
         creds["host"],
         minconn,
         maxconn,
+        use_tunnel,
     )
 
     _POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, **creds)

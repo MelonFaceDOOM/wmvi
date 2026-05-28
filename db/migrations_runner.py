@@ -59,6 +59,47 @@ def record_migration(version: str, checksum: str) -> None:
         )
 
 
+def _migration_number(version: str) -> int:
+    return int(version.split("_", 1)[0])
+
+
+def stamp_migrations(
+    migrations_dir: str = "db/migrations",
+    *,
+    up_to: int | None = None,
+) -> List[str]:
+    """
+    Record migration files in schema_migrations without executing their SQL.
+
+    Use when the database already has the objects (e.g. restored from prod dump)
+    but schema_migrations is empty or behind.
+    """
+    ensure_migrations_table()
+    done = applied_migrations()
+    paths = sorted(glob.glob(os.path.join(migrations_dir, "*.sql")))
+    stamped: List[str] = []
+
+    for path in paths:
+        version = os.path.basename(path)
+        if up_to is not None and _migration_number(version) > up_to:
+            continue
+
+        checksum = _sha256_canonical_sql(path)
+
+        if version in done:
+            if done[version] != checksum:
+                raise RuntimeError(
+                    f"Checksum mismatch for migration {version}. "
+                    f"Previously: {done[version]} Now: {checksum}"
+                )
+            continue
+
+        record_migration(version, checksum)
+        stamped.append(version)
+
+    return stamped
+
+
 def run_migrations(migrations_dir: str = "db/migrations") -> List[str]:
     """
     Applies pending *.sql files in lexical order using getcursor() transactions.

@@ -1,0 +1,88 @@
+# Podcast export/import smoke test — DEV DB, home PC → nitwitch host (existing data, no seed/clear)
+# Run from repo root: c:\werkshtuf\wmvi
+
+# --- Expected .env (set before any step) ---
+
+DEFAULT_DB=DEV
+
+# Postgres (DEV = wmvi_dev on the network/nitwitch host)
+DEV_PGHOST=localhost
+DEV_PGPORT=5432
+DEV_PGDATABASE=wmvi_dev
+DEV_PGUSER=
+DEV_PGPASSWORD=
+DEV_PGSSLMODE=disable
+
+# DB: tunnel (remote Postgres on SSH host) OR direct LAN (DEV_PGHOST=192.168.2.32, USE_SSH_TUNNEL unset)
+USE_SSH_TUNNEL=1
+SSH_HOST=192.168.2.32
+SSH_USERNAME=
+SSH_PKEY=
+SSH_PORT=22
+
+# Export: read DEV → stage locally → upload via SFTP using SSH_* above
+PODCAST_EXPORT_STORAGE_KIND=sftp
+PODCAST_SYNC_LOCAL_DIR=./data/podcast_sync_exports
+
+# Import: nitwitch = HTTP from https://nitwitch.com/dl/... (hardcoded; not SSH_HOST)
+#          local   = read bundle from PODCAST_SYNC_LOCAL_DIR (skips HTTP; good for LAN-only)
+PODCAST_IMPORT_STORAGE_KIND=nitwitch
+
+# Optional local watermarks (delete export state file to export all transcripts, not just delta)
+# PODCAST_SYNC_STATE_FILE=./data/podcast_sync_export_state.json
+
+# SFTP remote path is hardcoded: /mnt/md0/nitwitch_dl/transcription_exports/podcast_transcripts/
+# (storage/nitwitch_paths.py — not .env)
+
+# --- Migrate DEV (needs 022_podcast_transcript_import_state) ---
+
+python -m scripts.migrate_db
+
+# --- Baseline (psql via tunnel or LAN) ---
+
+# SELECT count(*) FROM podcasts.episodes WHERE transcript IS NOT NULL AND btrim(transcript) <> '';
+# SELECT last_imported_at FROM sm.podcast_transcript_import_state WHERE id = 'global';
+
+# --- Count / export from a start date (uses transcript_updated_at, not episode publish date) ---
+
+SELECT count(*) FROM podcasts.episodes
+WHERE transcript IS NOT NULL AND btrim(transcript) <> ''
+  AND transcript_updated_at > '2026-05-01'::timestamptz;
+
+# Optional: by RSS publish time instead (export does NOT filter on this; count only)
+# SELECT count(*) FROM podcasts.episodes
+# WHERE transcript IS NOT NULL AND btrim(transcript) <> ''
+#   AND created_at_ts >= '2026-05-01'::timestamptz;
+
+python -m services.podcast.transcript_export --since 2026-05-01 --dry-run
+
+python -m services.podcast.transcript_export --since 2026-05-28
+
+# Note BUNDLE_ID = folder name under data\podcast_sync_exports\podcast_transcripts\ e.g. 2026-05-28T12-00-00Z
+# Bundles are schema v4: podcast_episodes_*.jsonl (identity + transcript), podcast_shows_*.jsonl (referenced shows only)
+
+# --- Optional: confirm SFTP deposit on nitwitch host (same SSH_HOST) ---
+
+# ssh -i %SSH_PKEY% %SSH_USERNAME%@%SSH_HOST% ls /mnt/md0/nitwitch_dl/transcription_exports/podcast_transcripts/BUNDLE_ID/
+
+# --- Import one bundle into DEV (idempotent if transcript_updated_at unchanged) ---
+
+python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID --dry-run
+
+python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID
+
+# --- Verify ---
+
+# SELECT * FROM sm.podcast_transcript_import_state;
+# SELECT count(*) FROM podcasts.episodes WHERE transcript IS NOT NULL AND btrim(transcript) <> '';
+
+# --- LAN-only round-trip (skip nitwitch HTTP; still tests SFTP upload if EXPORT_KIND=sftp) ---
+
+# PODCAST_IMPORT_STORAGE_KIND=local
+# python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID
+
+# --- Notes ---
+# Export default pool = DEV (no --prod). Import needs --dev (default pool is PROD).
+# Do not use --force on import against DEV unless you intend to replay every bundle on nitwitch.
+# --since overrides PODCAST_SYNC_STATE_FILE watermark for that run only.
+# Incremental later: omit --since (uses last_exported_at in data/podcast_sync_export_state.json).

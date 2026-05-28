@@ -11,14 +11,15 @@ from services.podcast.transcript_sync import db_export, db_shows
 from services.podcast.transcript_sync.format import (
     SCHEMA_VERSION,
     ExportManifest,
-    payload_filename,
+    episodes_payload_filename,
+    make_bundle_id,
     shows_payload_filename,
-    write_jsonl_row,
+    write_episode_jsonl_row,
     write_manifest,
     write_show_jsonl_row,
 )
 from services.podcast.transcript_sync.state import ExportState, load_export_state, save_export_state
-from services.podcast.transcript_sync.storage import export_bundle_dir, upload_export
+from storage.podcast_sync import export_bundle_dir, upload_export
 
 load_dotenv()
 
@@ -43,6 +44,7 @@ def run_export(
     dry_run: bool = False,
 ) -> ExportManifest | None:
     until_ts = _utc_now()
+    bundle_id = make_bundle_id(until_ts)
     export_date = until_ts.date().isoformat()
 
     state = load_export_state()
@@ -50,34 +52,29 @@ def run_export(
 
     with getcursor() as cur:
         total = db_export.count_exportable(cur, since_ts)
-        shows = db_shows.fetch_all_shows(cur)
 
     log.info(
-        "export window since=%s until=%s transcript_rows=%d shows=%d dry_run=%s",
+        "export window since=%s until=%s episode_rows=%d dry_run=%s",
         since_ts,
         until_ts,
         total,
-        len(shows),
         dry_run,
     )
 
     if dry_run:
         return None
 
-    bundle_dir = export_bundle_dir(export_date)
+    bundle_dir = export_bundle_dir(bundle_id)
     bundle_dir.mkdir(parents=True, exist_ok=True)
-    payload_path = bundle_dir / payload_filename(export_date)
-    shows_path = bundle_dir / shows_payload_filename(export_date)
+    payload_path = bundle_dir / episodes_payload_filename(bundle_id)
+    shows_path = bundle_dir / shows_payload_filename(bundle_id)
     manifest_path = bundle_dir / "manifest.json"
-
-    with shows_path.open("w", encoding="utf-8") as shows_fp:
-        for show in shows:
-            write_show_jsonl_row(shows_fp, show)
 
     row_count = 0
     max_updated: datetime | None = None
     after_ts: datetime | None = None
     after_id: str | None = None
+    podcast_ids: set[int] = set()
 
     with payload_path.open("w", encoding="utf-8") as out_fp:
         while True:
@@ -92,27 +89,39 @@ def run_export(
             if not batch:
                 break
             for row in batch:
-                write_jsonl_row(out_fp, row)
+                write_episode_jsonl_row(out_fp, row)
                 row_count += 1
+                if row.source_show_id is not None:
+                    podcast_ids.add(row.source_show_id)
                 if max_updated is None or row.transcript_updated_at > max_updated:
                     max_updated = row.transcript_updated_at
             last = batch[-1]
             after_ts = last.transcript_updated_at
-            after_id = last.id
+            after_id = last.source_episode_id
+
+    shows: list = []
+    if podcast_ids:
+        with getcursor() as cur:
+            shows = db_shows.fetch_shows_by_ids(cur, sorted(podcast_ids))
+
+    with shows_path.open("w", encoding="utf-8") as shows_fp:
+        for show in shows:
+            write_show_jsonl_row(shows_fp, show)
 
     manifest = ExportManifest(
         schema_version=SCHEMA_VERSION,
+        bundle_id=bundle_id,
         export_date=export_date,
         since_ts=since_ts,
         until_ts=until_ts,
         row_count=row_count,
-        payload=payload_filename(export_date),
-        shows_payload=shows_payload_filename(export_date),
+        payload=episodes_payload_filename(bundle_id),
+        shows_payload=shows_payload_filename(bundle_id),
         shows_count=len(shows),
     )
     write_manifest(manifest_path, manifest)
     log.info(
-        "wrote %d transcript rows to %s and %d shows to %s",
+        "wrote %d episode rows to %s and %d shows to %s",
         row_count,
         payload_path,
         len(shows),

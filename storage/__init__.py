@@ -1,5 +1,3 @@
-"""Backward-compatible re-exports; prefer `storage.backends` for new code."""
-
 from storage.backends import AzureBlobStorage, LocalFileStorage, StorageBackend
 
 __all__ = [

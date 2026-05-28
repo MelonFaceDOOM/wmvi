@@ -1,4 +1,4 @@
-"""Tests for podcast transcript export/import sync."""
+"""Tests for podcast transcript export/import sync (schema v4)."""
 
 from __future__ import annotations
 
@@ -7,42 +7,67 @@ from pathlib import Path
 
 import pytest
 
+from ingestion.podcast import compute_episode_id
+from services.podcast.transcript_sync.bundle_import import apply_bundle, dry_run_bundle
 from services.podcast.transcript_sync.format import (
+    SCHEMA_VERSION,
+    EpisodeExportRow,
     ExportManifest,
     ShowRow,
-    TranscriptRow,
-    iter_jsonl_rows,
+    episodes_payload_filename,
+    iter_episode_jsonl_rows,
     iter_show_jsonl_rows,
-    payload_filename,
+    make_bundle_id,
+    parse_bundle_id,
     read_manifest,
     should_apply_import,
     shows_payload_filename,
-    write_jsonl_row,
+    write_episode_jsonl_row,
     write_manifest,
     write_show_jsonl_row,
 )
+from services.podcast.transcript_sync.resolve import (
+    has_transcript_match_key,
+    target_episode_id,
+)
+from services.podcast.transcript_sync.rss_url import normalize_rss_url
 from services.podcast.transcript_sync.state import ExportState, load_export_state, save_export_state
 
 
-def test_transcript_row_jsonl_roundtrip(tmp_path: Path) -> None:
+def test_normalize_rss_url() -> None:
+    assert normalize_rss_url("HTTPS://Example.COM/feed/") == "https://example.com/feed"
+    assert normalize_rss_url("  ") is None
+    assert normalize_rss_url(None) is None
+
+
+def test_episode_export_row_jsonl_roundtrip(tmp_path: Path) -> None:
     ts = datetime(2026, 5, 19, 3, 14, tzinfo=timezone.utc)
-    row = TranscriptRow(id="ep1", transcript="hello world", transcript_updated_at=ts)
+    row = EpisodeExportRow(
+        show_rss_url="https://example.com/feed.xml",
+        guid="ep-guid-1",
+        download_url="https://cdn.example.com/a.mp3",
+        title="Episode 1",
+        transcript="hello world",
+        transcript_updated_at=ts,
+        source_show_id=7,
+        source_episode_id="ep_7_abc",
+    )
     out = tmp_path / "rows.jsonl"
     with out.open("w", encoding="utf-8") as fp:
-        write_jsonl_row(fp, row)
-    rows = list(iter_jsonl_rows(out))
+        write_episode_jsonl_row(fp, row)
+    rows = list(iter_episode_jsonl_rows(out))
     assert len(rows) == 1
-    assert rows[0].id == "ep1"
+    assert rows[0].show_rss_url == "https://example.com/feed.xml"
+    assert rows[0].guid == "ep-guid-1"
     assert rows[0].transcript == "hello world"
-    assert rows[0].transcript_updated_at == ts
 
 
 def test_show_row_jsonl_roundtrip(tmp_path: Path) -> None:
     ts = datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc)
     row = ShowRow(
-        id=7,
-        title="My Podcast",
         rss_url="https://example.com/feed.xml",
+        title="My Podcast",
+        source_show_id=7,
         last_fetch_ts=ts,
         last_http_status=200,
     )
@@ -51,33 +76,82 @@ def test_show_row_jsonl_roundtrip(tmp_path: Path) -> None:
         write_show_jsonl_row(fp, row)
     rows = list(iter_show_jsonl_rows(out))
     assert len(rows) == 1
-    assert rows[0].id == 7
-    assert rows[0].title == "My Podcast"
     assert rows[0].rss_url == "https://example.com/feed.xml"
-    assert rows[0].last_fetch_ts == ts
+    assert rows[0].source_show_id == 7
 
 
 def test_manifest_roundtrip(tmp_path: Path) -> None:
     since = datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc)
     until = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    bundle_id = "2026-05-19T12-00-00Z"
     manifest = ExportManifest(
-        schema_version=2,
+        schema_version=SCHEMA_VERSION,
+        bundle_id=bundle_id,
         export_date="2026-05-19",
         since_ts=since,
         until_ts=until,
         row_count=2,
-        payload=payload_filename("2026-05-19"),
-        shows_payload=shows_payload_filename("2026-05-19"),
-        shows_count=5,
+        payload=episodes_payload_filename(bundle_id),
+        shows_payload=shows_payload_filename(bundle_id),
+        shows_count=1,
     )
     path = tmp_path / "manifest.json"
     write_manifest(path, manifest)
     loaded = read_manifest(path)
-    assert loaded.export_date == "2026-05-19"
+    assert loaded.bundle_id == bundle_id
+    assert loaded.schema_version == 4
     assert loaded.row_count == 2
-    assert loaded.shows_count == 5
-    assert loaded.since_ts == since
-    assert loaded.until_ts == until
+
+
+def test_manifest_rejects_schema_v3(tmp_path: Path) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text(
+        '{"schema_version":3,"bundle_id":"x","export_date":"2026-05-19",'
+        '"until_ts":"2026-05-19T12:00:00+00:00","row_count":0,"payload":"p.jsonl"}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unsupported export bundle schema_version=3"):
+        read_manifest(path)
+
+
+def test_target_episode_id_stable_across_podcast_id() -> None:
+    ts = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    row = EpisodeExportRow(
+        show_rss_url="https://example.com/feed",
+        guid="g1",
+        transcript="t",
+        transcript_updated_at=ts,
+    )
+    id_a = target_episode_id(7, row)
+    id_b = target_episode_id(42, row)
+    assert id_a != id_b
+    assert id_a == compute_episode_id(
+        podcast_id=7, guid="g1", download_url=None, created_at_ts=None, title=None
+    )
+
+
+def test_has_transcript_match_key() -> None:
+    ts = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    assert has_transcript_match_key(
+        EpisodeExportRow(show_rss_url="https://x.com/f", guid="g", transcript="t", transcript_updated_at=ts)
+    )
+    assert has_transcript_match_key(
+        EpisodeExportRow(
+            show_rss_url="https://x.com/f",
+            download_url="https://cdn/x.mp3",
+            transcript="t",
+            transcript_updated_at=ts,
+        )
+    )
+    assert not has_transcript_match_key(
+        EpisodeExportRow(
+            show_rss_url="https://x.com/f",
+            title="Only title",
+            created_at_ts=ts,
+            transcript="t",
+            transcript_updated_at=ts,
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -131,10 +205,6 @@ def test_export_watermark_not_advanced_on_failed_upload(
         fail_upload,
     )
     monkeypatch.setattr(
-        "services.podcast.transcript_export.exporter.db_shows.fetch_all_shows",
-        lambda cur: [],
-    )
-    monkeypatch.setattr(
         "services.podcast.transcript_export.exporter.init_pool",
         lambda prefix: None,
     )
@@ -149,7 +219,7 @@ def test_export_watermark_not_advanced_on_failed_upload(
     )
     monkeypatch.setattr(
         "services.podcast.transcript_export.exporter.export_bundle_dir",
-        lambda export_date: tmp_path / "bundle",
+        lambda bundle_id: tmp_path / "bundle",
     )
 
     from services.podcast.transcript_export.exporter import run_export
@@ -161,10 +231,10 @@ def test_export_watermark_not_advanced_on_failed_upload(
     assert state.last_exported_at is None
 
 
-def test_export_writes_shows_jsonl(
+def test_export_writes_referenced_shows_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("PODCAST_SYNC_STORAGE_KIND", "skip")
+    monkeypatch.setenv("PODCAST_EXPORT_STORAGE_KIND", "skip")
     monkeypatch.setattr(
         "services.podcast.transcript_export.exporter.upload_export",
         lambda _m, _p, _s=None: None,
@@ -182,15 +252,19 @@ def test_export_writes_shows_jsonl(
         "services.podcast.transcript_export.exporter.getcursor",
         _fake_export_cursor,
     )
-    show = ShowRow(id=3, title="Test Show", rss_url="https://example.com/rss")
+    show = ShowRow(
+        rss_url="https://example.com/rss",
+        title="Test Show",
+        source_show_id=3,
+    )
     monkeypatch.setattr(
-        "services.podcast.transcript_export.exporter.db_shows.fetch_all_shows",
-        lambda cur: [show],
+        "services.podcast.transcript_export.exporter.db_shows.fetch_shows_by_ids",
+        lambda cur, ids: [show] if ids == [3] else [],
     )
     bundle = tmp_path / "bundle"
     monkeypatch.setattr(
         "services.podcast.transcript_export.exporter.export_bundle_dir",
-        lambda export_date: bundle,
+        lambda bundle_id: bundle,
     )
 
     from services.podcast.transcript_export.exporter import run_export
@@ -201,42 +275,104 @@ def test_export_writes_shows_jsonl(
     assert shows_path.is_file()
     rows = list(iter_show_jsonl_rows(shows_path))
     assert len(rows) == 1
-    assert rows[0].id == 3
-    assert rows[0].title == "Test Show"
+    assert rows[0].rss_url == "https://example.com/rss"
 
 
-def test_import_inserts_new_shows_before_transcripts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    bundle = tmp_path / "2026-05-19"
+def test_import_dry_run_counts_skipped_transcript_keys(tmp_path: Path) -> None:
+    bundle = tmp_path / "2026-05-19T12-00-00Z"
     bundle.mkdir()
-    show = ShowRow(id=9, title="New Show")
-    shows_path = bundle / shows_payload_filename("2026-05-19")
+    ts = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    show = ShowRow(rss_url="https://example.com/rss", title="Show")
+    shows_path = bundle / shows_payload_filename("2026-05-19T12-00-00Z")
     with shows_path.open("w", encoding="utf-8") as fp:
         write_show_jsonl_row(fp, show)
-    payload_path = bundle / payload_filename("2026-05-19")
-    payload_path.write_text("", encoding="utf-8")
+    episodes_path = bundle / episodes_payload_filename("2026-05-19T12-00-00Z")
+    with episodes_path.open("w", encoding="utf-8") as fp:
+        write_episode_jsonl_row(
+            fp,
+            EpisodeExportRow(
+                show_rss_url="https://example.com/rss",
+                guid="g1",
+                transcript="a",
+                transcript_updated_at=ts,
+            ),
+        )
+        write_episode_jsonl_row(
+            fp,
+            EpisodeExportRow(
+                show_rss_url="https://example.com/rss",
+                title="no key",
+                transcript="b",
+                transcript_updated_at=ts,
+            ),
+        )
+
+    stats = dry_run_bundle(shows_path=shows_path, episodes_path=episodes_path)
+    assert stats.episodes_seen == 2
+    assert stats.skipped_no_transcript_key == 1
+
+
+def test_import_calls_upsert_before_episodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle_id = "2026-05-19T12-00-00Z"
+    bundle = tmp_path / bundle_id
+    bundle.mkdir()
+    ts = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    shows_path = bundle / shows_payload_filename(bundle_id)
+    with shows_path.open("w", encoding="utf-8") as fp:
+        write_show_jsonl_row(fp, ShowRow(rss_url="https://example.com/rss", title="Show"))
+    episodes_path = bundle / episodes_payload_filename(bundle_id)
+    with episodes_path.open("w", encoding="utf-8") as fp:
+        write_episode_jsonl_row(
+            fp,
+            EpisodeExportRow(
+                show_rss_url="https://example.com/rss",
+                guid="g1",
+                transcript="text",
+                transcript_updated_at=ts,
+            ),
+        )
     manifest = ExportManifest(
-        schema_version=2,
+        schema_version=SCHEMA_VERSION,
+        bundle_id=bundle_id,
         export_date="2026-05-19",
         since_ts=None,
-        until_ts=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
-        row_count=0,
-        payload=payload_filename("2026-05-19"),
-        shows_payload=shows_payload_filename("2026-05-19"),
+        until_ts=ts,
+        row_count=1,
+        payload=episodes_payload_filename(bundle_id),
+        shows_payload=shows_payload_filename(bundle_id),
         shows_count=1,
     )
     write_manifest(bundle / "manifest.json", manifest)
 
-    inserted: list[list] = []
+    call_order: list[str] = []
 
-    def fake_insert(cur, rows):
-        inserted.append(rows)
+    def fake_upsert(cur, rows):
+        call_order.append("shows")
+        return {"https://example.com/rss": 99}
+
+    def fake_insert_eps(cur, rows):
+        call_order.append("episodes")
         return len(rows)
 
+    def fake_transcripts(cur, rows):
+        call_order.append("transcripts")
+        from services.podcast.transcript_sync.db_import import BatchImportResult
+
+        return BatchImportResult(seen=len(rows), updated=len(rows), registered=len(rows))
+
     monkeypatch.setattr(
-        "services.podcast.transcript_import.importer.db_shows.insert_new_shows",
-        fake_insert,
+        "services.podcast.transcript_sync.bundle_import.db_shows.upsert_shows",
+        fake_upsert,
+    )
+    monkeypatch.setattr(
+        "services.podcast.transcript_sync.bundle_import.db_episodes.insert_new_episodes",
+        fake_insert_eps,
+    )
+    monkeypatch.setattr(
+        "services.podcast.transcript_sync.bundle_import.db_import.apply_transcript_batch",
+        fake_transcripts,
     )
     monkeypatch.setattr(
         "services.podcast.transcript_import.importer.init_pool",
@@ -247,20 +383,22 @@ def test_import_inserts_new_shows_before_transcripts(
         lambda: None,
     )
     monkeypatch.setattr(
-        "services.podcast.transcript_import.importer.manifest_path_for_date",
-        lambda d: bundle / "manifest.json",
-    )
-    monkeypatch.setattr(
         "services.podcast.transcript_import.importer.getcursor",
         _fake_import_cursor,
     )
-    monkeypatch.setenv("PODCAST_SYNC_IMPORT_STATE_FILE", str(tmp_path / "import_state.json"))
+    monkeypatch.setattr(
+        "services.podcast.transcript_import.importer.export_bundle_dir",
+        lambda bid: bundle,
+    )
+    monkeypatch.setattr(
+        "services.podcast.transcript_import.importer.db_import_state.set_last_imported_at",
+        lambda cur, ts: None,
+    )
 
     from services.podcast.transcript_import.importer import run_import
 
-    run_import(prod=True, export_date="2026-05-19", dry_run=False, force=True)
-    assert len(inserted) == 1
-    assert inserted[0][0].id == 9
+    run_import(prod=True, bundle_id=bundle_id, dry_run=False, force=True)
+    assert call_order == ["shows", "episodes", "transcripts"]
 
 
 def test_export_watermark_advanced_after_success(
@@ -268,7 +406,7 @@ def test_export_watermark_advanced_after_success(
 ) -> None:
     state_path = tmp_path / "export_state.json"
     monkeypatch.setenv("PODCAST_SYNC_STATE_FILE", str(state_path))
-    monkeypatch.setenv("PODCAST_SYNC_STORAGE_KIND", "skip")
+    monkeypatch.setenv("PODCAST_EXPORT_STORAGE_KIND", "skip")
     save_export_state(ExportState(last_exported_at=None))
 
     monkeypatch.setattr(
@@ -276,8 +414,8 @@ def test_export_watermark_advanced_after_success(
         lambda _m, _p, _s=None: None,
     )
     monkeypatch.setattr(
-        "services.podcast.transcript_export.exporter.db_shows.fetch_all_shows",
-        lambda cur: [],
+        "services.podcast.transcript_export.exporter.db_shows.fetch_shows_by_ids",
+        lambda cur, ids: [],
     )
     monkeypatch.setattr(
         "services.podcast.transcript_export.exporter.init_pool",
@@ -295,7 +433,7 @@ def test_export_watermark_advanced_after_success(
     bundle = tmp_path / "bundle"
     monkeypatch.setattr(
         "services.podcast.transcript_export.exporter.export_bundle_dir",
-        lambda export_date: bundle,
+        lambda bundle_id: bundle,
     )
 
     from services.podcast.transcript_export.exporter import run_export
@@ -304,6 +442,12 @@ def test_export_watermark_advanced_after_success(
     state = load_export_state(state_path)
     assert state.last_exported_at is not None
     assert state.last_exported_at == datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc)
+
+
+def test_parse_bundle_id() -> None:
+    assert parse_bundle_id("2026-05-19T12-00-00Z") == datetime(
+        2026, 5, 19, 12, 0, 0, tzinfo=timezone.utc
+    )
 
 
 class _FakeCursor:
@@ -326,7 +470,20 @@ class _FakeCursor:
         if _FakeCursor._fetchall_calls > 1:
             return []
         ts = datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc)
-        return [("ep1", "transcript text", ts)]
+        return [
+            (
+                "ep_3_abc",
+                "guid-1",
+                "https://cdn.example.com/a.mp3",
+                ts,
+                "Title",
+                "Desc",
+                "transcript text",
+                ts,
+                3,
+                "https://example.com/rss",
+            )
+        ]
 
 
 def _fake_export_cursor(*args, **kwargs):

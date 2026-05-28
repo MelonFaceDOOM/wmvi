@@ -6,25 +6,19 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from db.db import close_pool, getcursor, init_pool
-from services.podcast.transcript_sync import db_import, db_shows
-from services.podcast.transcript_sync.format import (
-    ExportManifest,
-    iter_jsonl_rows,
-    iter_show_jsonl_rows,
-    read_manifest,
-)
-from services.podcast.transcript_sync.state import ImportState, load_import_state, save_import_state
-from services.podcast.transcript_sync.storage import (
+from services.podcast.transcript_sync import db_import_state
+from services.podcast.transcript_sync.bundle_import import ImportStats, apply_bundle, dry_run_bundle
+from services.podcast.transcript_sync.format import ExportManifest, read_manifest
+from storage.podcast_sync import (
     MANIFEST_NAME,
-    download_export_for_date,
-    find_latest_export_date,
-    manifest_path_for_date,
+    download_export_bundle,
+    export_bundle_dir,
+    list_pending_bundle_ids,
 )
 
 load_dotenv()
 
 log = logging.getLogger(__name__)
-BATCH_SIZE = db_import.DEFAULT_BATCH_SIZE
 
 
 def _setup_logging() -> None:
@@ -34,143 +28,119 @@ def _setup_logging() -> None:
     )
 
 
-def _resolve_export_date(export_date: str | None) -> str:
-    if export_date:
-        return export_date
-    latest = find_latest_export_date()
-    if latest is None:
-        raise FileNotFoundError("no export bundles found under PODCAST_SYNC_LOCAL_DIR")
-    return latest
-
-
-def _already_processed(
-    export_date: str,
-    row_count: int,
-    shows_count: int,
-    force: bool,
-) -> bool:
-    if force:
-        return False
-    state = load_import_state()
-    return (
-        state.export_date == export_date
-        and state.row_count == row_count
-        and state.shows_count == shows_count
-    )
-
-
-def _load_bundle(export_date: str) -> tuple[ExportManifest, Path, Path, Path | None]:
-    bundle_dir = manifest_path_for_date(export_date).parent
+def _load_bundle(bundle_id: str) -> tuple[ExportManifest, Path, Path | None]:
+    bundle_dir = export_bundle_dir(bundle_id)
     manifest_path = bundle_dir / MANIFEST_NAME
     if not manifest_path.is_file():
         bundle_dir.mkdir(parents=True, exist_ok=True)
-        download_export_for_date(export_date, bundle_dir)
+        download_export_bundle(bundle_id, bundle_dir)
     manifest = read_manifest(manifest_path)
-    payload_path = bundle_dir / manifest.payload
-    if not payload_path.is_file():
-        raise FileNotFoundError(f"missing payload: {payload_path}")
+    episodes_path = bundle_dir / manifest.payload
+    if not episodes_path.is_file():
+        raise FileNotFoundError(f"missing episodes payload: {episodes_path}")
     shows_path = None
     if manifest.shows_payload:
-        shows_path = bundle_dir / manifest.shows_payload
-        if not shows_path.is_file():
-            raise FileNotFoundError(f"missing shows payload: {shows_path}")
-    return manifest, manifest_path, payload_path, shows_path
+        candidate = bundle_dir / manifest.shows_payload
+        if candidate.is_file():
+            shows_path = candidate
+    return manifest, episodes_path, shows_path
+
+
+def _import_one_bundle(
+    bundle_id: str,
+    *,
+    dry_run: bool,
+) -> ExportManifest:
+    manifest, episodes_path, shows_path = _load_bundle(bundle_id)
+
+    log.info(
+        "import bundle_id=%s schema=%s episode_rows=%d shows=%d dry_run=%s",
+        manifest.bundle_id,
+        manifest.schema_version,
+        manifest.row_count,
+        manifest.shows_count,
+        dry_run,
+    )
+
+    if manifest.row_count == 0 and manifest.shows_count == 0:
+        log.info("empty bundle %s; nothing to apply", bundle_id)
+        return manifest
+
+    if dry_run:
+        stats = dry_run_bundle(shows_path=shows_path, episodes_path=episodes_path)
+    else:
+        with getcursor(commit=True) as cur:
+            stats = apply_bundle(
+                cur,
+                shows_path=shows_path,
+                episodes_path=episodes_path,
+            )
+
+    _log_import_stats(bundle_id, stats)
+    return manifest
+
+
+def _log_import_stats(bundle_id: str, stats: ImportStats) -> None:
+    log.info(
+        "bundle %s: episodes_seen=%d shows_upserted=%d episodes_inserted=%d "
+        "transcripts_applied=%d transcripts_updated=%d posts_registered=%d "
+        "skipped_no_show_rss=%d skipped_show_not_in_map=%d "
+        "skipped_no_transcript_key=%d skipped_id_collision=%d",
+        bundle_id,
+        stats.episodes_seen,
+        stats.shows_upserted,
+        stats.episodes_inserted,
+        stats.transcripts_applied,
+        stats.transcripts_updated,
+        stats.posts_registered,
+        stats.skipped_no_show_rss,
+        stats.skipped_show_not_in_map,
+        stats.skipped_no_transcript_key,
+        stats.skipped_id_collision,
+    )
 
 
 def run_import(
     *,
     prod: bool,
-    export_date: str | None = None,
+    bundle_id: str | None = None,
     dry_run: bool = False,
     force: bool = False,
 ) -> None:
-    date = _resolve_export_date(export_date)
-    manifest, manifest_path, payload_path, shows_path = _load_bundle(date)
-    shows_count = manifest.shows_count
-
-    log.info(
-        "import export_date=%s transcript_rows=%d shows=%d dry_run=%s force=%s",
-        manifest.export_date,
-        manifest.row_count,
-        shows_count,
-        dry_run,
-        force,
-    )
-
-    if _already_processed(manifest.export_date, manifest.row_count, shows_count, force):
-        log.info("export %s already applied; skipping", manifest.export_date)
-        return
-
-    if manifest.row_count == 0 and shows_count == 0:
-        log.info("empty export; nothing to apply")
-        if not dry_run:
-            save_import_state(
-                ImportState(
-                    export_date=manifest.export_date,
-                    row_count=0,
-                    shows_count=0,
-                    manifest_path=str(manifest_path),
-                )
+    if bundle_id:
+        pending = [bundle_id]
+    else:
+        with getcursor() as cur:
+            last_imported_at = db_import_state.get_last_imported_at(cur)
+        pending = list_pending_bundle_ids(last_imported_at, force=force)
+        if not pending:
+            log.info(
+                "no pending export bundles (last_imported_at=%s force=%s)",
+                last_imported_at,
+                force,
             )
-        return
-
-    shows_inserted = 0
-    if shows_path is not None:
-        show_rows = list(iter_show_jsonl_rows(shows_path))
-        if dry_run:
-            shows_inserted = len(show_rows)
-            log.info("dry-run: would import up to %d shows", shows_inserted)
-        else:
-            with getcursor(commit=True) as cur:
-                shows_inserted = db_shows.insert_new_shows(cur, show_rows)
-            log.info("inserted %d new shows", shows_inserted)
-
-    totals = {"seen": 0, "updated": 0, "registered": 0}
-    batch: list = []
-
-    for row in iter_jsonl_rows(payload_path):
-        batch.append(row)
-        if len(batch) >= BATCH_SIZE:
-            totals = _apply_transcript_batch(totals, batch, dry_run=dry_run)
-            batch = []
-
-    if batch:
-        totals = _apply_transcript_batch(totals, batch, dry_run=dry_run)
-
-    log.info(
-        "import complete shows_inserted=%d seen=%d updated=%d registered=%d",
-        shows_inserted,
-        totals["seen"],
-        totals["updated"],
-        totals["registered"],
-    )
-
-    if not dry_run:
-        save_import_state(
-            ImportState(
-                export_date=manifest.export_date,
-                row_count=manifest.row_count,
-                shows_count=shows_count,
-                manifest_path=str(manifest_path),
-            )
+            return
+        log.info(
+            "importing %d bundle(s) since last_imported_at=%s",
+            len(pending),
+            last_imported_at,
         )
 
+    max_until = None
+    for bid in pending:
+        manifest = _import_one_bundle(bid, dry_run=dry_run)
+        if manifest.until_ts and (max_until is None or manifest.until_ts > max_until):
+            max_until = manifest.until_ts
 
-def _apply_transcript_batch(totals: dict[str, int], batch: list, *, dry_run: bool) -> dict[str, int]:
-    if dry_run:
-        totals["seen"] += len(batch)
-        return totals
-    with getcursor(commit=True) as cur:
-        result = db_import.apply_batch(cur, batch)
-    totals["seen"] += result.seen
-    totals["updated"] += result.updated
-    totals["registered"] += result.registered
-    return totals
+    if not dry_run and max_until is not None:
+        with getcursor(commit=True) as cur:
+            db_import_state.set_last_imported_at(cur, max_until)
+        log.info("advanced last_imported_at to %s", max_until)
 
 
 def main(
     prod: bool = True,
-    export_date: str | None = None,
+    bundle_id: str | None = None,
     dry_run: bool = False,
     force: bool = False,
 ) -> None:
@@ -181,7 +151,7 @@ def main(
     try:
         run_import(
             prod=prod,
-            export_date=export_date,
+            bundle_id=bundle_id,
             dry_run=dry_run,
             force=force,
         )

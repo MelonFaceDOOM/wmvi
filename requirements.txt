@@ -14,7 +14,7 @@ PyNaCl==1.6.1
 cffi==2.0.0
 pycparser==2.23
 websocket-client==1.8.0
-sshtunnel
+paramiko==3.5.1
 
 # --- HTTP / URL tooling ---
 requests==2.32.3

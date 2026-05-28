@@ -8,8 +8,6 @@ from psycopg2.extras import execute_values
 
 from db.post_registry_utils import ensure_post_registered
 
-from .format import TranscriptRow
-
 log = logging.getLogger(__name__)
 
 DEFAULT_BATCH_SIZE = 500
@@ -30,18 +28,28 @@ RETURNING p.id;
 
 
 @dataclass
+class TranscriptApplyRow:
+    episode_id: str
+    transcript: str
+    transcript_updated_at: object
+
+
+@dataclass
 class BatchImportResult:
     seen: int
     updated: int
     registered: int
 
 
-def apply_batch(cur, rows: Sequence[TranscriptRow]) -> BatchImportResult:
+def apply_transcript_batch(
+    cur,
+    rows: Sequence[TranscriptApplyRow],
+) -> BatchImportResult:
     if not rows:
         return BatchImportResult(seen=0, updated=0, registered=0)
 
     values = [
-        (r.id, r.transcript, r.transcript_updated_at)
+        (r.episode_id, r.transcript, r.transcript_updated_at)
         for r in rows
     ]
     template = "(%s, %s, %s::timestamptz)"

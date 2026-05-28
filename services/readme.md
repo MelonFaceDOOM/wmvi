@@ -84,5 +84,71 @@ python -m services list-available
 python -m services list-installed
 python -m services list-installed --user
 
+## Storage and podcast transcript sync
+
+Shared connectors live under `storage/` (backends, SSH tunnel, podcast export/import I/O). `services/storage.py` re-exports blob/local backends for older imports.
+
+### SSH (DB tunnel + SFTP export)
+
+Used when the database or SFTP target is reachable only via SSH (e.g. GPU box → nitwitch Postgres).
+
+```bash
+USE_SSH_TUNNEL=1              # or PROD_USE_SSH_TUNNEL=1
+SSH_HOST=nitwitch.example
+SSH_USERNAME=melon
+SSH_PKEY=/home/melon/.ssh/wmvi_nitwitch_ed25519
+SSH_PORT=22                   # optional
+# Optional: OpenSSH connect timeout (seconds) and max wait for local forward to listen.
+# SSH_CONNECT_TIMEOUT=30
+# SSH_TUNNEL_READY_TIMEOUT=60
+# SSH_BIN=C:/Windows/System32/OpenSSH/ssh.exe
+```
+
+`init_pool()` in `db/db.py` runs OpenSSH `ssh -L` to `{PREFIX}_PGHOST:{PREFIX}_PGPORT` and connects via `127.0.0.1:<local port>`. Set `{PREFIX}_PGSSLMODE=disable` if local Postgres has no SSL.
+
+Generate a key (not stored in the repo): `ssh-keygen -t ed25519 -f ~/.ssh/wmvi_nitwitch_ed25519`, then install the public key in `authorized_keys` on the SSH host.
+
+### Podcast export (GPU / local DB → nitwitch files)
+
+```bash
+PODCAST_EXPORT_STORAGE_KIND=sftp   # skip | local | azure | sftp
+PODCAST_SYNC_LOCAL_DIR=./data/podcast_sync_exports
+```
+
+Export writes a schema **v4** bundle under `podcast_transcripts/{bundle_id}/` (UTC stamp like `2026-05-22T14-30-45Z`): `podcast_episodes_{bundle}.jsonl` (show `rss_url`, episode identity fields, transcript) and `podcast_shows_{bundle}.jsonl` (only shows referenced by those episodes). Matching on import is by canonical `rss_url` + `compute_episode_id` (not source DB ids). Upload path: `/mnt/md0/nitwitch_dl/transcription_exports/` (mirrored at https://nitwitch.com/dl/transcription_exports/podcast_transcripts/).
+
+```bash
+USE_SSH_TUNNEL=1 python -m services.podcast.transcript_export --prod
+```
+
+### Podcast import (nitwitch HTTP → Azure prod DB)
+
+```bash
+PODCAST_IMPORT_STORAGE_KIND=nitwitch   # local | azure | nitwitch
+# PROD_* → Azure Postgres (direct; no tunnel)
+```
+
+```bash
+python -m services.podcast.transcript_import
+```
+
+Import order per bundle: upsert shows (`rss_url`) → insert episodes (computed ids) → apply transcripts (requires guid or `download_url`). Applies bundles with `until_ts` after `sm.podcast_transcript_import_state.last_imported_at` (migration `022`). `--force` re-imports all bundles; `--bundle` for one run. v3 bundles are rejected.
+
+```bash
+python -m scripts.migrate_db --test
+python -m scripts.migrate_db --prod
+```
+
+Nitwitch URLs are hardcoded in `storage/nitwitch_paths.py` and `services/podcast/transcript_import/nitwitch_dl.py` (not `.env`).
+
+### Azure blob (optional)
+
+```bash
+AZURE_STORAGE_ACCOUNT=...
+AZURE_STORAGE_KEY=...
+AZURE_STORAGE_CONTAINER=...
+# Virtual folder inside the container (azure export/import only)
+PODCAST_SYNC_AZURE_BLOB_PREFIX=podcast_transcripts/
+```
 
 

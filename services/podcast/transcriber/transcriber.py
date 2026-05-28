@@ -85,7 +85,7 @@ def claim_next_episode(cur) -> Optional[Tuple[str, str]]:
                 transcription_started_at IS NULL
              OR transcription_started_at < now() - interval '6 hours'
           )
-        ORDER BY created_at_ts
+        ORDER BY transcription_started_at NULLS FIRST, created_at_ts
         LIMIT 1
         FOR UPDATE SKIP LOCKED
         """
