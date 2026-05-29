@@ -42,12 +42,20 @@ def close_pool() -> None:
         _POOL = None
 
 
+def _env_flag(name: str) -> bool:
+    """True for 1, true, yes, on (case-insensitive); used for USE_SSH_TUNNEL etc."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return False
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 def _should_tunnel(prefix: str, force_tunnel: bool) -> bool:
     if force_tunnel:
         return True
-    if os.environ.get("USE_SSH_TUNNEL") == "1":
+    if _env_flag("USE_SSH_TUNNEL"):
         return True
-    return os.environ.get(f"{prefix}_USE_SSH_TUNNEL") == "1"
+    return _env_flag(f"{prefix}_USE_SSH_TUNNEL")
 
 
 def close_tunnel() -> None:
@@ -80,26 +88,39 @@ def init_pool(
         close_tunnel()
 
     creds = _base_creds(prefix)
+    remote_host = creds["host"]
+    remote_port = creds["port"]
     use_tunnel = _should_tunnel(prefix, force_tunnel)
 
     if use_tunnel:
-        from storage.ssh.tunnel import open_tunnel
+        from storage.ssh.tunnel import open_tunnel, local_bind_port
 
-        open_tunnel(creds["host"], creds["port"])
-        from storage.ssh.tunnel import local_bind_port
-
+        open_tunnel(remote_host, remote_port)
         creds = dict(creds)
         creds["host"] = "127.0.0.1"
         creds["port"] = local_bind_port()
+    elif remote_host.strip().lower() in ("localhost", "127.0.0.1", "::1"):
+        logger.warning(
+            "DB pool for %s targets %s:%s without SSH tunnel "
+            "(set USE_SSH_TUNNEL=1 or %s_USE_SSH_TUNNEL=1 to reach Postgres on the SSH host).",
+            prefix,
+            remote_host,
+            remote_port,
+            prefix,
+        )
 
     logger.info(
-        "Initializing DB pool (prefix=%s, db=%s, host=%s, minconn=%d, maxconn=%d, tunnel=%s).",
+        "Initializing DB pool (prefix=%s, db=%s, host=%s, port=%s, "
+        "minconn=%d, maxconn=%d, tunnel=%s, remote=%s:%s).",
         prefix,
         creds["database"],
         creds["host"],
+        creds["port"],
         minconn,
         maxconn,
         use_tunnel,
+        remote_host if use_tunnel else "-",
+        remote_port if use_tunnel else "-",
     )
 
     _POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, **creds)

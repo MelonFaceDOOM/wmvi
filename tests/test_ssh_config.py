@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from db.db import _env_flag, _should_tunnel
 from storage.ssh.config import SSHConfig
 
 
@@ -92,6 +93,19 @@ def test_ssh_config_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert cfg.username == "melon"
     assert cfg.port == 2222
     assert cfg.pkey_path == key
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", " yes ", "on"])
+def test_env_flag_truthy(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("USE_SSH_TUNNEL", value)
+    assert _env_flag("USE_SSH_TUNNEL") is True
+    assert _should_tunnel("PROD", force_tunnel=False) is True
+
+
+def test_env_flag_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("USE_SSH_TUNNEL", raising=False)
+    monkeypatch.delenv("PROD_USE_SSH_TUNNEL", raising=False)
+    assert _should_tunnel("PROD", force_tunnel=False) is False
 
 
 def test_ssh_config_missing_env(monkeypatch: pytest.MonkeyPatch) -> None:
