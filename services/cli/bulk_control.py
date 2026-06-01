@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from services.cli.install import require_root_for_system_units
 from services.cli.lib.systemd import SystemdNotAvailable, systemctl_cmd
 from services.cli.list_installed import get_installed_services
 
@@ -27,6 +28,7 @@ def stop_all(project_root: Path, user: bool) -> int:
     - Then disable/stop the service unit (if present).
     Best-effort: continues on errors and returns nonzero if any command failed.
     """
+    require_root_for_system_units(user=user, action="stop-all")
     installed = get_installed_services(project_root, user=user)
     if not installed:
         print("No installed services found.")
@@ -68,10 +70,12 @@ def stop_all(project_root: Path, user: bool) -> int:
 def start_all(project_root: Path, user: bool) -> int:
     """
     Enable/start all installed services.
+    - Runs daemon-reload once (picks up unit file edits on disk).
     - If a timer unit exists, enable/start the timer.
     - Otherwise enable/start the service.
     Best-effort: continues on errors and returns nonzero if any command failed.
     """
+    require_root_for_system_units(user=user, action="start-all")
     installed = get_installed_services(project_root, user=user)
     if not installed:
         print("No installed services found.")
@@ -83,6 +87,7 @@ def start_all(project_root: Path, user: bool) -> int:
         die(str(e))
 
     rc = 0
+    rc |= _try_run(systemctl + ["daemon-reload"])
 
     for row in installed:
         st = row.status

@@ -229,7 +229,7 @@ def require_root_for_system_units(*, user: bool, action: str) -> None:
     if os.geteuid() != 0:
         die(
             f"{action} targets /etc/systemd/system and requires root. "
-            f"Run: sudo -E python -m services {action} <name> "
+            f"Run: sudo -E python -m services {action} "
             f"or use --user for ~/.config/systemd/user."
         )
 

@@ -45,22 +45,26 @@ def main() -> None:
         help="Uninstall user systemd unit (~/.config/systemd/user)",
     )
 
-    # stop installed
-    ap_stop_installed = sub.add_parser(
-        "stop-installed", help="Stop all installed services.")
-    ap_stop_installed.add_argument(
+    # stop-all
+    ap_stop_all = sub.add_parser(
+        "stop-all",
+        help="Disable/stop all installed services in this scope",
+    )
+    ap_stop_all.add_argument(
         "--user",
         action="store_true",
-        help="Install as user systemd unit (~/.config/systemd/user)",
+        help="Use user systemd units (~/.config/systemd/user) via systemctl --user",
     )
 
-    # start installed
-    ap_start_installed = sub.add_parser(
-        "start-installed", help="Start all installed services.")
-    ap_start_installed.add_argument(
+    # start-all
+    ap_start_all = sub.add_parser(
+        "start-all",
+        help="daemon-reload, then enable/start all installed services in this scope",
+    )
+    ap_start_all.add_argument(
         "--user",
         action="store_true",
-        help="Uninstall user systemd unit (~/.config/systemd/user)",
+        help="Use user systemd units (~/.config/systemd/user) via systemctl --user",
     )
 
     args = ap.parse_args()
@@ -90,12 +94,12 @@ def main() -> None:
         uninstall(service_name=name, user=args.user)
         return
 
-    elif args.cmd == "stop-installed":
+    elif args.cmd == "stop-all":
         from services.cli.bulk_control import stop_all
 
         raise SystemExit(stop_all(Path.cwd().resolve(), user=args.user))
 
-    elif args.cmd == "start-installed":
+    elif args.cmd == "start-all":
         from services.cli.bulk_control import start_all
 
         raise SystemExit(start_all(Path.cwd().resolve(), user=args.user))

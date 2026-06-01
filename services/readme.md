@@ -84,6 +84,36 @@ python -m services list-available
 python -m services list-installed
 python -m services list-installed --user
 
+# Bulk stop/start (installed units only, one scope per invocation)
+sudo -E python -m services stop-all
+sudo -E python -m services start-all
+python -m services stop-all --user
+python -m services start-all --user
+```
+
+`stop-all` and `start-all` only affect services that already have unit files in the chosen scope (`/etc/systemd/system` by default, or `~/.config/systemd/user` with `--user`). They do not install new services. System scope requires root (`sudo -E`); user scope uses `--user` on both commands.
+
+If you use **both** system and user units, run stop/start separately for each scope (`list-installed` vs `list-installed --user` to see what is installed where).
+
+### Upgrading (code-only)
+
+When unit files on disk are unchanged (no `install`, no template or `service.toml` changes):
+
+```bash
+cd /path/to/wmvi
+sudo -E python -m services stop-all
+git pull
+# venv / dependency updates as needed
+sudo -E python -m scripts.migrate_db --prod   # when schema changed
+sudo -E python -m services start-all          # daemon-reload + enable/start
+```
+
+User scope: add `--user` to the `python -m services` lines and omit `sudo`.
+
+`stop-all` uses `disable --now` so timers and longrunning services stay down during `git pull`. `start-all` runs `daemon-reload` then `enable --now`, which starts new processes that load the pulled code.
+
+Re-run `python -m services install <name>` when unit definitions must change (templates, `service.toml`, `SERVICE_ENV`, venv paths). Installing a new service from the repo still requires `install` once.
+
 ## Storage and podcast transcript sync
 
 Shared connectors live under `storage/` (backends, SSH tunnel, podcast export/import I/O). `services/storage.py` re-exports blob/local backends for older imports.
