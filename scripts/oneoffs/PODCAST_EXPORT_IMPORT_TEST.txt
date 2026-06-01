@@ -67,9 +67,9 @@ python -m services.podcast.transcript_export --since 2026-05-28
 
 # --- Import one bundle into DEV (idempotent if transcript_updated_at unchanged) ---
 
-python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID --dry-run
+python -m services.podcast.transcript_import --bundle BUNDLE_ID --dry-run
 
-python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID
+python -m services.podcast.transcript_import --bundle BUNDLE_ID
 
 # --- Verify ---
 
@@ -79,10 +79,10 @@ python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID
 # --- LAN-only round-trip (skip nitwitch HTTP; still tests SFTP upload if EXPORT_KIND=sftp) ---
 
 # PODCAST_IMPORT_STORAGE_KIND=local
-# python -m services.podcast.transcript_import --dev --bundle BUNDLE_ID
+# python -m services.podcast.transcript_import --bundle BUNDLE_ID
 
 # --- Notes ---
-# Export default pool = DEV (no --prod). Import needs --dev (default pool is PROD).
+# Export and import default pool = DEV (no --prod). Use --prod for production DB.
 # Do not use --force on import against DEV unless you intend to replay every bundle on nitwitch.
 # --since overrides PODCAST_SYNC_STATE_FILE watermark for that run only.
 # Incremental later: omit --since (uses last_exported_at in data/podcast_sync_export_state.json).

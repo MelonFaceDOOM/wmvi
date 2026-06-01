@@ -139,7 +139,7 @@ def run_import(
 
 
 def main(
-    prod: bool = True,
+    prod: bool = False,
     bundle_id: str | None = None,
     dry_run: bool = False,
     force: bool = False,
