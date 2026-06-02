@@ -281,11 +281,15 @@ def check_youtube_auth_files(_ctx: CheckContext) -> Result:
 
 
 def check_yt_proxy(_ctx: CheckContext) -> Result:
-    url = os.environ.get("YT_PROXY_URL", "").strip()
-    if not url:
+    raw = os.environ.get("YT_PROXY_URL", "").strip()
+    if not raw:
         return _warn("YT_PROXY_URL not set (yt-dlp uses direct connection)")
-    if not re.match(r"^https?://", url, re.I):
-        return _fail(f"YT_PROXY_URL must be http(s) URL, got: {url!r}")
+    try:
+        from storage.yt_proxy import normalize_proxy_url
+
+        url = normalize_proxy_url(raw)
+    except ValueError as e:
+        return _fail(str(e))
     try:
         import requests
 
@@ -351,7 +355,10 @@ def check_yt_dlp_smoke(_ctx: CheckContext) -> Result:
         except subprocess.TimeoutExpired:
             return _fail("yt-dlp smoke timed out (180s)")
 
-        produced = any(out_base.with_suffix(ext).exists() for ext in ("mp3", "m4a", "opus", "webm"))
+        produced = any(
+            out_base.with_suffix("." + ext).exists()
+            for ext in ("mp3", "m4a", "opus", "webm")
+        )
         if result.returncode == 0 and produced:
             return _ok("yt-dlp download smoke succeeded")
 

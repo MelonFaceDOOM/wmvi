@@ -80,3 +80,17 @@ def test_yt_proxy_args_set(monkeypatch):
     from storage.yt_proxy import yt_dlp_proxy_args
 
     assert yt_dlp_proxy_args() == ["--proxy", "http://user:pass@proxy.example:8080"]
+
+
+def test_normalize_proxy_url_proxidize():
+    from storage.yt_proxy import normalize_proxy_url
+
+    raw = "pg.proxi.es:20000:myuser:mypass"
+    assert normalize_proxy_url(raw) == "http://myuser:mypass@pg.proxi.es:20000"
+
+
+def test_normalize_proxy_url_http_unchanged():
+    from storage.yt_proxy import normalize_proxy_url
+
+    url = "http://user:pass@proxy.example:8080"
+    assert normalize_proxy_url(url) == url
