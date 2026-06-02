@@ -99,11 +99,23 @@ def _has_db_prefix(prefix: str) -> bool:
 # ----------------------------
 
 
+def _env_path() -> Path:
+    return REPO_ROOT / ".env"
+
+
+def _ensure_env_loaded() -> Path | None:
+    """Load repo .env when present (same as services via systemd EnvironmentFile)."""
+    env_path = _env_path()
+    if env_path.is_file():
+        load_dotenv(env_path, override=True)
+        return env_path
+    return None
+
+
 def check_env(_ctx: CheckContext) -> Result:
-    env_path = REPO_ROOT / ".env"
-    if not env_path.is_file():
-        return _fail(f".env not found at {env_path}")
-    load_dotenv(env_path, override=True)
+    env_path = _ensure_env_loaded()
+    if env_path is None:
+        return _fail(f".env not found at {_env_path()}")
     cwd = Path.cwd().resolve()
     if cwd != REPO_ROOT and REPO_ROOT not in cwd.parents:
         return _warn(
@@ -587,6 +599,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         print_menu()
         return 0
+
+    loaded = _ensure_env_loaded()
+    if loaded is None and not args.list:
+        print(f"[warn] {_env_path()} not found; DB/proxy checks may skip or fail")
 
     ctx = CheckContext(sample_audio=args.sample_audio, db_prefix=args.prefix)
 
