@@ -13,3 +13,4 @@ To refresh them:
 If downloads start failing with missing formats, bot-check, or JS challenge errors:
  - refresh cookies and user agent
  - make sure both `yt-dlp` and `yt-dlp-ejs` in the transcription venv are up to date
+supposedly yt-dlp[default] (in requirements-transcription) will install both.

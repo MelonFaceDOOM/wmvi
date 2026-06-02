@@ -1,0 +1,10 @@
+[service]
+description = "Unified content sync import (nitwitch bundles -> prod DB)"
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+# ~2h after export timer; allows upload to finish before prod pulls bundles.
+on_calendar = "*-*-* 04:30:00"
+persistent = true

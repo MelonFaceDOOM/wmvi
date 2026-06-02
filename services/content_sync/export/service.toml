@@ -1,0 +1,10 @@
+[service]
+description = "Unified content sync export (GPU dev DB -> nitwitch bundle)"
+type = "oneshot"
+runtime = "base"
+
+
+[timer]
+# Daily export; import timer runs later so SFTP upload can finish first.
+on_calendar = "*-*-* 02:15:00"
+persistent = true

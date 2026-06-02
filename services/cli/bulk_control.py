@@ -6,7 +6,11 @@ import sys
 from pathlib import Path
 
 from services.cli.install import require_root_for_system_units
-from services.cli.lib.systemd import SystemdNotAvailable, systemctl_cmd
+from services.cli.lib.systemd import (
+    SystemdNotAvailable,
+    reset_failed_if_failed,
+    systemctl_cmd,
+)
 from services.cli.list_installed import get_installed_services
 
 
@@ -41,27 +45,27 @@ def stop_all(project_root: Path, user: bool) -> int:
 
     rc = 0
 
-    # 1) Stop timers first
+    # 1) Clear failed state while units are still loaded
+    for row in installed:
+        st = row.status
+        if st.has_service_unit:
+            rc |= reset_failed_if_failed(f"{row.unit_name}.service", user)
+        if st.has_timer_unit:
+            rc |= reset_failed_if_failed(f"{row.unit_name}.timer", user)
+
+    # 2) Stop timers first
     for row in installed:
         st = row.status
         if st.has_timer_unit:
             rc |= _try_run(
                 systemctl + ["disable", "--now", f"{row.unit_name}.timer"])
 
-    # 2) Stop services
+    # 3) Stop services
     for row in installed:
         st = row.status
         if st.has_service_unit:
             rc |= _try_run(
                 systemctl + ["disable", "--now", f"{row.unit_name}.service"])
-
-    # 3) Clean up failed states (optional but keeps status output clean)
-    for row in installed:
-        st = row.status
-        if st.has_service_unit:
-            rc |= _try_run(systemctl + ["reset-failed", f"{row.unit_name}.service"])
-        if st.has_timer_unit:
-            rc |= _try_run(systemctl + ["reset-failed", f"{row.unit_name}.timer"])
 
     print("[done] stop-all complete")
     return rc

@@ -18,6 +18,7 @@ class TimerConfig:
     on_boot_sec: str = "2min"
     on_unit_inactive_sec: str = "5min"
     persistent: bool = False
+    on_calendar: str | None = None
 
 
 @dataclass(frozen=True)
@@ -58,10 +59,12 @@ def parse_service_config(
     timer_cfg = None
     t = data.get("timer")
     if isinstance(t, dict):
+        on_calendar = t.get("on_calendar")
         timer_cfg = TimerConfig(
             on_boot_sec=t.get("on_boot_sec", "2min"),
             on_unit_inactive_sec=t.get("on_unit_inactive_sec", "5min"),
             persistent=bool(t.get("persistent", False)),
+            on_calendar=str(on_calendar).strip() if on_calendar else None,
         )
 
     return ServiceConfig(

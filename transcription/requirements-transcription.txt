@@ -1,7 +1,7 @@
 # Core transcription
 faster-whisper==1.2.1
 ctranslate2==4.6.3
-yt-dlp
+yt-dlp[default]  # includes yt-dlp-ejs (YouTube JS challenges); needs system node
 # Audio handling
 ffmpeg-python
 soundfile

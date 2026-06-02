@@ -2,8 +2,7 @@
 2) install the following:
 
 sudo apt install ffmpeg
-sudo apt install firefox
-
+sudo apt install firefox-esr
 
 install nodejs 20.x:
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -11,5 +10,12 @@ sudo apt-get install -y nodejs
 node --version
 # expect v20.x or newer
 
-run firefox once to get cookies:
-firefox https://www.youtube.com
+3) YouTube cookies (graphical session on headless GPU):
+   See transcription/gpu-remote-desktop.md (xrdp + Firefox).
+   Cookie export steps: services/youtube/transcriber/process_and_troubleshooting.txt
+
+4) Verify environment (from repo root, transcription venv active):
+   python transcription/transcription_checklist.py --list
+   python transcription/transcription_checklist.py --group podcast
+   python transcription/transcription_checklist.py --group youtube
+   python transcription/transcription_checklist.py 0

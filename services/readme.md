@@ -49,6 +49,8 @@ and may be overridden via environment variables (set in .env)
 The service installer may add an extra argument when starting services based on `SERVICE_ENV`
 (e.g. `--prod` for production). `SERVICE_ENV` is loaded from the project `.env`.
 
+**Transcription env checks** (GPU box, `venvs/transcription`): `python transcription/transcription_checklist.py --group podcast` or `--group youtube` — see `transcription/setup_instructions.txt`.
+
 - `SERVICE_ENV=dev` → no extra args
 - `SERVICE_ENV=prod` → adds `--prod`
 
@@ -113,6 +115,54 @@ User scope: add `--user` to the `python -m services` lines and omit `sudo`.
 `stop-all` uses `disable --now` so timers and longrunning services stay down during `git pull`. `start-all` runs `daemon-reload` then `enable --now`, which starts new processes that load the pulled code.
 
 Re-run `python -m services install <name>` when unit definitions must change (templates, `service.toml`, `SERVICE_ENV`, venv paths). Installing a new service from the repo still requires `install` once.
+
+## Unified content sync (GPU → nitwitch → prod)
+
+One utility exports **all configured platforms** changed since the last run, uploads a bundle to nitwitch, and imports on prod. Replaces separate per-platform transcript export/import for the GPU workflow.
+
+**Platforms (v1):** `youtube_video` (+ segments sidecar), `youtube_comment`, `podcast_episode` (+ podcast shows sidecar).
+
+```bash
+# GPU / local (DEV pool unless --prod)
+CONTENT_SYNC_EXPORT_STORAGE_KIND=sftp   # or skip for local-only
+CONTENT_SYNC_LOCAL_DIR=./data/content_sync
+YT_PROXY_URL=http://...                 # optional; yt-dlp transcriber only (Proxidize)
+
+python -m scripts.content_sync export
+python -m scripts.content_sync export --since 2026-05-01T00:00:00+00:00 --dry-run
+
+# Prod
+python -m scripts.migrate_db --prod     # migration 023: sm.content_sync_state
+CONTENT_SYNC_IMPORT_STORAGE_KIND=nitwitch
+python -m scripts.content_sync import --prod
+```
+
+**Scheduled services** (install on the right host with `SERVICE_ENV` in `.env`):
+
+| Service id | Host | Timer (local time) |
+|------------|------|--------------------|
+| `content_sync/export` | GPU | daily `02:15` |
+| `content_sync/import` | prod | daily `04:30` |
+
+```bash
+# GPU box (SERVICE_ENV=dev)
+python -m services install content_sync/export
+
+# Prod (SERVICE_ENV=prod → unit runs with --prod)
+python -m services install content_sync/import
+```
+
+Timers use `OnCalendar` (see `service.toml`). Shared template adds `AccuracySec=1min` and `RandomizedDelaySec=30s` jitter. Manual runs: `python -m services.content_sync.export` / `services.content_sync.import`.
+
+After import, run existing `label_en` and `term_matcher` services on prod.
+
+**Notes:**
+
+- Dump uses natural keys `(platform, key1, key2)`, not `post_registry.id`.
+- `youtube.comment` rows from monitor on the GPU box are included when `youtube_comment` is exported; they are not part of podcast-style transcript bundles.
+- Podcast per-service `transcript_export` / `transcript_import` remain available; you can deprecate them once this path is stable.
+
+See `scripts/oneoffs/CONTENT_SYNC_TEST.txt` for a smoke checklist.
 
 ## Storage and podcast transcript sync
 

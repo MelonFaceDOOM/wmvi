@@ -6,6 +6,8 @@ import sys
 import logging
 from dotenv import load_dotenv
 
+from storage.yt_proxy import yt_dlp_proxy_args
+
 load_dotenv()
 
 log = logging.getLogger(__name__)
@@ -89,6 +91,7 @@ def download_yt_audio(url: str, audio_path: str) -> None:
         "--js-runtimes", "node",
         "--cookies", str(YT_COOKIES_PATH),
         "--add-headers", f"User-Agent:{FIREFOX_UA}",
+        *yt_dlp_proxy_args(),
         "-f", "bestaudio/best",
         "--extract-audio",
         "--audio-format", "mp3",

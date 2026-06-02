@@ -5,10 +5,11 @@ import sys
 import os
 from pathlib import Path
 
-from services.cli.lib.config import load_toml, parse_service_config
+from services.cli.lib.config import TimerConfig, load_toml, parse_service_config
 from services.cli.lib.render import load_template, render_template, write_text
 from services.cli.lib.systemd import (
     SystemdNotAvailable,
+    reset_failed_if_failed,
     systemctl_cmd,
     unit_paths,
 )
@@ -95,6 +96,21 @@ def timer_template(templates: Path) -> Path:
     if not p.exists():
         die(f"Missing template file: {p}")
     return p
+
+
+def timer_triggers(timer: TimerConfig) -> str:
+    if timer.on_calendar:
+        persistent = str(timer.persistent).lower()
+        return (
+            f"OnCalendar={timer.on_calendar}\n"
+            f"Persistent={persistent}"
+        )
+    persistent = str(timer.persistent).lower()
+    return (
+        f"OnBootSec={timer.on_boot_sec}\n"
+        f"OnUnitInactiveSec={timer.on_unit_inactive_sec}\n"
+        f"Persistent={persistent}"
+    )
 
 
 def make_replacements(
@@ -187,13 +203,7 @@ def install(
         t_tpl = load_template(t_tpl_path)
 
         timer_repl = dict(repl)
-        timer_repl.update(
-            {
-                "ON_BOOT_SEC": cfg.timer.on_boot_sec,
-                "ON_UNIT_INACTIVE_SEC": cfg.timer.on_unit_inactive_sec,
-                "PERSISTENT": str(cfg.timer.persistent).lower(),
-            }
-        )
+        timer_repl["TIMER_TRIGGERS"] = timer_triggers(cfg.timer)
         t_rendered = render_template(t_tpl, timer_repl)
         try:
             write_text(paths["timer"], t_rendered)
@@ -260,13 +270,15 @@ def uninstall(
         print("+", " ".join(cmd))
         subprocess.run(cmd, check=False)
 
+    # Clear failed state while units are still loaded (before disable unloads them).
+    if paths["service"].exists():
+        reset_failed_if_failed(f"{unit_name}.service", user)
+    if paths["timer"].exists():
+        reset_failed_if_failed(f"{unit_name}.timer", user)
+
     # Stop timers first (prevents re-trigger)
     try_run(systemctl + ["disable", "--now", f"{unit_name}.timer"])
     try_run(systemctl + ["disable", "--now", f"{unit_name}.service"])
-
-    # Clean up "failed" state so status output is clearer
-    try_run(systemctl + ["reset-failed", f"{unit_name}.service"])
-    try_run(systemctl + ["reset-failed", f"{unit_name}.timer"])
 
     # Remove unit files if they exist
     removed_any = False

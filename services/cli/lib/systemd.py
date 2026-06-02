@@ -78,6 +78,26 @@ def is_enabled(unit: str, user: bool) -> str:
     return out or "unknown"
 
 
+def is_failed(unit: str, user: bool) -> bool:
+    """True when systemctl is-failed reports the unit is in failed state."""
+    cmd = systemctl_cmd(user) + ["is-failed", unit]
+    rc, _ = _run_quiet(cmd)
+    return rc == 0
+
+
+def reset_failed_if_failed(unit: str, user: bool) -> int:
+    """
+    Run systemctl reset-failed only if the unit is currently failed.
+    Returns the reset-failed exit code, or 0 if skipped.
+    """
+    if not is_failed(unit, user):
+        return 0
+    cmd = systemctl_cmd(user) + ["reset-failed", unit]
+    print("+", " ".join(cmd))
+    p = subprocess.run(cmd, check=False)
+    return int(p.returncode or 0)
+
+
 @dataclass(frozen=True)
 class InstalledStatus:
     unit_name: str

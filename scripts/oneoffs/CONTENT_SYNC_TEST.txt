@@ -1,0 +1,26 @@
+# Unified content sync smoke test
+# Run from repo root. Requires migration 023 on import target.
+
+# --- Export (GPU / DEV) ---
+# CONTENT_SYNC_EXPORT_STORAGE_KIND=skip
+# CONTENT_SYNC_LOCAL_DIR=./data/content_sync
+
+python -m scripts.content_sync export --dry-run
+python -m scripts.content_sync export
+# Bundle under: ./data/content_sync/content_sync/<bundle_id>/
+
+# --- Import (prod) ---
+# CONTENT_SYNC_IMPORT_STORAGE_KIND=local   # or nitwitch after upload
+python -m scripts.migrate_db --prod
+python -m scripts.content_sync import --prod --bundle BUNDLE_ID --dry-run
+python -m scripts.content_sync import --prod --bundle BUNDLE_ID
+
+# --- Verify (prod) ---
+# SELECT * FROM sm.content_sync_state;
+# Episodes with transcript but no registry (should be empty after import):
+# SELECT e.id FROM podcasts.episodes e
+# WHERE e.transcript IS NOT NULL AND btrim(e.transcript) <> ''
+#   AND NOT EXISTS (
+#     SELECT 1 FROM sm.post_registry pr
+#     WHERE pr.platform = 'podcast_episode' AND pr.key1 = e.id AND pr.key2 = ''
+#   );
