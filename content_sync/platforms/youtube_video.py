@@ -65,8 +65,57 @@ def _row_to_dict(record: tuple) -> dict[str, Any]:
     }
 
 
+def _youtube_video_export_conditions(
+    *,
+    since: datetime | None,
+    until: datetime,
+) -> tuple[list[str], list[Any]]:
+    conditions = [
+        "v.transcript IS NOT NULL",
+        "btrim(v.transcript) <> ''",
+        "COALESCE(v.transcript_updated_at, v.date_entered) <= %s",
+    ]
+    params: list[Any] = [until]
+    if since is not None:
+        conditions.append("COALESCE(v.transcript_updated_at, v.date_entered) > %s")
+        params.append(since)
+    return conditions, params
+
+
 class YoutubeVideoHandler:
     platform = PLATFORM_YOUTUBE_VIDEO
+
+    def count_export_delta(
+        self,
+        cur,
+        *,
+        since: datetime | None,
+        until: datetime,
+    ) -> tuple[int, dict[str, int]]:
+        conditions, params = _youtube_video_export_conditions(since=since, until=until)
+        where = " AND ".join(conditions)
+        cur.execute(
+            f"SELECT COUNT(*)::bigint FROM youtube.video v WHERE {where}",
+            params,
+        )
+        video_count = int(cur.fetchone()[0])
+        sidecars: dict[str, int] = {}
+        if video_count:
+            cur.execute(
+                f"""
+                SELECT COUNT(*)::bigint
+                FROM youtube.transcript_segments s
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM youtube.video v
+                    WHERE v.video_id = s.video_id
+                      AND {where}
+                )
+                """,
+                params,
+            )
+            sidecars[SIDECAR_YOUTUBE_SEGMENTS] = int(cur.fetchone()[0])
+        return video_count, sidecars
 
     def export_delta(
         self,
@@ -75,15 +124,7 @@ class YoutubeVideoHandler:
         since: datetime | None,
         until: datetime,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        conditions = [
-            "v.transcript IS NOT NULL",
-            "btrim(v.transcript) <> ''",
-            "COALESCE(v.transcript_updated_at, v.date_entered) <= %s",
-        ]
-        params: list[Any] = [until]
-        if since is not None:
-            conditions.append("COALESCE(v.transcript_updated_at, v.date_entered) > %s")
-            params.append(since)
+        conditions, params = _youtube_video_export_conditions(since=since, until=until)
 
         sql = f"""
             SELECT

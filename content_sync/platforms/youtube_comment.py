@@ -37,8 +37,35 @@ def _row_to_dict(record: tuple) -> dict[str, Any]:
     }
 
 
+def _youtube_comment_export_conditions(
+    *,
+    since: datetime | None,
+    until: datetime,
+) -> tuple[list[str], list[Any]]:
+    conditions = ["c.date_entered <= %s"]
+    params: list[Any] = [until]
+    if since is not None:
+        conditions.append("c.date_entered > %s")
+        params.append(since)
+    return conditions, params
+
+
 class YoutubeCommentHandler:
     platform = PLATFORM_YOUTUBE_COMMENT
+
+    def count_export_delta(
+        self,
+        cur,
+        *,
+        since: datetime | None,
+        until: datetime,
+    ) -> tuple[int, dict[str, int]]:
+        conditions, params = _youtube_comment_export_conditions(since=since, until=until)
+        cur.execute(
+            f"SELECT COUNT(*)::bigint FROM youtube.comment c WHERE {' AND '.join(conditions)}",
+            params,
+        )
+        return int(cur.fetchone()[0]), {}
 
     def export_delta(
         self,
@@ -47,11 +74,7 @@ class YoutubeCommentHandler:
         since: datetime | None,
         until: datetime,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        conditions = ["c.date_entered <= %s"]
-        params: list[Any] = [until]
-        if since is not None:
-            conditions.append("c.date_entered > %s")
-            params.append(since)
+        conditions, params = _youtube_comment_export_conditions(since=since, until=until)
 
         sql = f"""
             SELECT

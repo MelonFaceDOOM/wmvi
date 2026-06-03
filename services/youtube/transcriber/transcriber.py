@@ -88,6 +88,21 @@ def _default_now_local() -> datetime:
     return datetime.now(LOCAL_TZ)
 
 
+def _session_label(start: datetime) -> str:
+    hour = start.hour
+    if hour == SESSION_STARTS[0][0]:
+        return "morning"
+    if hour == SESSION_STARTS[1][0]:
+        return "evening"
+    return f"{hour:02d}:{start.minute:02d}"
+
+
+def _idle_reason(now: datetime, window: SessionWindow) -> str:
+    if now < window.start:
+        return f"before_{_session_label(window.start)}_session"
+    return "outside_session_window"
+
+
 def build_slot_times(
     *,
     session_start_monotonic: float,
@@ -271,6 +286,25 @@ def _handle_signal(signum, frame):
 # ---------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------
+
+def count_claimable_videos(cur) -> int:
+    cur.execute(
+        """
+        SELECT COUNT(*)
+        FROM youtube.video
+        WHERE transcript IS NULL
+          AND (
+                transcription_started_at IS NULL
+             OR transcription_started_at < now() - interval '6 hours'
+          )
+          AND duration_seconds IS NOT NULL
+          AND duration_seconds <= %s
+        """,
+        (MAX_VID_LENGTH,),
+    )
+    row = cur.fetchone()
+    return int(row[0]) if row else 0
+
 
 def claim_next_video(cur) -> ClaimedVideo | None:
     cur.execute(
@@ -555,11 +589,22 @@ def run_scheduler_cycle(
     sleep_fn: Callable[[float], None] = time.sleep,
     session_runner: Callable[[SessionBudget], None] = run_one_session,
     budget_factory: Callable[[float], SessionBudget] | None = None,
+    count_claimable_fn: Callable[[Any], int] = count_claimable_videos,
+    cursor_factory: Callable[..., Any] = getcursor,
 ) -> None:
-    window = next_session_window(now_fn())
+    now = now_fn()
+    window = next_session_window(now)
 
     if not window.active:
-        logging.info("Sleeping until next session at %s", window.start.isoformat())
+        logging.info(
+            "Outside transcription window (now=%s, reason=%s); "
+            "sleeping until %s (%s session, %sh, America/Los_Angeles)",
+            now.isoformat(),
+            _idle_reason(now, window),
+            window.start.isoformat(),
+            _session_label(window.start),
+            SESSION_DURATION_HOURS,
+        )
         _sleep_until_datetime(window.start, now_fn=now_fn, sleep_fn=sleep_fn)
 
     now = now_fn()
@@ -575,16 +620,31 @@ def run_scheduler_cycle(
     else:
         budget = budget_factory(remaining_s)
 
+    try:
+        with cursor_factory(commit=False) as cur:
+            claimable = count_claimable_fn(cur)
+    except Exception:
+        logging.warning("Could not count claimable videos", exc_info=True)
+        claimable = None
+
     logging.info(
-        "Starting session: quota=%s end=%s",
+        "Starting transcription session (%s): now=%s quota=%s ends=%s "
+        "claimable_videos=%s",
+        _session_label(window.start),
+        now.isoformat(),
         VIDEOS_PER_SESSION,
         window.end.isoformat(),
+        claimable if claimable is not None else "unknown",
     )
     session_runner(budget)
 
     now = now_fn()
     if now < window.end:
-        logging.info("Session finished early; waiting until %s", window.end.isoformat())
+        logging.info(
+            "Session finished early (now=%s); waiting until %s",
+            now.isoformat(),
+            window.end.isoformat(),
+        )
         _sleep_until_datetime(window.end, now_fn=now_fn, sleep_fn=sleep_fn)
 
 
@@ -598,6 +658,15 @@ def main(prod=False) -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     init_pool(prefix="prod" if prod else "dev")
+
+    logging.info(
+        "youtube transcriber started (prod=%s); sessions %s Pacific, "
+        "%sh each, up to %s videos per session",
+        prod,
+        SESSION_STARTS,
+        SESSION_DURATION_HOURS,
+        VIDEOS_PER_SESSION,
+    )
 
     try:
         while True:

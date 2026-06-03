@@ -44,6 +44,16 @@ class PlatformHandler(Protocol):
         """
         ...
 
+    def count_export_delta(
+        self,
+        cur,
+        *,
+        since: datetime | None,
+        until: datetime,
+    ) -> tuple[int, dict[str, int]]:
+        """Row counts for dry-run (main platform rows, sidecar name -> count)."""
+        ...
+
     def import_bundle(
         self,
         cur,

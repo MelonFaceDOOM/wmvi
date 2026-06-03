@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
+from content_sync.export_runner import run_export
 from content_sync.format import (
     SCHEMA_VERSION,
     ContentSyncManifest,
@@ -16,6 +18,46 @@ from content_sync.format import (
     write_manifest,
 )
 from storage.nitwitch_http import parse_bundle_ids_from_index
+
+
+def test_run_export_dry_run_queries_counts(monkeypatch, caplog):
+    class FakeHandler:
+        platform = "fake_platform"
+
+        def count_export_delta(self, cur, *, since, until):
+            assert cur is mock_cur
+            return 7, {"fake_sidecar": 2}
+
+    mock_cur = MagicMock()
+    mock_cm = MagicMock()
+    mock_cm.__enter__.return_value = mock_cur
+    mock_cm.__exit__.return_value = False
+
+    monkeypatch.setattr(
+        "content_sync.export_runner.get_handlers",
+        lambda platforms: [FakeHandler()],
+    )
+    monkeypatch.setattr(
+        "db.db.getcursor",
+        lambda commit=False: mock_cm,
+    )
+    monkeypatch.setattr(
+        "content_sync.export_runner.load_export_state",
+        lambda: type("S", (), {"last_exported_at": None})(),
+    )
+    monkeypatch.setattr(
+        "content_sync.export_runner.save_export_state",
+        lambda state: pytest.fail("dry-run must not save state"),
+    )
+
+    since = datetime(2026, 2, 3, tzinfo=timezone.utc)
+    with caplog.at_level("INFO"):
+        result = run_export(since_override=since, dry_run=True)
+
+    assert result is None
+    assert "dry-run fake_platform: 7 rows" in caplog.text
+    assert "dry-run sidecar fake_sidecar: 2 rows" in caplog.text
+    assert "watermark unchanged" in caplog.text
 
 
 def test_make_bundle_id_roundtrip():

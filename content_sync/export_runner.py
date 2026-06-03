@@ -46,6 +46,17 @@ def run_export(
     )
 
     if dry_run:
+        from db.db import getcursor
+
+        with getcursor() as cur:
+            for handler in handlers:
+                row_count, sidecar_counts = handler.count_export_delta(
+                    cur, since=since_ts, until=until_ts
+                )
+                log.info("dry-run %s: %d rows", handler.platform, row_count)
+                for sidecar_name, count in sidecar_counts.items():
+                    log.info("dry-run sidecar %s: %d rows", sidecar_name, count)
+        log.info("dry-run complete; no bundle written, watermark unchanged")
         return None
 
     bundle_dir = export_bundle_dir(bundle_id)

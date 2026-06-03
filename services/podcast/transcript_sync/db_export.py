@@ -25,7 +25,11 @@ _EXPORT_SELECT = """
 """
 
 
-def count_exportable(cur, since_ts: datetime | None) -> int:
+def _export_window_conditions(
+    *,
+    since_ts: datetime | None,
+    until_ts: datetime | None,
+) -> tuple[list[str], list[Any]]:
     conditions = [
         "e.transcript IS NOT NULL",
         "btrim(e.transcript) <> ''",
@@ -33,12 +37,59 @@ def count_exportable(cur, since_ts: datetime | None) -> int:
         "btrim(s.rss_url) <> ''",
     ]
     params: list[Any] = []
+    if until_ts is not None:
+        conditions.append("e.transcript_updated_at <= %s")
+        params.append(until_ts)
     if since_ts is not None:
         conditions.append("e.transcript_updated_at > %s")
         params.append(since_ts)
+    return conditions, params
 
+
+def count_exportable(cur, since_ts: datetime | None) -> int:
+    conditions, params = _export_window_conditions(since_ts=since_ts, until_ts=None)
     sql = f"""
         SELECT COUNT(*)::bigint
+        FROM podcasts.episodes e
+        INNER JOIN podcasts.shows s ON s.id = e.podcast_id
+        WHERE {' AND '.join(conditions)}
+    """
+    cur.execute(sql, params)
+    return int(cur.fetchone()[0])
+
+
+def count_exportable_in_window(
+    cur,
+    *,
+    since_ts: datetime | None,
+    until_ts: datetime,
+) -> int:
+    conditions, params = _export_window_conditions(
+        since_ts=since_ts,
+        until_ts=until_ts,
+    )
+    sql = f"""
+        SELECT COUNT(*)::bigint
+        FROM podcasts.episodes e
+        INNER JOIN podcasts.shows s ON s.id = e.podcast_id
+        WHERE {' AND '.join(conditions)}
+    """
+    cur.execute(sql, params)
+    return int(cur.fetchone()[0])
+
+
+def count_export_shows_in_window(
+    cur,
+    *,
+    since_ts: datetime | None,
+    until_ts: datetime,
+) -> int:
+    conditions, params = _export_window_conditions(
+        since_ts=since_ts,
+        until_ts=until_ts,
+    )
+    sql = f"""
+        SELECT COUNT(DISTINCT e.podcast_id)::bigint
         FROM podcasts.episodes e
         INNER JOIN podcasts.shows s ON s.id = e.podcast_id
         WHERE {' AND '.join(conditions)}

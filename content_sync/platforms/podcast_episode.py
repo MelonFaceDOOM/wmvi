@@ -28,6 +28,24 @@ def _show_row_to_dict(row: ShowRow) -> dict[str, Any]:
 class PodcastEpisodeHandler:
     platform = PLATFORM_PODCAST_EPISODE
 
+    def count_export_delta(
+        self,
+        cur,
+        *,
+        since: datetime | None,
+        until: datetime,
+    ) -> tuple[int, dict[str, int]]:
+        episodes = db_export.count_exportable_in_window(
+            cur, since_ts=since, until_ts=until
+        )
+        shows = db_export.count_export_shows_in_window(
+            cur, since_ts=since, until_ts=until
+        )
+        sidecars: dict[str, int] = {}
+        if shows:
+            sidecars[SIDECAR_PODCAST_SHOWS] = shows
+        return episodes, sidecars
+
     def export_delta(
         self,
         cur,

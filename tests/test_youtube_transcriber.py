@@ -355,6 +355,8 @@ def test_run_scheduler_cycle_sleeps_to_start_runs_session_and_waits_to_end() -> 
         sleep_fn=sleeper,
         session_runner=session_runner,
         budget_factory=budget_factory,
+        count_claimable_fn=lambda cur: 3,
+        cursor_factory=DummyCursorFactory(),
     )
 
     assert seen["budget"] == "BUDGET"
