@@ -26,6 +26,3 @@ def _parse_args():
 if __name__ == "__main__":
     args = _parse_args()
     main(prod=args.prod)
-
-if __name__ == "__main__":
-    main()

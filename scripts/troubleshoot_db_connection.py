@@ -215,21 +215,28 @@ def probe_tunnel(prefix: str, ssh_cmd: list[str] | None) -> None:
             return
 
         p = prefix.upper()
-        conn = psycopg2.connect(
-            host="127.0.0.1",
-            port=local_port,
-            user=os.environ[f"{p}_PGUSER"],
-            password=os.environ[f"{p}_PGPASSWORD"],
-            dbname=os.environ.get(f"{p}_PGDATABASE", "postgres"),
-            sslmode=os.environ.get(f"{p}_PGSSLMODE", "require"),
-            connect_timeout=10,
-        )
         try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                print(f"  OK: SELECT 1 -> {cur.fetchone()}")
-        finally:
-            conn.close()
+            conn = psycopg2.connect(
+                host="127.0.0.1",
+                port=local_port,
+                user=os.environ[f"{p}_PGUSER"],
+                password=os.environ[f"{p}_PGPASSWORD"],
+                dbname=os.environ.get(f"{p}_PGDATABASE", "postgres"),
+                sslmode=os.environ.get(f"{p}_PGSSLMODE", "require"),
+                connect_timeout=10,
+            )
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    print(f"  OK: SELECT 1 -> {cur.fetchone()}")
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"  FAIL: {type(e).__name__}: {e}")
+            print(
+                "  Tunnel TCP is up but Postgres rejected/closed the session.\n"
+                "  On SSH_HOST, check: ss -tlnp | grep 5432 ; psql -h 127.0.0.1 -U ... -d ..."
+            )
     finally:
         proc.terminate()
         try:
