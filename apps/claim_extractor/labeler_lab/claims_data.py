@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
-from apps.claim_extractor.labeler_lab.text_builder import build_structured_input
+from apps.claim_extractor.labeler_lab.field_inputs import build_input_for_head
 from apps.claim_extractor.model_common import stable_task_id
 
 
@@ -62,8 +62,10 @@ def iter_success_claims(
 
 def build_xy_for_labels(
     posts: list[dict[str, Any]],
-    var_keys: list[str],
     labeled_rows: list[tuple[str, int, float]],
+    *,
+    input_var_keys: list[str],
+    score_field_name: str | None = None,
 ) -> tuple[list[str], list[float]]:
     idx = index_claims_by_key(posts)
 
@@ -74,6 +76,15 @@ def build_xy_for_labels(
         if key not in idx:
             continue
         post_row, claim_dict = idx[key]
-        texts.append(build_structured_input(var_keys, post_row, claim_dict))
+        texts.append(
+            build_input_for_head(
+                score_field_name=score_field_name,
+                input_var_keys=input_var_keys,
+                post_row=post_row,
+                claim_dict=claim_dict,
+                claim_index=cidx,
+                task_id=tid,
+            )
+        )
         ys.append(y)
     return texts, ys

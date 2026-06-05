@@ -19,9 +19,17 @@ def _parse_args():
         action="store_true",
         help="Run against PROD (default: dev).",
     )
+    ap.add_argument(
+        "--limit",
+        type=int,
+        metavar="N",
+        help="One-shot mode: transcribe up to N videos, then exit (skips session scheduler).",
+    )
     return ap.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    main(prod=args.prod)
+    if args.limit is not None and args.limit < 1:
+        raise SystemExit("--limit must be >= 1")
+    main(prod=args.prod, limit=args.limit)

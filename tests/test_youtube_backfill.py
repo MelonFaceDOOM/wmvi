@@ -28,6 +28,46 @@ def test_oldest_video_ts_for_term_returns_none_when_null(monkeypatch) -> None:
     assert bf.oldest_video_ts_for_term(123) is None
 
 
+def test_save_oldest_found_ts_returns_none_when_no_row(monkeypatch) -> None:
+    getcursor_fn, _cur = fake_getcursor(fetchone_value=None)
+    commits: list[bool] = []
+
+    def wrapped_getcursor(*_a, commit: bool = False, **_k):
+        commits.append(commit)
+        return getcursor_fn(commit=commit)
+
+    monkeypatch.setattr(bf, "getcursor", wrapped_getcursor)
+
+    out = bf.save_oldest_found_ts(123, datetime(2024, 6, 1, tzinfo=timezone.utc))
+    assert out is None
+    assert commits == [True]
+
+
+def test_save_oldest_found_ts_returns_stored_value(monkeypatch) -> None:
+    stored = datetime(2024, 5, 1, tzinfo=timezone.utc)
+    getcursor_fn, _cur = fake_getcursor(fetchone_value=(stored,))
+    commits: list[bool] = []
+
+    def wrapped_getcursor(*_a, commit: bool = False, **_k):
+        commits.append(commit)
+        return getcursor_fn(commit=commit)
+
+    monkeypatch.setattr(bf, "getcursor", wrapped_getcursor)
+
+    out = bf.save_oldest_found_ts(123, datetime(2024, 6, 1, tzinfo=timezone.utc))
+    assert out == stored
+    assert commits == [True]
+
+
+def test_window_notable_detects_inserts_and_empty() -> None:
+    empty = FakeScrapeWindowOutcome()
+    inserted = FakeScrapeWindowOutcome(found_v=1, ins_v=1)
+
+    assert bf._window_notable(empty, hit_max_pages=False, early_stop=False) is False
+    assert bf._window_notable(inserted, hit_max_pages=False, early_stop=False) is True
+    assert bf._window_notable(empty, hit_max_pages=True, early_stop=False) is True
+
+
 def test_oldest_video_ts_for_term_normalizes_to_utc(monkeypatch) -> None:
     naive = datetime(2024, 1, 1, 12, 0)  # naive
 
@@ -61,6 +101,7 @@ def test_backfill_term_raises_when_budget_too_low(monkeypatch) -> None:
 def test_backfill_term_uses_backfill_end_when_no_existing_data(monkeypatch) -> None:
     # No existing data -> use BACKFILL_END_UTC as published_before
     monkeypatch.setattr(bf, "oldest_video_ts_for_term", lambda _term_id: None)
+    monkeypatch.setattr(bf, "save_oldest_found_ts", lambda term_id, oldest_ts: oldest_ts)
 
     calls: list[tuple[datetime, datetime]] = []
 
@@ -88,6 +129,7 @@ def test_backfill_term_uses_backfill_end_when_no_existing_data(monkeypatch) -> N
 
 
 def test_backfill_term_shrinks_window_on_max_pages_and_retries_same_window(monkeypatch) -> None:
+    monkeypatch.setattr(bf, "save_oldest_found_ts", lambda term_id, oldest_ts: oldest_ts)
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 2, 1, tzinfo=timezone.utc)
 
@@ -120,6 +162,7 @@ def test_backfill_term_shrinks_window_on_max_pages_and_retries_same_window(monke
 
 
 def test_backfill_term_advances_published_before_backward_with_overlap(monkeypatch) -> None:
+    monkeypatch.setattr(bf, "save_oldest_found_ts", lambda term_id, oldest_ts: oldest_ts)
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 1, 20, tzinfo=timezone.utc)
 

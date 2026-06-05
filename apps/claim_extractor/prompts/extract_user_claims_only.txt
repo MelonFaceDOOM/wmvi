@@ -1,0 +1,23 @@
+--------------------------------------------------
+INSTRUCTIONS
+--------------------------------------------------
+Extract 0-{{max_claims}} vaccine-related claims. Return claim text only — no scores.
+
+
+--------------------------------------------------
+TEXT INPUT FOR EXTRACTION
+--------------------------------------------------
+{{text_input}}
+
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+Return JSON only with this shape:
+{
+  "claims": [
+    { "claim": "..." }
+  ]
+}
+
+Each claim object must contain only the "claim" string field.

@@ -21,6 +21,7 @@ from transcription.transcription import (
     transcribe_audio_file,
 )
 from .download_yt_audio import download_yt_audio, DownloadFailed
+from .yt_download_errors import DownloadFailureInfo
 from ..time import PACIFIC
 
 load_dotenv()
@@ -76,7 +77,7 @@ class TranscriptResult:
 
 @dataclass(frozen=True)
 class LoaderStepResult:
-    action: str  # "enqueue" | "retry" | "stop"
+    action: str  # "enqueue" | "skip" | "abort" | "stop"
     item: DownloadedAudio | None = None
 
 
@@ -287,18 +288,24 @@ def _handle_signal(signum, frame):
 # DB helpers
 # ---------------------------------------------------------------------
 
+_CLAIMABLE_WHERE = """
+    transcript IS NULL
+    AND transcription_failed_at IS NULL
+    AND (
+          transcription_started_at IS NULL
+       OR transcription_started_at < now() - interval '6 hours'
+    )
+    AND duration_seconds IS NOT NULL
+    AND duration_seconds <= %s
+"""
+
+
 def count_claimable_videos(cur) -> int:
     cur.execute(
-        """
+        f"""
         SELECT COUNT(*)
         FROM youtube.video
-        WHERE transcript IS NULL
-          AND (
-                transcription_started_at IS NULL
-             OR transcription_started_at < now() - interval '6 hours'
-          )
-          AND duration_seconds IS NOT NULL
-          AND duration_seconds <= %s
+        WHERE {_CLAIMABLE_WHERE}
         """,
         (MAX_VID_LENGTH,),
     )
@@ -308,17 +315,11 @@ def count_claimable_videos(cur) -> int:
 
 def claim_next_video(cur) -> ClaimedVideo | None:
     cur.execute(
-        """
+        f"""
         WITH next_video AS (
             SELECT video_id, url
             FROM youtube.video
-            WHERE transcript IS NULL
-              AND (
-                    transcription_started_at IS NULL
-                 OR transcription_started_at < now() - interval '6 hours'
-              )
-              AND duration_seconds IS NOT NULL
-              AND duration_seconds <= %s
+            WHERE {_CLAIMABLE_WHERE}
             ORDER BY created_at_ts
             LIMIT 1
             FOR UPDATE SKIP LOCKED
@@ -348,6 +349,19 @@ def save_transcript(cur, video_id: str, transcript: str) -> None:
          WHERE video_id = %s
         """,
         (transcript, video_id),
+    )
+
+
+def mark_transcription_failed(cur, video_id: str, reason: str) -> None:
+    cur.execute(
+        """
+        UPDATE youtube.video
+           SET transcription_failed_at = now(),
+               transcription_failure_reason = %s,
+               transcription_started_at = NULL
+         WHERE video_id = %s
+        """,
+        (reason[:500], video_id),
     )
 
 
@@ -384,12 +398,20 @@ def save_segments(cur, video_id: str, segments) -> None:
 # One-item helpers (primary test targets)
 # ---------------------------------------------------------------------
 
+def _download_failure_info(exc: DownloadFailed) -> DownloadFailureInfo:
+    info = getattr(exc, "info", None)
+    if isinstance(info, DownloadFailureInfo):
+        return info
+    return DownloadFailureInfo(summary=str(exc), category="retryable", detail=str(exc))
+
+
 def claim_and_download_one(
         budget: SessionBudget,
         *,
         cursor_factory=getcursor,
         claim_next_video_fn=claim_next_video,
         download_audio_fn=download_yt_audio,
+        mark_failed_fn=mark_transcription_failed,
         cleanup_tempdir_fn=_cleanup_tempdir,
         sleep_until_fn=_sleep_until_monotonic,
 ) -> LoaderStepResult:
@@ -415,24 +437,37 @@ def claim_and_download_one(
 
     try:
         download_audio_fn(claimed.url, audio_path)
-    # TODO clean up this logging a bit.
     except DownloadFailed as e:
-        err_text = str(e)
-        logging.warning(
-            "audio_loader: download failed for %s url=%s err=%s",
-            claimed.video_id,
-            claimed.url,
-            err_text,
-        )
-        if (
-                "Sign in to confirm you’re not a bot" in err_text
-                or "Use --cookies-from-browser or --cookies" in err_text
-                or "HTTP Error 403" in err_text
-        ):
-            logging.warning("audio_loader: likely auth/captcha issue for %s", claimed.video_id)
-
+        info = _download_failure_info(e)
         cleanup_tempdir_fn(td)
-        return LoaderStepResult(action="retry")
+
+        if info.category == "permanent":
+            with cursor_factory(commit=True) as cur:
+                mark_failed_fn(cur, claimed.video_id, info.summary)
+            log.warning(
+                "audio_loader: permanent failure for %s (%s); skipping",
+                claimed.video_id,
+                info.summary,
+            )
+            budget.release_slot()
+            return LoaderStepResult(action="skip")
+
+        if info.category in ("auth", "proxy"):
+            log.error(
+                "audio_loader: systemic %s failure for %s: %s",
+                info.category,
+                claimed.video_id,
+                info.summary,
+            )
+            return LoaderStepResult(action="abort")
+
+        log.warning(
+            "audio_loader: retryable failure for %s: %s",
+            claimed.video_id,
+            info.summary,
+        )
+        budget.release_slot()
+        return LoaderStepResult(action="skip")
 
     return LoaderStepResult(
         action="enqueue",
@@ -488,7 +523,12 @@ def audio_loader_worker(audio_q: queue.Queue, budget: SessionBudget) -> None:
             audio_q.put(None)
             return
 
-        if step.action == "retry":
+        if step.action == "abort":
+            log.error("audio_loader: stopping session due to systemic download failure")
+            audio_q.put(None)
+            return
+
+        if step.action == "skip":
             continue
 
         assert step.item is not None
@@ -648,7 +688,7 @@ def run_scheduler_cycle(
         _sleep_until_datetime(window.end, now_fn=now_fn, sleep_fn=sleep_fn)
 
 
-def main(prod=False) -> None:
+def main(prod: bool = False, limit: int | None = None) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -659,16 +699,32 @@ def main(prod=False) -> None:
 
     init_pool(prefix="prod" if prod else "dev")
 
-    logging.info(
-        "youtube transcriber started (prod=%s); sessions %s Pacific, "
-        "%sh each, up to %s videos per session",
-        prod,
-        SESSION_STARTS,
-        SESSION_DURATION_HOURS,
-        VIDEOS_PER_SESSION,
-    )
-
     try:
+        if limit is not None:
+            spread = 0.0 if limit <= 10 else SESSION_SPREAD_FRACTION
+            log.info(
+                "youtube transcriber: one-shot mode (prod=%s, limit=%s)",
+                prod,
+                limit,
+            )
+            budget = SessionBudget(
+                max_videos=limit,
+                session_seconds=86400.0,
+                spread_fraction=spread,
+            )
+            run_one_session(budget)
+            log.info("youtube transcriber: one-shot run complete")
+            return
+
+        log.info(
+            "youtube transcriber started (prod=%s); sessions %s Pacific, "
+            "%sh each, up to %s videos per session",
+            prod,
+            SESSION_STARTS,
+            SESSION_DURATION_HOURS,
+            VIDEOS_PER_SESSION,
+        )
+
         while True:
             run_scheduler_cycle()
     finally:

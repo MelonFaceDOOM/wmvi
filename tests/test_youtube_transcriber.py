@@ -213,7 +213,7 @@ def test_claim_and_download_one_releases_slot_when_no_video_claimed() -> None:
     assert cursor_factory.commit_calls == [True]
 
 
-def test_claim_and_download_one_retries_on_download_failure_and_cleans_up() -> None:
+def test_claim_and_download_one_skips_retryable_download_failure_and_releases_slot() -> None:
     budget = tr.SessionBudget(
         max_videos=1,
         session_seconds=60.0,
@@ -239,9 +239,72 @@ def test_claim_and_download_one_retries_on_download_failure_and_cleans_up() -> N
         sleep_until_fn=lambda target: None,
     )
 
-    assert step.action == "retry"
+    assert step.action == "skip"
     assert step.item is None
     assert len(cleanup_calls) == 1
+    assert budget.claimed == 0
+
+
+def test_claim_and_download_one_marks_permanent_failure_and_skips() -> None:
+    budget = tr.SessionBudget(
+        max_videos=1,
+        session_seconds=60.0,
+        monotonic_fn=Mono(0.0),
+        uniform_fn=lambda a, b: a,
+    )
+    cursor_factory = DummyCursorFactory()
+    mark_calls: list[tuple[str, str]] = []
+
+    def fail_download(url: str, path: str) -> None:
+        raise tr.DownloadFailed(
+            tr.DownloadFailureInfo(
+                summary="Video unavailable",
+                category="permanent",
+            )
+        )
+
+    step = tr.claim_and_download_one(
+        budget,
+        cursor_factory=cursor_factory,
+        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
+        download_audio_fn=fail_download,
+        mark_failed_fn=lambda cur, video_id, reason: mark_calls.append(
+            (video_id, reason)
+        ),
+        sleep_until_fn=lambda target: None,
+    )
+
+    assert step.action == "skip"
+    assert mark_calls == [("vid1", "Video unavailable")]
+    assert budget.claimed == 0
+
+
+def test_claim_and_download_one_aborts_on_auth_failure() -> None:
+    budget = tr.SessionBudget(
+        max_videos=1,
+        session_seconds=60.0,
+        monotonic_fn=Mono(0.0),
+        uniform_fn=lambda a, b: a,
+    )
+    cursor_factory = DummyCursorFactory()
+
+    def fail_download(url: str, path: str) -> None:
+        raise tr.DownloadFailed(
+            tr.DownloadFailureInfo(
+                summary="Sign in to confirm you're not a bot",
+                category="auth",
+            )
+        )
+
+    step = tr.claim_and_download_one(
+        budget,
+        cursor_factory=cursor_factory,
+        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
+        download_audio_fn=fail_download,
+        sleep_until_fn=lambda target: None,
+    )
+
+    assert step.action == "abort"
     assert budget.claimed == 1
 
 

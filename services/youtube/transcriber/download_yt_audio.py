@@ -7,6 +7,7 @@ import logging
 from dotenv import load_dotenv
 
 from storage.yt_proxy import yt_dlp_proxy_args
+from .yt_download_errors import DownloadFailed, DownloadFailureInfo, classify_yt_dlp_stderr
 
 load_dotenv()
 
@@ -61,8 +62,16 @@ YT_COOKIES_PATH = get_youtube_cookies_path()
 FIREFOX_UA = load_firefox_user_agent()
 
 
-class DownloadFailed(Exception):
-    pass
+def _log_download_failure(url: str, info: DownloadFailureInfo) -> None:
+    if info.category == "proxy":
+        log.error("yt-dlp proxy failure for %s: %s", url, info.summary)
+    elif info.category == "auth":
+        log.error("yt-dlp auth failure for %s: %s", url, info.summary)
+    elif info.category == "permanent":
+        log.warning("yt-dlp permanent failure for %s: %s", url, info.summary)
+    else:
+        log.warning("yt-dlp download failed for %s: %s", url, info.summary)
+    log.debug("yt-dlp stderr for %s:\n%s", url, info.detail)
 
 
 def download_yt_audio(url: str, audio_path: str) -> None:
@@ -73,8 +82,8 @@ def download_yt_audio(url: str, audio_path: str) -> None:
     cookies_size = YT_COOKIES_PATH.stat().st_size if cookies_exists else 0
     node_bin = shutil.which("node")
 
-    log.info(
-        "yt-dlp debug: bin=%s node=%s cookies=%s cookies_exists=%s cookies_size=%s ua_len=%s url=%s",
+    log.debug(
+        "yt-dlp setup: bin=%s node=%s cookies=%s cookies_exists=%s cookies_size=%s ua_len=%s url=%s",
         YT_DLP_BIN,
         node_bin,
         YT_COOKIES_PATH,
@@ -86,7 +95,6 @@ def download_yt_audio(url: str, audio_path: str) -> None:
 
     cmd = [
         YT_DLP_BIN,
-        "-vU",  # temporary debug
         "--no-playlist",
         "--js-runtimes", "node",
         "--cookies", str(YT_COOKIES_PATH),
@@ -110,13 +118,12 @@ def download_yt_audio(url: str, audio_path: str) -> None:
             text=True,
         )
         if result.stderr:
-            log.info("yt-dlp stderr (success) for %s:\n%s", url, result.stderr)
+            log.debug("yt-dlp stderr (success) for %s:\n%s", url, result.stderr)
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
-        first_line = stderr.splitlines()[0] if stderr else "<no stderr>"
-        log.warning("yt-dlp first stderr line for %s: %s", url, first_line)
-        log.warning("yt-dlp full stderr for %s:\n%s", url, stderr)
-        raise DownloadFailed(f"yt-dlp failed for {url}\n{stderr}") from e
+        info = classify_yt_dlp_stderr(stderr)
+        _log_download_failure(url, info)
+        raise DownloadFailed(info) from e
 
     produced = None
     for ext in ("mp3", "m4a", "opus", "webm"):
@@ -126,8 +133,11 @@ def download_yt_audio(url: str, audio_path: str) -> None:
             break
 
     if not produced:
-        raise DownloadFailed(
-            f"yt-dlp reported success but no audio file was produced for {url}"
+        info = DownloadFailureInfo(
+            summary="yt-dlp reported success but no audio file was produced",
+            category="retryable",
         )
+        _log_download_failure(url, info)
+        raise DownloadFailed(info)
 
     produced.replace(audio_path)

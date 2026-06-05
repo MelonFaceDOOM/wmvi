@@ -54,6 +54,11 @@ def _migrate_ridge_heads(conn: sqlite3.Connection) -> None:
     if "encoder_model_id" not in cols:
         conn.execute("ALTER TABLE ridge_heads ADD COLUMN encoder_model_id TEXT")
         conn.commit()
+    info = conn.execute("PRAGMA table_info(ridge_heads)").fetchall()
+    cols = {row[1] for row in info}
+    if "score_field_name" not in cols:
+        conn.execute("ALTER TABLE ridge_heads ADD COLUMN score_field_name TEXT")
+        conn.commit()
 
 
 @dataclass
@@ -63,47 +68,61 @@ class RidgeHead:
     input_var_keys: list[str]
     artifact_dir: str | None
     encoder_model_id: str | None
+    score_field_name: str | None = None
 
 
-def create_head(conn: sqlite3.Connection, name: str, input_var_keys: list[str]) -> int:
+def create_head(
+    conn: sqlite3.Connection,
+    name: str,
+    input_var_keys: list[str],
+    *,
+    score_field_name: str | None = None,
+) -> int:
     cur = conn.execute(
-        "INSERT INTO ridge_heads (name, input_var_keys) VALUES (?, ?)",
-        (name.strip(), json.dumps(input_var_keys)),
+        "INSERT INTO ridge_heads (name, input_var_keys, score_field_name) VALUES (?, ?, ?)",
+        (name.strip(), json.dumps(input_var_keys), score_field_name),
     )
     conn.commit()
     return int(cur.lastrowid)
 
 
-def list_heads(conn: sqlite3.Connection) -> list[RidgeHead]:
-    rows = conn.execute("SELECT id, name, input_var_keys, artifact_dir, encoder_model_id FROM ridge_heads ORDER BY id").fetchall()
-    out: list[RidgeHead] = []
-    for r in rows:
-        out.append(
-            RidgeHead(
-                id=int(r["id"]),
-                name=str(r["name"]),
-                input_var_keys=json.loads(r["input_var_keys"]),
-                artifact_dir=r["artifact_dir"],
-                encoder_model_id=r["encoder_model_id"],
-            )
-        )
-    return out
-
-
-def get_head(conn: sqlite3.Connection, head_id: int) -> RidgeHead | None:
-    r = conn.execute(
-        "SELECT id, name, input_var_keys, artifact_dir, encoder_model_id FROM ridge_heads WHERE id = ?",
-        (head_id,),
-    ).fetchone()
-    if r is None:
-        return None
+def _row_to_head(r: sqlite3.Row) -> RidgeHead:
+    sfn = r["score_field_name"]
     return RidgeHead(
         id=int(r["id"]),
         name=str(r["name"]),
         input_var_keys=json.loads(r["input_var_keys"]),
         artifact_dir=r["artifact_dir"],
         encoder_model_id=r["encoder_model_id"],
+        score_field_name=str(sfn) if sfn else None,
     )
+
+
+def list_heads(conn: sqlite3.Connection) -> list[RidgeHead]:
+    rows = conn.execute(
+        "SELECT id, name, input_var_keys, artifact_dir, encoder_model_id, score_field_name FROM ridge_heads ORDER BY id"
+    ).fetchall()
+    return [_row_to_head(r) for r in rows]
+
+
+def get_head(conn: sqlite3.Connection, head_id: int) -> RidgeHead | None:
+    r = conn.execute(
+        "SELECT id, name, input_var_keys, artifact_dir, encoder_model_id, score_field_name FROM ridge_heads WHERE id = ?",
+        (head_id,),
+    ).fetchone()
+    if r is None:
+        return None
+    return _row_to_head(r)
+
+
+def get_head_by_name(conn: sqlite3.Connection, name: str) -> RidgeHead | None:
+    r = conn.execute(
+        "SELECT id, name, input_var_keys, artifact_dir, encoder_model_id, score_field_name FROM ridge_heads WHERE name = ?",
+        (name.strip(),),
+    ).fetchone()
+    if r is None:
+        return None
+    return _row_to_head(r)
 
 
 def update_head_artifact(conn: sqlite3.Connection, head_id: int, artifact_dir: str | None) -> None:
@@ -164,3 +183,48 @@ def fetch_labels_xy(
         params = (head_id, split)
     rows = conn.execute(q, params).fetchall()
     return [(str(r["task_id"]), int(r["claim_index"]), float(r["y"])) for r in rows]
+
+
+def fetch_labels_sorted(
+    conn: sqlite3.Connection,
+    head_id: int,
+    split: str | None = None,
+    *,
+    descending: bool = False,
+) -> list[dict[str, Any]]:
+    """Return label rows for a head, sorted by score (y)."""
+    order = "DESC" if descending else "ASC"
+    if split is None:
+        q = f"""
+            SELECT task_id, claim_index, y, split, created_at
+            FROM labels WHERE head_id = ?
+            ORDER BY y {order}, task_id, claim_index
+        """
+        params: tuple[Any, ...] = (head_id,)
+    else:
+        q = f"""
+            SELECT task_id, claim_index, y, split, created_at
+            FROM labels WHERE head_id = ? AND split = ?
+            ORDER BY y {order}, task_id, claim_index
+        """
+        params = (head_id, split)
+    rows = conn.execute(q, params).fetchall()
+    return [
+        {
+            "task_id": str(r["task_id"]),
+            "claim_index": int(r["claim_index"]),
+            "y": float(r["y"]),
+            "split": str(r["split"]),
+            "created_at": str(r["created_at"]) if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+def delete_label(conn: sqlite3.Connection, head_id: int, task_id: str, claim_index: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM labels WHERE head_id = ? AND task_id = ? AND claim_index = ?",
+        (head_id, task_id, claim_index),
+    )
+    conn.commit()
+    return cur.rowcount > 0

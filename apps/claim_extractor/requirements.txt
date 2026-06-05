@@ -1,0 +1,16 @@
+# Claim extractor — optional stack (install on top of repo root requirements.txt).
+#
+# From repo root:
+#   pip install -r requirements.txt
+#   pip install -r apps/claim_extractor/requirements.txt
+#
+# Subsets (if you only need part of the pipeline):
+#   Labeler lab + Ridge scoring only  →  requirements-learned.txt
+#   Coref stage only                   →  requirements-coref.txt
+#   LLM extraction only                →  openai (listed below)
+
+-r requirements-learned.txt
+-r requirements-coref.txt
+
+# LLM claim extraction (apps.claim_extractor.get_claims)
+openai>=1.40.0,<2.0.0

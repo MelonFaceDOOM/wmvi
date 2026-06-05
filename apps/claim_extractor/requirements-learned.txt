@@ -1,5 +1,6 @@
-# Optional: learned per-label scoring (BGE-small-en + Ridge heads).
-# pip install -r apps/claim_extractor/requirements-learned.txt
+# Optional: learned per-label scoring (BGE-small-en + Ridge heads) + Streamlit labeler lab.
+# Usually installed via apps/claim_extractor/requirements.txt (includes this file).
+# Standalone: pip install -r apps/claim_extractor/requirements-learned.txt
 
 torch>=2.2.0,<2.7.0
 sentence-transformers>=3.0.0,<4.0.0

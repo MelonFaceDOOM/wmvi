@@ -41,6 +41,8 @@ MODEL_NAME = "gpt-5.4-mini"
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 SYSTEM_PROMPT = (PROMPTS_DIR / "extract_system.txt").read_text(encoding="utf-8-sig")
 USER_PROMPT = (PROMPTS_DIR / "extract_user.txt").read_text(encoding="utf-8-sig")
+SYSTEM_PROMPT_CLAIMS_ONLY = (PROMPTS_DIR / "extract_system_claims_only.txt").read_text(encoding="utf-8-sig")
+USER_PROMPT_CLAIMS_ONLY = (PROMPTS_DIR / "extract_user_claims_only.txt").read_text(encoding="utf-8-sig")
 
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -48,6 +50,29 @@ AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-pre
 
 _SCORE_PROPS: dict[str, Any] = {
     name: {"type": "number", "minimum": 0.0, "maximum": 1.0} for name in SCORE_FIELD_NAMES
+}
+
+CLAIMS_ONLY_JSON_SCHEMA: dict[str, Any] = {
+    "name": "vaccine_claim_extraction_claims_only",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "claims": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "claim": {"type": "string"},
+                    },
+                    "required": ["claim"],
+                },
+            }
+        },
+        "required": ["claims"],
+    },
 }
 
 CLAIMS_JSON_SCHEMA: dict[str, Any] = {
@@ -107,35 +132,64 @@ class PostsJsonStreamWriter:
         self.tmp_path.replace(self.final_path)
 
 
-def _build_client() -> AzureClaimsClient:
+def _build_client(*, claims_only: bool = False) -> AzureClaimsClient:
     if not AZURE_OPENAI_KEY:
         raise RuntimeError("Missing AZURE_OPENAI_KEY in environment.")
     if not AZURE_OPENAI_ENDPOINT:
         raise RuntimeError("Missing AZURE_OPENAI_ENDPOINT in environment.")
+    schema = CLAIMS_ONLY_JSON_SCHEMA if claims_only else CLAIMS_JSON_SCHEMA
     return AzureClaimsClient(
         api_key=AZURE_OPENAI_KEY,
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_version=AZURE_OPENAI_API_VERSION,
         model=MODEL_NAME,
-        system_prompt_builder=lambda payload: _build_system_prompt(max_claims=int(payload["max_claims"])),
-        user_prompt_builder=lambda payload: _build_user_prompt(
-            str(payload["input_text"]), max_claims=int(payload["max_claims"])
+        system_prompt_builder=lambda payload: _build_system_prompt(
+            max_claims=int(payload["max_claims"]),
+            claims_only=bool(payload.get("claims_only")),
         ),
-        response_schema=CLAIMS_JSON_SCHEMA,
-        output_parser=_parse_and_validate_output,
+        user_prompt_builder=lambda payload: _build_user_prompt(
+            str(payload["input_text"]),
+            max_claims=int(payload["max_claims"]),
+            claims_only=bool(payload.get("claims_only")),
+        ),
+        response_schema=schema,
+        output_parser=_parse_output_factory(claims_only),
     )
 
 
-def _build_system_prompt(*, max_claims: int) -> str:
-    return SYSTEM_PROMPT.replace("{{max_claims}}", str(max_claims)).replace("[[max_claims]]", str(max_claims))
+def _parse_output_factory(claims_only: bool):
+    if claims_only:
+        return _parse_and_validate_output_claims_only
+    return _parse_and_validate_output
 
 
-def _build_user_prompt(input_text: str, *, max_claims: int) -> str:
+def _build_system_prompt(*, max_claims: int, claims_only: bool = False) -> str:
+    template = SYSTEM_PROMPT_CLAIMS_ONLY if claims_only else SYSTEM_PROMPT
+    return template.replace("{{max_claims}}", str(max_claims)).replace("[[max_claims]]", str(max_claims))
+
+
+def _build_user_prompt(input_text: str, *, max_claims: int, claims_only: bool = False) -> str:
+    template = USER_PROMPT_CLAIMS_ONLY if claims_only else USER_PROMPT
     return (
-        USER_PROMPT.replace("{{max_claims}}", str(max_claims))
+        template.replace("{{max_claims}}", str(max_claims))
         .replace("[[max_claims]]", str(max_claims))
         .replace("{{text_input}}", input_text)
     )
+
+
+def _parse_and_validate_output_claims_only(content: str) -> dict[str, Any]:
+    parsed = json.loads(content.strip())
+    if not isinstance(parsed, dict):
+        raise ValueError("model output JSON top-level is not an object")
+    claims = parsed.get("claims")
+    if not isinstance(claims, list):
+        raise ValueError("model output missing list field 'claims'")
+    for i, c in enumerate(claims):
+        if not isinstance(c, dict):
+            raise ValueError(f"claims[{i}] is not an object")
+        if not isinstance(c.get("claim"), str):
+            raise ValueError(f"claims[{i}].claim must be a string")
+    return parsed
 
 
 def _parse_and_validate_output(content: str) -> dict[str, Any]:
@@ -310,6 +364,7 @@ def run(
     max_retries: int,
     max_tasks: int,
     n_posts: int,
+    claims_only: bool = False,
 ) -> None:
     payload, rows = _load_payload(input_file)
     existing_ids, existing_rows = _load_existing_output_rows(out_file)
@@ -348,6 +403,8 @@ def run(
         flush=True,
     )
     meta = {k: v for k, v in payload.items() if k != "posts"}
+    if claims_only:
+        meta["claims_extraction_mode"] = "claims_only"
     writer = PostsJsonStreamWriter(out_file, meta=meta)
 
     # Requirement: filtered rows are dumped first before prompting starts.
@@ -360,7 +417,7 @@ def run(
         flush=True,
     )
 
-    client = _build_client()
+    client = _build_client(claims_only=claims_only)
     throttle = ThrottlePolicy(
         target_requests_per_minute=max(1, int(os.getenv("CLAIMS_TARGET_RPM", str(DEFAULT_TARGET_RPM)))),
         global_429_cooldown_s=max(0.0, float(os.getenv("CLAIMS_429_COOLDOWN_S", str(DEFAULT_429_COOLDOWN_S)))),
@@ -380,7 +437,11 @@ def run(
         request_tasks = [
             RequestTask(
                 task_id=t["task_id"],
-                payload={"input_text": t["input_text"], "max_claims": max_claims},
+                payload={
+                    "input_text": t["input_text"],
+                    "max_claims": max_claims,
+                    "claims_only": claims_only,
+                },
             )
             for t in batch
         ]
@@ -411,6 +472,17 @@ if __name__ == "__main__":
         help="Deprecated alias for --n-posts (0 means unlimited).",
     )
     ap.add_argument("--n-posts", type=int, default=DEFAULT_N_POSTS, help="Process at most N pending rows.")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--claims-only",
+        action="store_true",
+        help="Extract claim text only (no LLM scores). Run score_claims post-pass for Ridge pred_* fields.",
+    )
+    mode.add_argument(
+        "--with-scores",
+        action="store_true",
+        help="Extract claims plus all five score fields (default).",
+    )
     args = ap.parse_args()
     run(
         input_file=args.input_file,
@@ -421,4 +493,5 @@ if __name__ == "__main__":
         max_retries=max(1, int(args.max_retries)),
         max_tasks=max(0, int(args.max_tasks)),
         n_posts=max(0, int(args.n_posts)),
+        claims_only=bool(args.claims_only),
     )
