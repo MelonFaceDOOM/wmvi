@@ -18,6 +18,7 @@ def _row_to_dict(record: tuple) -> dict[str, Any]:
         parent_comment_id,
         like_count,
         reply_count,
+        date_entered,
     ) = record
     return {
         "platform": PLATFORM_YOUTUBE_COMMENT,
@@ -34,6 +35,9 @@ def _row_to_dict(record: tuple) -> dict[str, Any]:
         "parent_comment_id": parent_comment_id,
         "like_count": like_count,
         "reply_count": reply_count,
+        "date_entered": date_entered.isoformat()
+        if isinstance(date_entered, datetime)
+        else date_entered,
     }
 
 
@@ -86,7 +90,8 @@ class YoutubeCommentHandler:
                 c.created_at_ts,
                 c.parent_comment_id,
                 c.like_count,
-                c.reply_count
+                c.reply_count,
+                c.date_entered
             FROM youtube.comment c
             WHERE {' AND '.join(conditions)}
             ORDER BY c.date_entered, c.video_id, c.comment_id

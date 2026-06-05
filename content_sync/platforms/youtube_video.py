@@ -43,6 +43,7 @@ def _row_to_dict(record: tuple) -> dict[str, Any]:
         duration_seconds,
         transcript,
         transcript_updated_at,
+        date_entered,
     ) = record
     return {
         "platform": PLATFORM_YOUTUBE_VIDEO,
@@ -62,24 +63,58 @@ def _row_to_dict(record: tuple) -> dict[str, Any]:
         "duration_seconds": duration_seconds,
         "transcript": str(transcript) if transcript is not None else None,
         "transcript_updated_at": _serialize_ts(transcript_updated_at),
+        "date_entered": _serialize_ts(date_entered),
     }
 
 
-def _youtube_video_export_conditions(
+def _youtube_video_export_where(
     *,
     since: datetime | None,
     until: datetime,
-) -> tuple[list[str], list[Any]]:
-    conditions = [
+) -> tuple[str, list[Any]]:
+    """
+    Export videos when any of:
+      - newly ingested on GPU (date_entered window),
+      - transcript appeared or was updated (transcript_updated_at window),
+      - referenced by a comment in the comment export window (parent FK).
+    """
+    params: list[Any] = []
+    branches: list[str] = []
+
+    ingest_parts = ["v.date_entered <= %s"]
+    params.append(until)
+    if since is not None:
+        ingest_parts.append("v.date_entered > %s")
+        params.append(since)
+    branches.append("(" + " AND ".join(ingest_parts) + ")")
+
+    transcript_parts = [
         "v.transcript IS NOT NULL",
         "btrim(v.transcript) <> ''",
         "COALESCE(v.transcript_updated_at, v.date_entered) <= %s",
     ]
-    params: list[Any] = [until]
+    params.append(until)
     if since is not None:
-        conditions.append("COALESCE(v.transcript_updated_at, v.date_entered) > %s")
+        transcript_parts.append(
+            "COALESCE(v.transcript_updated_at, v.date_entered) > %s"
+        )
         params.append(since)
-    return conditions, params
+    branches.append("(" + " AND ".join(transcript_parts) + ")")
+
+    comment_parts = ["c.date_entered <= %s"]
+    params.append(until)
+    if since is not None:
+        comment_parts.append("c.date_entered > %s")
+        params.append(since)
+    branches.append(
+        "EXISTS ("
+        "SELECT 1 FROM youtube.comment c "
+        "WHERE c.video_id = v.video_id AND "
+        + " AND ".join(comment_parts)
+        + ")"
+    )
+
+    return "(" + " OR ".join(branches) + ")", params
 
 
 class YoutubeVideoHandler:
@@ -92,8 +127,7 @@ class YoutubeVideoHandler:
         since: datetime | None,
         until: datetime,
     ) -> tuple[int, dict[str, int]]:
-        conditions, params = _youtube_video_export_conditions(since=since, until=until)
-        where = " AND ".join(conditions)
+        where, params = _youtube_video_export_where(since=since, until=until)
         cur.execute(
             f"SELECT COUNT(*)::bigint FROM youtube.video v WHERE {where}",
             params,
@@ -124,7 +158,7 @@ class YoutubeVideoHandler:
         since: datetime | None,
         until: datetime,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        conditions, params = _youtube_video_export_conditions(since=since, until=until)
+        where, params = _youtube_video_export_where(since=since, until=until)
 
         sql = f"""
             SELECT
@@ -141,10 +175,11 @@ class YoutubeVideoHandler:
                 v.comment_count,
                 v.duration_seconds,
                 v.transcript,
-                v.transcript_updated_at
+                v.transcript_updated_at,
+                v.date_entered
             FROM youtube.video v
-            WHERE {' AND '.join(conditions)}
-            ORDER BY v.transcript_updated_at, v.video_id
+            WHERE {where}
+            ORDER BY v.date_entered, v.video_id
         """
         cur.execute(sql, params)
         rows = [_row_to_dict(r) for r in cur.fetchall()]

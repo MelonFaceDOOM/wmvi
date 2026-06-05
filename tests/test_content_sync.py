@@ -136,3 +136,91 @@ def test_normalize_proxy_url_http_unchanged():
 
     url = "http://user:pass@proxy.example:8080"
     assert normalize_proxy_url(url) == url
+
+
+def test_youtube_video_export_where_includes_ingest_transcript_and_comment_parents():
+    from content_sync.platforms.youtube_video import _youtube_video_export_where
+
+    until = datetime(2026, 6, 5, 14, 31, 12, tzinfo=timezone.utc)
+    since = datetime(2026, 5, 28, 17, 9, 1, tzinfo=timezone.utc)
+
+    where, params = _youtube_video_export_where(since=since, until=until)
+
+    assert "v.date_entered <= %s" in where
+    assert "v.date_entered > %s" in where
+    assert "v.transcript IS NOT NULL" in where
+    assert "transcript_updated_at" in where
+    assert "EXISTS (" in where
+    assert "youtube.comment c" in where
+    assert " OR " in where
+    assert params.count(until) == 3
+    assert params.count(since) == 3
+
+
+def test_youtube_video_export_where_without_since():
+    from content_sync.platforms.youtube_video import _youtube_video_export_where
+
+    until = datetime(2026, 6, 5, tzinfo=timezone.utc)
+    where, params = _youtube_video_export_where(since=None, until=until)
+
+    assert "v.date_entered > %s" not in where
+    assert "transcript_updated_at, v.date_entered) > %s" not in where
+    assert "c.date_entered > %s" not in where
+    assert params == [until, until, until]
+
+
+def test_run_export_advances_watermark_to_until_ts(monkeypatch, tmp_path: Path):
+    class FakeHandler:
+        platform = "fake_platform"
+
+        def export_delta(self, cur, *, since, until):
+            return (
+                [{"created_at_ts": "2020-01-01T00:00:00+00:00"}],
+                {},
+            )
+
+    saved: list = []
+
+    monkeypatch.setattr(
+        "content_sync.export_runner.get_handlers",
+        lambda platforms: [FakeHandler()],
+    )
+    monkeypatch.setattr(
+        "content_sync.export_runner.export_bundle_dir",
+        lambda bundle_id: tmp_path / bundle_id,
+    )
+    monkeypatch.setattr(
+        "content_sync.export_runner.upload_bundle",
+        lambda bundle_dir: None,
+    )
+    monkeypatch.setattr(
+        "content_sync.export_runner.load_export_state",
+        lambda: type("S", (), {"last_exported_at": None})(),
+    )
+    monkeypatch.setattr(
+        "content_sync.export_runner.save_export_state",
+        lambda state: saved.append(state),
+    )
+    monkeypatch.setattr(
+        "db.db.getcursor",
+        lambda commit=False: type(
+            "CM",
+            (),
+            {
+                "__enter__": lambda self: object(),
+                "__exit__": lambda *a: False,
+            },
+        )(),
+    )
+
+    fixed_until = datetime(2026, 6, 5, 12, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        "content_sync.export_runner._utc_now",
+        lambda: fixed_until,
+    )
+
+    manifest = run_export()
+    assert manifest is not None
+    assert manifest.until_ts == fixed_until
+    assert len(saved) == 1
+    assert saved[0].last_exported_at == fixed_until

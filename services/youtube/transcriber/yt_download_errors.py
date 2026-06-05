@@ -52,7 +52,13 @@ def classify_yt_dlp_stderr(stderr: str) -> DownloadFailureInfo:
     summary = _extract_error_summary(stderr)
     haystack = f"{summary}\n{stderr}"
 
-    if _matches_any(_PROXY_PATTERNS, haystack):
+    # yt-dlp's final ERROR line is the authoritative failure reason. Proxy/auth
+    # retry noise elsewhere in stderr must not override a clear content error.
+    if _matches_any(_PERMANENT_PATTERNS, summary):
+        category = "permanent"
+    elif _matches_any(_AUTH_PATTERNS, summary):
+        category = "auth"
+    elif _matches_any(_PROXY_PATTERNS, haystack):
         category = "proxy"
     elif _matches_any(_AUTH_PATTERNS, haystack):
         category = "auth"

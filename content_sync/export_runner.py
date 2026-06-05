@@ -64,7 +64,6 @@ def run_export(
 
     manifest_platforms: dict[str, PlatformFileInfo] = {}
     sidecar_files: dict[str, str] = {}
-    max_watermark: datetime | None = None
 
     from db.db import getcursor
 
@@ -77,11 +76,6 @@ def run_export(
             with out_path.open("w", encoding="utf-8") as fp:
                 for row in rows:
                     write_jsonl_row(fp, row)
-                    ts_raw = row.get("transcript_updated_at") or row.get("created_at_ts") or row.get("date_entered")
-                    if ts_raw:
-                        ts = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
-                        if max_watermark is None or ts > max_watermark:
-                            max_watermark = ts
             manifest_platforms[handler.platform] = PlatformFileInfo(
                 row_count=len(rows),
                 file=out_path.name,
@@ -114,7 +108,8 @@ def run_export(
         log.exception("upload failed; export watermark not advanced")
         raise
 
-    new_watermark = max_watermark if max_watermark is not None else until_ts
-    save_export_state(ExportState(last_exported_at=new_watermark))
-    log.info("advanced export watermark to %s", new_watermark)
+    # Advance to end of this export window so date_entered / transcript deltas
+    # are not re-exported; avoids regressing when rows carry old created_at_ts.
+    save_export_state(ExportState(last_exported_at=until_ts))
+    log.info("advanced export watermark to %s", until_ts)
     return manifest

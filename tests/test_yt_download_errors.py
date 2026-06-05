@@ -14,6 +14,20 @@ def test_classify_permanent_video_unavailable() -> None:
     assert "Video unavailable" in info.summary
 
 
+def test_classify_permanent_wins_over_proxy_noise_in_stderr() -> None:
+    stderr = (
+        "OSError: Tunnel connection failed: 407 Proxy Authentication Required\n"
+        "yt_dlp.networking.exceptions.ProxyError: ('Unable to connect to proxy', ...)\n"
+        "WARNING: [youtube] Retrying...\n"
+        "ERROR: [youtube] 3P9GTvs9Bss: Video unavailable. "
+        "This video is no longer available because the YouTube account "
+        "associated with this video has been terminated."
+    )
+    info = classify_yt_dlp_stderr(stderr)
+    assert info.category == "permanent"
+    assert "3P9GTvs9Bss" in info.summary
+
+
 def test_classify_proxy_auth_failure() -> None:
     stderr = (
         "OSError: Tunnel connection failed: 407 Proxy Authentication Required\n"
