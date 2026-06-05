@@ -197,6 +197,37 @@ def test_backfill_term_advances_published_before_backward_with_overlap(monkeypat
 # run_backfill behavior
 # ----------------------------
 
+def test_is_rate_limited_detects_429() -> None:
+    from services.youtube.quota_client import YTUnexpectedError, is_rate_limited
+
+    assert is_rate_limited(YTUnexpectedError("x", status=429, reason=None))
+    assert not is_rate_limited(YTUnexpectedError("x", status=403, reason="forbidden"))
+
+
+def test_run_backfill_sleeps_and_retries_term_on_rate_limit(monkeypatch) -> None:
+    from services.youtube.quota_client import YTUnexpectedError
+
+    monkeypatch.setattr(bf, "load_search_terms", lambda _name: [(1, "one")])
+    monkeypatch.setattr(bf, "RATE_LIMIT_BACKOFF_S", 0.0)
+
+    calls: list[str] = []
+
+    def fake_backfill_term(_qyt, *, term_id: int, term_name: str) -> None:
+        calls.append(term_name)
+        if len(calls) == 1:
+            raise YTUnexpectedError("rate limited", status=429, reason=None)
+
+    monkeypatch.setattr(bf, "backfill_term", fake_backfill_term)
+    monkeypatch.setattr(
+        bf.YTQuotaClient,
+        "from_api_key",
+        classmethod(lambda cls, *, tracker: FakeYTQuotaClient(afford=True)),
+    )
+
+    bf.run_backfill()
+    assert calls == ["one", "one"]
+
+
 def test_run_backfill_stops_on_budget_exceeded(monkeypatch) -> None:
     monkeypatch.setattr(bf, "load_search_terms", lambda _name: [(1, "one"), (2, "two")])
 

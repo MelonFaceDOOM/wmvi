@@ -28,9 +28,13 @@ from services.youtube.time import next_midnight_pacific, publication_span_second
 
 from services.youtube.quota_client import (
     BudgetTracker,
+    RATE_LIMIT_BACKOFF_S,
     YTBudgetExceeded,
     YTQuotaClient,
     YTQuotaExceeded,
+    YTUnexpectedError,
+    is_rate_limited,
+    rate_limit_summary,
 )
 
 # ---------------------------------------------------------------------
@@ -271,6 +275,26 @@ def pause_until_next_midnight(
     pause.until_ts = max(pause.until_ts, resume_ts)
     cv.notify_all()
 
+
+def pause_for_rate_limit(
+    *,
+    cv: threading.Condition,
+    pause: PauseState,
+    sleep_s: float = RATE_LIMIT_BACKOFF_S,
+) -> None:
+    now = datetime.now(timezone.utc)
+    resume_at = now + timedelta(seconds=sleep_s)
+    resume_ts = resume_at.timestamp()
+
+    logging.warning(
+        "Rate limited; pausing all scrapes for %.0fs until %s",
+        sleep_s,
+        resume_at.isoformat(),
+    )
+
+    pause.until_ts = max(pause.until_ts, resume_ts)
+    cv.notify_all()
+
 # ---------------------------------------------------------------------
 # Job Queue & Main Workers
 # ---------------------------------------------------------------------
@@ -358,6 +382,36 @@ def heap_worker(
         except (YTQuotaExceeded, YTBudgetExceeded):
             with cv:
                 pause_until_next_midnight(cv=cv, pause=pause)
+            continue
+
+        except YTUnexpectedError as e:
+            if is_rate_limited(e):
+                logging.warning(
+                    "Rate limited on term=%r (id=%s) [%s]",
+                    term_name,
+                    term_id,
+                    rate_limit_summary(e),
+                )
+                with cv:
+                    pause_for_rate_limit(cv=cv, pause=pause)
+                continue
+
+            logging.warning(
+                "Scrape failed term_id=%s term=%r [%s]",
+                term_id,
+                term_name,
+                rate_limit_summary(e) if e.reason or e.status else e,
+            )
+            with cv:
+                interval_s = min(15 * 60, MAX_INTERVAL_S)
+                schedule_term(
+                    cv=cv,
+                    heap=heap,
+                    pause=pause,
+                    term_states=term_states,
+                    term_id=term_id,
+                    interval_s=interval_s,
+                )
             continue
 
         except Exception:

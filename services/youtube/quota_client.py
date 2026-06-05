@@ -59,11 +59,38 @@ class YTBudgetExceeded(RuntimeError):
 
 
 class YTUnexpectedError(RuntimeError):
+    """Unexpected / non-retryable error from YouTube API layer."""
+
     def __init__(self, msg: str, *, status: int | None = None, reason: str | None = None) -> None:
         super().__init__(msg)
         self.status = status
         self.reason = reason
-    """Unexpected / non-retryable error from YouTube API layer."""
+
+
+RATE_LIMIT_BACKOFF_S = 30 * 60
+
+_RATE_LIMIT_REASONS = frozenset({
+    "userRateLimitExceeded",
+    "rateLimitExceeded",
+    "servingLimitExceeded",
+    "concurrentLimitExceeded",
+    "limitExceeded",
+})
+
+
+def is_rate_limited(err: YTUnexpectedError) -> bool:
+    if err.status == 429:
+        return True
+    return err.reason in _RATE_LIMIT_REASONS
+
+
+def rate_limit_summary(err: YTUnexpectedError) -> str:
+    parts: list[str] = []
+    if err.status is not None:
+        parts.append(f"HTTP {err.status}")
+    if err.reason:
+        parts.append(f"reason={err.reason}")
+    return ", ".join(parts) if parts else "rate limited"
 
 
 # ---------------------------------------------------------------------

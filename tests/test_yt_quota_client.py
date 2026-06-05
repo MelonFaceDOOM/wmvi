@@ -232,6 +232,17 @@ def test_call_retries_retryable_then_succeeds_charges_and_sleeps() -> None:
     assert tracker.used_units_today() == 3  # videos.list cost=1, charged each attempt
 
 
+def test_is_rate_limited_detects_429_and_reasons() -> None:
+    from services.youtube.quota_client import YTUnexpectedError, is_rate_limited, rate_limit_summary
+
+    assert is_rate_limited(YTUnexpectedError("x", status=429))
+    assert is_rate_limited(YTUnexpectedError("x", status=403, reason="userRateLimitExceeded"))
+    assert not is_rate_limited(YTUnexpectedError("x", status=403, reason="forbidden"))
+    assert rate_limit_summary(YTUnexpectedError("x", status=429, reason="rateLimitExceeded")) == (
+        "HTTP 429, reason=rateLimitExceeded"
+    )
+
+
 def test_call_non_retryable_raises_YTUnexpectedError() -> None:
     now = Now(datetime(2026, 2, 13, 12, 0, tzinfo=timezone.utc))
     tracker = BudgetTracker(budget_units_per_day=500, now_fn=now)

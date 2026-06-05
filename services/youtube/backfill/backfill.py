@@ -15,6 +15,7 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -23,9 +24,13 @@ from db.db import getcursor, init_pool, close_pool
 
 from services.youtube.quota_client import (
     BudgetTracker,
+    RATE_LIMIT_BACKOFF_S,
     YTBudgetExceeded,
     YTQuotaClient,
     YTQuotaExceeded,
+    YTUnexpectedError,
+    is_rate_limited,
+    rate_limit_summary,
 )
 
 from services.youtube.scraping import ScrapeWindowOutcome, load_search_terms, scrape_window
@@ -330,10 +335,13 @@ def run_backfill() -> None:
         terms = load_search_terms(SEARCH_TERM_LIST_NAME)
 
         all_done = True
+        term_idx = 0
 
-        for term_id, term_name in terms:
+        while term_idx < len(terms):
+            term_id, term_name = terms[term_idx]
             try:
                 backfill_term(qyt, term_id=term_id, term_name=term_name)
+                term_idx += 1
             except (YTQuotaExceeded, YTBudgetExceeded) as e:
                 # Quota exhausted (API) or local budget exhausted: wait for Pacific reset.
                 now = datetime.now(timezone.utc)
@@ -348,14 +356,32 @@ def run_backfill() -> None:
                     sleep_s,
                 )
 
-                # Actually sleep; keep service alive.
-                __import__("time").sleep(sleep_s)
+                time.sleep(sleep_s)
 
                 # After sleeping, restart outer loop with a fresh client/tracker and refreshed term list.
                 all_done = False
                 break
+            except YTUnexpectedError as e:
+                if is_rate_limited(e):
+                    log.warning(
+                        "Rate limited on term=%r (id=%s) [%s]; sleeping %.0fs then retrying.",
+                        term_name,
+                        term_id,
+                        rate_limit_summary(e),
+                        RATE_LIMIT_BACKOFF_S,
+                    )
+                    time.sleep(RATE_LIMIT_BACKOFF_S)
+                    continue
+
+                log.warning(
+                    "YouTube API error on term=%r (id=%s) [%s]; skipping term.",
+                    term_name,
+                    term_id,
+                    rate_limit_summary(e) if e.reason or e.status else e,
+                )
+                term_idx += 1
+                continue
             except Exception:
-                # Unexpected / worth stopping for.
                 log.exception("Backfill crashed on term=%r (id=%s)", term_name, term_id)
                 raise
 

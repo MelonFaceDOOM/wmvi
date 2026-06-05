@@ -8,6 +8,7 @@ from typing import Any, Optional, Sequence
 
 import feedparser
 import requests
+from requests.exceptions import ContentDecodingError, RequestException
 from dotenv import load_dotenv
 
 from db.db import close_pool, getcursor, init_pool
@@ -20,6 +21,8 @@ log = logging.getLogger(__name__)
 HTTP_TIMEOUT_S = 25
 USER_AGENT = "wmvi-podcast-monitor/1.0"
 BATCH_SIZE = 500
+# Retry brotli/gzip decode failures with simpler encodings (transient CDN/server glitches).
+RSS_ACCEPT_ENCODING_STRATEGIES: tuple[str | None, ...] = (None, "gzip, deflate", "identity")
 
 def parse_entry_published(entry: Any) -> Optional[datetime]:
     for attr in ("published_parsed", "updated_parsed"):
@@ -105,22 +108,75 @@ def update_show_fetch_state(
     )
 
 
-def fetch_rss(show: PodcastShowRow) -> tuple[int, Optional[str], Optional[str], Optional[str]]:
+def _rss_request_headers(show: PodcastShowRow, *, accept_encoding: str | None) -> dict[str, str]:
     headers = {"User-Agent": USER_AGENT}
+    if accept_encoding is not None:
+        headers["Accept-Encoding"] = accept_encoding
     if show.etag:
         headers["If-None-Match"] = show.etag
     if show.last_modified:
         headers["If-Modified-Since"] = show.last_modified
+    return headers
 
-    resp = requests.get(show.rss_url or "", headers=headers, timeout=HTTP_TIMEOUT_S)
-    etag = resp.headers.get("ETag") or show.etag
-    last_modified = resp.headers.get("Last-Modified") or show.last_modified
 
-    if resp.status_code == 304:
-        return resp.status_code, None, etag, last_modified
+def format_show_fetch_error(show: PodcastShowRow, exc: BaseException) -> str:
+    parts: list[str] = [f"{type(exc).__name__}: {exc}"]
+    if show.rss_url:
+        parts.append(f"url={show.rss_url}")
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        parts.append(f"status={resp.status_code}")
+        content_encoding = resp.headers.get("Content-Encoding")
+        if content_encoding:
+            parts.append(f"content-encoding={content_encoding}")
+    return " | ".join(parts)[:2000]
 
-    resp.raise_for_status()
-    return resp.status_code, resp.text, etag, last_modified
+
+def fetch_rss(show: PodcastShowRow) -> tuple[int, Optional[str], Optional[str], Optional[str]]:
+    url = show.rss_url or ""
+    last_decode_error: ContentDecodingError | None = None
+
+    for attempt, accept_encoding in enumerate(RSS_ACCEPT_ENCODING_STRATEGIES):
+        headers = _rss_request_headers(show, accept_encoding=accept_encoding)
+        try:
+            resp = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT_S)
+        except ContentDecodingError as exc:
+            last_decode_error = exc
+            if attempt < len(RSS_ACCEPT_ENCODING_STRATEGIES) - 1:
+                next_encoding = RSS_ACCEPT_ENCODING_STRATEGIES[attempt + 1]
+                log.warning(
+                    "Show id=%s url=%r decode failed on attempt %d/%d "
+                    "(accept-encoding=%r); retrying with accept-encoding=%r: %s",
+                    show.id,
+                    url,
+                    attempt + 1,
+                    len(RSS_ACCEPT_ENCODING_STRATEGIES),
+                    accept_encoding,
+                    next_encoding,
+                    exc,
+                )
+                continue
+            raise
+
+        etag = resp.headers.get("ETag") or show.etag
+        last_modified = resp.headers.get("Last-Modified") or show.last_modified
+
+        if resp.status_code == 304:
+            return resp.status_code, None, etag, last_modified
+
+        resp.raise_for_status()
+        if last_decode_error is not None:
+            log.info(
+                "Show id=%s url=%r recovered after content decode failure using accept-encoding=%r",
+                show.id,
+                url,
+                accept_encoding,
+            )
+        return resp.status_code, resp.text, etag, last_modified
+
+    if last_decode_error is not None:
+        raise last_decode_error
+    raise RequestException(f"RSS fetch failed for show id={show.id}")
 
 def fetch_existing_episode_ids(ids: Sequence[str]) -> set[str]:
     if not ids:
@@ -219,7 +275,14 @@ def process_show(show: PodcastShowRow) -> None:
             )
 
     except Exception as e:
-        log.exception("Show id=%s failed: %s", show.id, e)
+        detail = format_show_fetch_error(show, e)
+        log.error(
+            "Show id=%s title=%r failed: %s",
+            show.id,
+            show.title,
+            detail,
+            exc_info=True,
+        )
         try:
             with getcursor(commit=True) as cur:
                 update_show_fetch_state(
@@ -227,8 +290,8 @@ def process_show(show: PodcastShowRow) -> None:
                     show_id=show.id,
                     etag=show.etag,
                     last_modified=show.last_modified,
-                    http_status=0,
-                    error=str(e)[:2000],
+                    http_status=getattr(getattr(e, "response", None), "status_code", None) or 0,
+                    error=detail,
                 )
         except Exception:
             log.exception("Failed to update fetch state for show id=%s", show.id)

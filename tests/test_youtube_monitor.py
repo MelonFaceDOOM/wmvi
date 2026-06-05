@@ -168,3 +168,15 @@ def test_load_term_state_updates_last_seen_removes_stale_adds_new(monkeypatch) -
 
     # new term scheduled after latest existing (term 1 had +5m; term 2 removed; latest is term1)
     assert term_states[3].next_run_at >= term_states[1].next_run_at + timedelta(minutes=1)
+
+
+def test_pause_for_rate_limit_extends_global_pause() -> None:
+    lock = threading.Lock()
+    cv = threading.Condition(lock)
+    pause = mon.PauseState(until_ts=0.0)
+    before = datetime.now(timezone.utc).timestamp()
+
+    with cv:
+        mon.pause_for_rate_limit(cv=cv, pause=pause, sleep_s=120.0)
+
+    assert pause.until_ts >= before + 120.0
