@@ -23,6 +23,6 @@ def assign_label_split(
         return "train"
     if ev >= 1.0:
         return "eval"
-    payload = f"{seed}|{task_id}|{claim_index}".encode("utf-8")
+    payload = f"split|{seed}|{task_id}|{claim_index}".encode("utf-8")
     bucket = int(hashlib.sha256(payload).hexdigest()[:8], 16) / 0xFFFFFFFF
     return "eval" if bucket < ev else "train"

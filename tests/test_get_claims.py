@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from apps.claim_extractor.get_claims import _parse_and_validate_output
+from apps.claim_extractor.extraction_core import parse_claims_with_scores_output
 from apps.claim_extractor.model_common import SCORE_FIELD_NAMES
 
 
@@ -17,7 +17,7 @@ def _valid_claim() -> dict:
 
 def test_parse_valid_scores() -> None:
     raw = json.dumps({"claims": [_valid_claim()]})
-    out = _parse_and_validate_output(raw)
+    out = parse_claims_with_scores_output(raw)
     assert len(out["claims"]) == 1
 
 
@@ -26,11 +26,11 @@ def test_parse_rejects_out_of_range() -> None:
     c["claim_vaccine_alignment_score"] = 1.5
     raw = json.dumps({"claims": [c]})
     with pytest.raises(ValueError, match="claim_vaccine_alignment_score"):
-        _parse_and_validate_output(raw)
+        parse_claims_with_scores_output(raw)
 
 
 def test_parse_rejects_missing_field() -> None:
     c = {"claim": "x", **{k: 0.5 for k in SCORE_FIELD_NAMES if k != "attribution_authority_score"}}
     raw = json.dumps({"claims": [c]})
     with pytest.raises(ValueError):
-        _parse_and_validate_output(raw)
+        parse_claims_with_scores_output(raw)

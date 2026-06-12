@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import queue
 import tempfile
 import os
 from typing import Any
@@ -279,7 +280,7 @@ def test_claim_and_download_one_marks_permanent_failure_and_skips() -> None:
     assert budget.claimed == 0
 
 
-def test_claim_and_download_one_aborts_on_auth_failure() -> None:
+def test_claim_and_download_one_systemic_skip_on_auth_failure() -> None:
     budget = tr.SessionBudget(
         max_videos=1,
         session_seconds=60.0,
@@ -287,6 +288,7 @@ def test_claim_and_download_one_aborts_on_auth_failure() -> None:
         uniform_fn=lambda a, b: a,
     )
     cursor_factory = DummyCursorFactory()
+    release_calls: list[str] = []
 
     def fail_download(url: str, path: str) -> None:
         raise tr.DownloadFailed(
@@ -301,11 +303,44 @@ def test_claim_and_download_one_aborts_on_auth_failure() -> None:
         cursor_factory=cursor_factory,
         claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
         download_audio_fn=fail_download,
+        release_claim_fn=lambda cur, video_id: release_calls.append(video_id),
         sleep_until_fn=lambda target: None,
     )
 
-    assert step.action == "abort"
-    assert budget.claimed == 1
+    assert step.action == "systemic_skip"
+    assert budget.claimed == 0
+    assert release_calls == ["vid1"]
+    assert cursor_factory.commit_calls == [True, True]
+
+
+def test_claim_and_download_one_systemic_skip_on_proxy_failure() -> None:
+    budget = tr.SessionBudget(
+        max_videos=1,
+        session_seconds=60.0,
+        monotonic_fn=Mono(0.0),
+        uniform_fn=lambda a, b: a,
+    )
+    release_calls: list[str] = []
+
+    def fail_download(url: str, path: str) -> None:
+        raise tr.DownloadFailed(
+            tr.DownloadFailureInfo(
+                summary="Tunnel connection failed: 407 Proxy Authentication Required",
+                category="proxy",
+            )
+        )
+
+    step = tr.claim_and_download_one(
+        budget,
+        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid2", url="https://x"),
+        download_audio_fn=fail_download,
+        release_claim_fn=lambda cur, video_id: release_calls.append(video_id),
+        sleep_until_fn=lambda target: None,
+    )
+
+    assert step.action == "systemic_skip"
+    assert budget.claimed == 0
+    assert release_calls == ["vid2"]
 
 
 def test_claim_and_download_one_enqueues_downloaded_audio() -> None:
@@ -394,6 +429,122 @@ def test_save_one_persists_transcript_segments_and_registry() -> None:
         ("segments", "vid1", ["seg1"]),
         ("registry", "youtube_video", "vid1"),
     ]
+
+
+# ----------------------------
+# Loader worker (systemic cooldown)
+# ----------------------------
+
+def _dummy_downloaded() -> tr.DownloadedAudio:
+    td = tempfile.TemporaryDirectory()
+    tr._track_tempdir(td)
+    return tr.DownloadedAudio(
+        video_id="vid_ok",
+        audio_path=os.path.join(td.name, "audio"),
+        tempdir=td,
+    )
+
+
+def test_audio_loader_worker_cooldown_on_systemic_skip(monkeypatch) -> None:
+    budget = tr.SessionBudget(
+        max_videos=5,
+        session_seconds=3600.0,
+        monotonic_fn=Mono(0.0),
+        uniform_fn=lambda a, b: a,
+    )
+    stats = tr.SessionStats()
+    audio_q: queue.Queue = queue.Queue()
+    sleep_calls: list[float] = []
+    outcomes = [
+        tr.LoaderStepResult(action="systemic_skip"),
+        tr.LoaderStepResult(action="stop"),
+    ]
+
+    def fake_claim(_budget):
+        return outcomes.pop(0)
+
+    monkeypatch.setattr(tr, "claim_and_download_one", fake_claim)
+
+    tr.audio_loader_worker(
+        audio_q,
+        budget,
+        stats,
+        sleep_fn=lambda s: sleep_calls.append(s),
+    )
+
+    assert sleep_calls == [tr.SYSTEMIC_FAILURE_COOLDOWN_S]
+    assert stats.systemic_cooldowns == 1
+    assert stats.session_aborted is False
+    assert audio_q.get() is None
+
+
+def test_audio_loader_worker_aborts_after_consecutive_systemic_failures(monkeypatch) -> None:
+    budget = tr.SessionBudget(
+        max_videos=10,
+        session_seconds=3600.0,
+        monotonic_fn=Mono(0.0),
+        uniform_fn=lambda a, b: a,
+    )
+    stats = tr.SessionStats()
+    audio_q: queue.Queue = queue.Queue()
+    sleep_calls: list[float] = []
+    outcomes = [tr.LoaderStepResult(action="systemic_skip")] * tr.SYSTEMIC_FAILURE_ABORT_AFTER
+
+    def fake_claim(_budget):
+        return outcomes.pop(0)
+
+    monkeypatch.setattr(tr, "claim_and_download_one", fake_claim)
+
+    tr.audio_loader_worker(
+        audio_q,
+        budget,
+        stats,
+        sleep_fn=lambda s: sleep_calls.append(s),
+    )
+
+    assert len(sleep_calls) == tr.SYSTEMIC_FAILURE_ABORT_AFTER - 1
+    assert stats.systemic_cooldowns == tr.SYSTEMIC_FAILURE_ABORT_AFTER - 1
+    assert stats.session_aborted is True
+    assert audio_q.get() is None
+
+
+def test_audio_loader_worker_success_resets_systemic_counter(monkeypatch) -> None:
+    budget = tr.SessionBudget(
+        max_videos=10,
+        session_seconds=3600.0,
+        monotonic_fn=Mono(0.0),
+        uniform_fn=lambda a, b: a,
+    )
+    stats = tr.SessionStats()
+    audio_q: queue.Queue = queue.Queue()
+    item = _dummy_downloaded()
+    outcomes = [
+        tr.LoaderStepResult(action="systemic_skip"),
+        tr.LoaderStepResult(action="systemic_skip"),
+        tr.LoaderStepResult(action="enqueue", item=item),
+        tr.LoaderStepResult(action="systemic_skip"),
+        tr.LoaderStepResult(action="stop"),
+    ]
+
+    def fake_claim(_budget):
+        return outcomes.pop(0)
+
+    monkeypatch.setattr(tr, "claim_and_download_one", fake_claim)
+
+    tr.audio_loader_worker(
+        audio_q,
+        budget,
+        stats,
+        sleep_fn=lambda _s: None,
+    )
+
+    assert stats.systemic_cooldowns == 3
+    assert stats.session_aborted is False
+    got_item = audio_q.get()
+    assert got_item is not None
+    assert got_item.video_id == "vid_ok"
+    assert audio_q.get() is None
+    tr._cleanup_tempdir(item.tempdir)
 
 
 # ----------------------------

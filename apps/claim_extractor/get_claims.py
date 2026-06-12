@@ -21,7 +21,7 @@ from apps.claim_extractor.api_requester import (
     classify_error_text,
     default_is_retryable_exception,
 )
-from apps.claim_extractor.model_common import SCORE_FIELD_NAMES, parse_score_01
+from apps.claim_extractor.extraction_core import build_azure_claims_client, format_input_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT_FILE = REPO_ROOT / "data" / "posts_for_term.json"
@@ -47,57 +47,6 @@ USER_PROMPT_CLAIMS_ONLY = (PROMPTS_DIR / "extract_user_claims_only.txt").read_te
 AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
-
-_SCORE_PROPS: dict[str, Any] = {
-    name: {"type": "number", "minimum": 0.0, "maximum": 1.0} for name in SCORE_FIELD_NAMES
-}
-
-CLAIMS_ONLY_JSON_SCHEMA: dict[str, Any] = {
-    "name": "vaccine_claim_extraction_claims_only",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "claims": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "claim": {"type": "string"},
-                    },
-                    "required": ["claim"],
-                },
-            }
-        },
-        "required": ["claims"],
-    },
-}
-
-CLAIMS_JSON_SCHEMA: dict[str, Any] = {
-    "name": "vaccine_claim_extraction",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "claims": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "claim": {"type": "string"},
-                        **_SCORE_PROPS,
-                    },
-                    "required": ["claim", *SCORE_FIELD_NAMES],
-                },
-            }
-        },
-        "required": ["claims"],
-    },
-}
 
 class PostsJsonStreamWriter:
     def __init__(self, final_path: Path, *, meta: dict[str, Any]) -> None:
@@ -133,16 +82,12 @@ class PostsJsonStreamWriter:
 
 
 def _build_client(*, claims_only: bool = False) -> AzureClaimsClient:
-    if not AZURE_OPENAI_KEY:
-        raise RuntimeError("Missing AZURE_OPENAI_KEY in environment.")
-    if not AZURE_OPENAI_ENDPOINT:
-        raise RuntimeError("Missing AZURE_OPENAI_ENDPOINT in environment.")
-    schema = CLAIMS_ONLY_JSON_SCHEMA if claims_only else CLAIMS_JSON_SCHEMA
-    return AzureClaimsClient(
+    return build_azure_claims_client(
+        model=MODEL_NAME,
         api_key=AZURE_OPENAI_KEY,
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_version=AZURE_OPENAI_API_VERSION,
-        model=MODEL_NAME,
+        claims_only=claims_only,
         system_prompt_builder=lambda payload: _build_system_prompt(
             max_claims=int(payload["max_claims"]),
             claims_only=bool(payload.get("claims_only")),
@@ -152,15 +97,7 @@ def _build_client(*, claims_only: bool = False) -> AzureClaimsClient:
             max_claims=int(payload["max_claims"]),
             claims_only=bool(payload.get("claims_only")),
         ),
-        response_schema=schema,
-        output_parser=_parse_output_factory(claims_only),
     )
-
-
-def _parse_output_factory(claims_only: bool):
-    if claims_only:
-        return _parse_and_validate_output_claims_only
-    return _parse_and_validate_output
 
 
 def _build_system_prompt(*, max_claims: int, claims_only: bool = False) -> str:
@@ -177,40 +114,6 @@ def _build_user_prompt(input_text: str, *, max_claims: int, claims_only: bool = 
     )
 
 
-def _parse_and_validate_output_claims_only(content: str) -> dict[str, Any]:
-    parsed = json.loads(content.strip())
-    if not isinstance(parsed, dict):
-        raise ValueError("model output JSON top-level is not an object")
-    claims = parsed.get("claims")
-    if not isinstance(claims, list):
-        raise ValueError("model output missing list field 'claims'")
-    for i, c in enumerate(claims):
-        if not isinstance(c, dict):
-            raise ValueError(f"claims[{i}] is not an object")
-        if not isinstance(c.get("claim"), str):
-            raise ValueError(f"claims[{i}].claim must be a string")
-    return parsed
-
-
-def _parse_and_validate_output(content: str) -> dict[str, Any]:
-    parsed = json.loads(content.strip())
-    if not isinstance(parsed, dict):
-        raise ValueError("model output JSON top-level is not an object")
-    claims = parsed.get("claims")
-    if not isinstance(claims, list):
-        raise ValueError("model output missing list field 'claims'")
-    for i, c in enumerate(claims):
-        if not isinstance(c, dict):
-            raise ValueError(f"claims[{i}] is not an object")
-        if not isinstance(c.get("claim"), str):
-            raise ValueError(f"claims[{i}].claim must be a string")
-        for key in SCORE_FIELD_NAMES:
-            v, bad = parse_score_01(c.get(key))
-            if v is None or bad:
-                raise ValueError(f"claims[{i}].{key} must be a number in [0, 1]")
-    return parsed
-
-
 def _stable_task_id(row: dict[str, Any]) -> str:
     src = row.get("source_post_id")
     idx = row.get("sentence_boundary_chunk_index")
@@ -220,19 +123,6 @@ def _stable_task_id(row: dict[str, Any]) -> str:
     text = str(row.get("text_coreference_resolved") or row.get("text") or "")
     digest = hashlib.sha256(f"{post_id}|{text}".encode("utf-8")).hexdigest()[:16]
     return f"{post_id}:{digest}"
-
-
-def _format_input_text(row: dict[str, Any], text: str) -> str:
-    platform = str(row.get("platform", "unknown"))
-    if platform == "reddit_submission":
-        return f"Submission title: {row.get('reddit_submission_title') or 'Unknown'}\n\n{text}"
-    if platform == "reddit_comment":
-        return f"Reddit comment context title: {row.get('reddit_comment_submission_title') or 'Unknown'}\n\n{text}"
-    if platform == "youtube_video":
-        return f"YouTube video title: {row.get('youtube_video_title') or 'Unknown'}\n\n{text}"
-    if platform == "podcast_episode":
-        return f"Podcast name: {row.get('podcast_name') or 'Unknown'}\n\n{text}"
-    return text
 
 
 def _normalize_row_state(row: dict[str, Any]) -> tuple[str, Optional[str]]:
@@ -312,7 +202,7 @@ def _build_tasks(posts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], lis
         pending.append(
             {
                 "task_id": task_id,
-                "input_text": _format_input_text(row, text),
+                "input_text": format_input_text(row, text),
                 "row": row,
             }
         )

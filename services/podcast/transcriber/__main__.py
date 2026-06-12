@@ -4,12 +4,12 @@ from .transcriber import main
 
 """
 TO RUN ON DEV:
-python -m services.transcriber
+python -m services.podcast.transcriber
 
 TO RUN ON PROD:
-python -m services.transcriber --prod
+python -m services.podcast.transcriber --prod
 
-calls must come from root dir (wmvi):
+Run from repo root. GPU setup: transcription/README.md
 """
 
 

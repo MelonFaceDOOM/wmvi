@@ -1,5 +1,5 @@
 [service]
-description = "transcribes youtube videos that have been labeled as is_en"
+description = "transcribes youtube videos (is_en labeled after transcript by label_en)"
 type = "oneshot"
 runtime = "transcription"
 

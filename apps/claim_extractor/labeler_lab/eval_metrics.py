@@ -5,6 +5,28 @@ from __future__ import annotations
 import math
 from typing import Any
 
+METRIC_HELP: dict[str, str] = {
+    "mae": (
+        "**MAE (mean absolute error)** — average |prediction − your label| on the 0–1 scale. "
+        "Lower is better. MAE ≈ 0.16 means predictions are typically off by about 0.16."
+    ),
+    "rmse": (
+        "**RMSE (root mean squared error)** — like MAE but large mistakes count more. "
+        "Lower is better; often slightly above MAE when a few rows are badly wrong."
+    ),
+    "pearson": (
+        "**Pearson r** — correlation between predictions and your labels (−1 to 1). "
+        "Higher is better for ranking agreement (high vs low scores). "
+        "Does not measure calibration: predictions can track your order but still be shifted."
+    ),
+    "n": "Number of eval rows included in this metric block.",
+}
+
+BEATS_LLM_HELP = (
+    "Ridge **beats LLM** when Ridge MAE is lower than LLM MAE **and** Ridge Pearson ≥ LLM Pearson "
+    "(requires ≥10 valid LLM scores on eval)."
+)
+
 
 def _pearson(x: list[float], y: list[float]) -> float | None:
     if len(x) < 2:
@@ -32,6 +54,80 @@ def eval_predictions(y_true: list[float], y_pred: list[float]) -> dict[str, Any]
         "rmse": rmse,
         "pearson": _pearson(y_true, y_pred),
     }
+
+
+def format_metric(value: float | None, *, decimals: int = 3) -> str:
+    if value is None:
+        return "—"
+    return f"{float(value):.{decimals}f}"
+
+
+def metrics_comparison_rows(
+    ridge: dict[str, Any],
+    llm: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Rows for a grouped bar chart: model × metric → value."""
+    rows: list[dict[str, Any]] = []
+    for metric_key, label in (("mae", "MAE"), ("rmse", "RMSE")):
+        rv = ridge.get(metric_key)
+        lv = llm.get(metric_key)
+        if rv is not None:
+            rows.append({"metric": label, "value": float(rv), "model": "Ridge"})
+        if lv is not None:
+            rows.append({"metric": label, "value": float(lv), "model": "LLM"})
+    return rows
+
+
+def pearson_comparison_rows(ridge: dict[str, Any], llm: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if ridge.get("pearson") is not None:
+        rows.append({"model": "Ridge", "pearson": float(ridge["pearson"])})
+    if llm.get("pearson") is not None:
+        rows.append({"model": "LLM", "pearson": float(llm["pearson"])})
+    return rows
+
+
+def scatter_rows_per_row(per_row: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Manual gold (x) vs prediction (y) points for Ridge and LLM scatter charts."""
+    ridge_pts: list[dict[str, Any]] = []
+    llm_pts: list[dict[str, Any]] = []
+    for row in per_row:
+        gold = float(row["y_manual"])
+        ridge_pts.append({"manual": gold, "predicted": float(row["y_ridge"])})
+        llm_v = row.get("y_llm")
+        if llm_v is not None:
+            llm_pts.append({"manual": gold, "predicted": float(llm_v)})
+    return ridge_pts, llm_pts
+
+
+def abs_error_histogram_rows(per_row: list[dict[str, Any]], *, bins: int = 10) -> list[dict[str, Any]]:
+    """Bucket absolute errors for Ridge vs LLM overlay histogram via bar chart."""
+    if not per_row:
+        return []
+    edges = [i / bins for i in range(bins + 1)]
+
+    def bucket(err: float) -> str:
+        idx = min(int(err * bins), bins - 1)
+        lo = edges[idx]
+        hi = edges[idx + 1]
+        return f"{lo:.1f}–{hi:.1f}"
+
+    counts: dict[tuple[str, str], int] = {}
+    labels = [f"{edges[i]:.1f}–{edges[i + 1]:.1f}" for i in range(bins)]
+    for row in per_row:
+        rb = bucket(float(row["ridge_abs_err"]))
+        key = ("Ridge", rb)
+        counts[key] = counts.get(key, 0) + 1
+        llm_err = row.get("llm_abs_err")
+        if llm_err is not None:
+            lb = bucket(float(llm_err))
+            key = ("LLM", lb)
+            counts[key] = counts.get(key, 0) + 1
+    out: list[dict[str, Any]] = []
+    for label in labels:
+        for model in ("Ridge", "LLM"):
+            out.append({"error_bin": label, "count": counts.get((model, label), 0), "model": model})
+    return out
 
 
 def compare_to_llm_baseline(

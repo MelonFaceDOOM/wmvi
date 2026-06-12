@@ -49,7 +49,7 @@ and may be overridden via environment variables (set in .env)
 The service installer may add an extra argument when starting services based on `SERVICE_ENV`
 (e.g. `--prod` for production). `SERVICE_ENV` is loaded from the project `.env`.
 
-**Transcription env checks** (GPU box, `venvs/transcription`): `python transcription/transcription_checklist.py --group podcast` or `--group youtube` — see `transcription/setup_instructions.txt`.
+**Transcription env checks** (GPU box, `venvs/transcription`): `python transcription/transcription_checklist.py --group podcast` or `--group youtube` — see [transcription/README.md](../transcription/README.md) and [transcription/setup.md](../transcription/setup.md).
 
 - `SERVICE_ENV=dev` → no extra args
 - `SERVICE_ENV=prod` → adds `--prod`

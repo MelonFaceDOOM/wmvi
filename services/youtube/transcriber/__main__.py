@@ -6,9 +6,9 @@ TO RUN ON DEV:
 python -m services.youtube.transcriber
 
 TO RUN ON PROD:
-python -m services.youtube.transciber --prod
+python -m services.youtube.transcriber --prod
 
-calls must come from root dir (wmvi):
+Run from repo root. Cookies/proxy/xrdp: transcription/youtube.md
 """
 
 

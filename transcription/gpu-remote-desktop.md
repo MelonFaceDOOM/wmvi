@@ -1,8 +1,10 @@
-# GPU box: remote desktop (xrdp) for Firefox / YouTube
+# GPU box: remote desktop (xrdp)
 
-Use this on the headless Debian GPU machine when you need a graphical session—for example to sign into YouTube, configure a proxy, and refresh `private/youtube-cookies.txt` and `private/youtube-agent.txt`.
+Use this on the headless Debian GPU machine when you need a **graphical session** — for example Firefox to refresh YouTube cookies. Podcast transcription does not require a browser.
 
-Use **SSH** for shells and services; use **Remote Desktop (xrdp)** only when you need a browser.
+Use **SSH** for shells and services; use **Remote Desktop (xrdp)** only when you need a GUI.
+
+**YouTube cookie refresh:** after connecting, see [youtube.md](youtube.md) (Firefox proxy + export steps).
 
 ## Install (on gpu-pc)
 
@@ -40,7 +42,7 @@ sudo reboot
 3. Log in with your Linux user (same account as SSH).
 4. You should see an **XFCE** desktop.
 
-## Firefox and proxy (Proxidize)
+## Firefox and proxy (YouTube cookie export only)
 
 Open Firefox from the XFCE menu or run:
 
@@ -48,13 +50,11 @@ Open Firefox from the XFCE menu or run:
 firefox-esr https://www.youtube.com
 ```
 
-**Proxy:** In Firefox go to **Settings → General → Network Settings → Settings… → Manual proxy configuration**. Enter the **HTTP** proxy host, port, and credentials from your Proxidize dashboard. Use the HTTP proxy line, not SOCKS, unless you have a specific reason to use SOCKS in the browser.
+**Proxy:** **Settings → General → Network Settings → Settings… → Manual proxy configuration**. Enter the **HTTP** proxy host, port, and credentials from your Proxidize dashboard (same proxy as `YT_PROXY_URL` in `.env`).
 
-`YT_PROXY_URL` in `.env` applies only to **yt-dlp** on the transcriber; the browser does not read it—you must set the proxy in Firefox for web login and cookie export.
+`YT_PROXY_URL` applies only to **yt-dlp** on the transcriber; Firefox does not read `.env` — configure the proxy in the browser before signing in and exporting cookies.
 
-## Refresh YouTube cookies for wmvi
-
-After proxy and sign-in work in Firefox, follow the steps in `services/youtube/transcriber/process_and_troubleshooting.txt` (private window, `youtube.com/robots.txt`, cookies.txt extension → `private/youtube-cookies.txt`, user-agent → `private/youtube-agent.txt`).
+Full procedure: [youtube.md](youtube.md).
 
 ## Troubleshooting
 

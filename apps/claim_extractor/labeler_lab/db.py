@@ -42,6 +42,20 @@ def init_schema(conn: sqlite3.Connection) -> None:
             UNIQUE(head_id, task_id, claim_index)
         );
         CREATE INDEX IF NOT EXISTS idx_labels_head_split ON labels(head_id, split);
+        CREATE TABLE IF NOT EXISTS problem_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL,
+            claim_index INTEGER NOT NULL,
+            post_json TEXT NOT NULL,
+            claim_json TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            head_id INTEGER REFERENCES ridge_heads(id) ON DELETE SET NULL,
+            flagged_from_head TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(task_id, claim_index)
+        );
+        CREATE INDEX IF NOT EXISTS idx_problem_claims_created ON problem_claims(created_at);
         """
     )
     conn.commit()
@@ -225,6 +239,125 @@ def delete_label(conn: sqlite3.Connection, head_id: int, task_id: str, claim_ind
     cur = conn.execute(
         "DELETE FROM labels WHERE head_id = ? AND task_id = ? AND claim_index = ?",
         (head_id, task_id, claim_index),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def _row_to_problem_claim(r: sqlite3.Row, *, parse_json: bool = True) -> dict[str, Any]:
+    post_json = str(r["post_json"])
+    claim_json = str(r["claim_json"])
+    out: dict[str, Any] = {
+        "task_id": str(r["task_id"]),
+        "claim_index": int(r["claim_index"]),
+        "note": str(r["note"] or ""),
+        "head_id": int(r["head_id"]) if r["head_id"] is not None else None,
+        "flagged_from_head": str(r["flagged_from_head"] or ""),
+        "created_at": str(r["created_at"]) if r["created_at"] else None,
+        "updated_at": str(r["updated_at"]) if r["updated_at"] else None,
+    }
+    if parse_json:
+        out["post_row"] = json.loads(post_json)
+        out["claim_dict"] = json.loads(claim_json)
+    else:
+        out["post_json"] = post_json
+        out["claim_json"] = claim_json
+    return out
+
+
+def upsert_problem_claim(
+    conn: sqlite3.Connection,
+    *,
+    task_id: str,
+    claim_index: int,
+    post_row: dict[str, Any],
+    claim_dict: dict[str, Any],
+    note: str = "",
+    head_id: int | None = None,
+    flagged_from_head: str | None = None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO problem_claims (
+            task_id, claim_index, post_json, claim_json, note, head_id, flagged_from_head
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(task_id, claim_index) DO UPDATE SET
+            post_json = excluded.post_json,
+            claim_json = excluded.claim_json,
+            head_id = excluded.head_id,
+            flagged_from_head = excluded.flagged_from_head,
+            updated_at = datetime('now'),
+            note = CASE
+                WHEN excluded.note != '' THEN excluded.note
+                ELSE problem_claims.note
+            END
+        """,
+        (
+            task_id,
+            claim_index,
+            json.dumps(post_row, ensure_ascii=False),
+            json.dumps(claim_dict, ensure_ascii=False),
+            note,
+            head_id,
+            flagged_from_head,
+        ),
+    )
+    conn.commit()
+
+
+def is_problem_claim(conn: sqlite3.Connection, task_id: str, claim_index: int) -> bool:
+    r = conn.execute(
+        "SELECT 1 FROM problem_claims WHERE task_id = ? AND claim_index = ?",
+        (task_id, claim_index),
+    ).fetchone()
+    return r is not None
+
+
+def count_problem_claims(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM problem_claims").fetchone()[0])
+
+
+def fetch_problem_claims_sorted(
+    conn: sqlite3.Connection,
+    *,
+    descending: bool = True,
+) -> list[dict[str, Any]]:
+    order = "DESC" if descending else "ASC"
+    rows = conn.execute(
+        f"""
+        SELECT task_id, claim_index, post_json, claim_json, note, head_id,
+               flagged_from_head, created_at, updated_at
+        FROM problem_claims
+        ORDER BY created_at {order}, task_id, claim_index
+        """
+    ).fetchall()
+    return [_row_to_problem_claim(r) for r in rows]
+
+
+def update_problem_claim_note(
+    conn: sqlite3.Connection,
+    *,
+    task_id: str,
+    claim_index: int,
+    note: str,
+) -> bool:
+    cur = conn.execute(
+        """
+        UPDATE problem_claims
+        SET note = ?, updated_at = datetime('now')
+        WHERE task_id = ? AND claim_index = ?
+        """,
+        (note, task_id, claim_index),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_problem_claim(conn: sqlite3.Connection, task_id: str, claim_index: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM problem_claims WHERE task_id = ? AND claim_index = ?",
+        (task_id, claim_index),
     )
     conn.commit()
     return cur.rowcount > 0

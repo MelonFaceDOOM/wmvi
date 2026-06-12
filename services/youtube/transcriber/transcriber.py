@@ -41,6 +41,8 @@ SESSION_STARTS = [
 SESSION_DURATION_HOURS = 3
 VIDEOS_PER_SESSION = 100
 SESSION_SPREAD_FRACTION = 0.90
+SYSTEMIC_FAILURE_COOLDOWN_S = 600
+SYSTEMIC_FAILURE_ABORT_AFTER = 5
 
 
 # ---------------------------------------------------------------------
@@ -77,8 +79,40 @@ class TranscriptResult:
 
 @dataclass(frozen=True)
 class LoaderStepResult:
-    action: str  # "enqueue" | "skip" | "abort" | "stop"
+    action: str  # "enqueue" | "skip" | "systemic_skip" | "abort" | "stop"
     item: DownloadedAudio | None = None
+    skip_kind: str | None = None  # "permanent" | "retryable"
+
+
+class SessionStats:
+    def __init__(self) -> None:
+        self.saved_count = 0
+        self.skipped_permanent = 0
+        self.skipped_retryable = 0
+        self.systemic_cooldowns = 0
+        self.session_aborted = False
+        self.started_monotonic = time.monotonic()
+        self._lock = threading.Lock()
+
+    def inc_saved(self) -> None:
+        with self._lock:
+            self.saved_count += 1
+
+    def inc_skipped_permanent(self) -> None:
+        with self._lock:
+            self.skipped_permanent += 1
+
+    def inc_skipped_retryable(self) -> None:
+        with self._lock:
+            self.skipped_retryable += 1
+
+    def inc_systemic_cooldown(self) -> None:
+        with self._lock:
+            self.systemic_cooldowns += 1
+
+    def mark_aborted(self) -> None:
+        with self._lock:
+            self.session_aborted = True
 
 
 # ---------------------------------------------------------------------
@@ -352,6 +386,17 @@ def save_transcript(cur, video_id: str, transcript: str) -> None:
     )
 
 
+def release_claim(cur, video_id: str) -> None:
+    cur.execute(
+        """
+        UPDATE youtube.video
+           SET transcription_started_at = NULL
+         WHERE video_id = %s
+        """,
+        (video_id,),
+    )
+
+
 def mark_transcription_failed(cur, video_id: str, reason: str) -> None:
     cur.execute(
         """
@@ -412,6 +457,7 @@ def claim_and_download_one(
         claim_next_video_fn=claim_next_video,
         download_audio_fn=download_yt_audio,
         mark_failed_fn=mark_transcription_failed,
+        release_claim_fn=release_claim,
         cleanup_tempdir_fn=_cleanup_tempdir,
         sleep_until_fn=_sleep_until_monotonic,
 ) -> LoaderStepResult:
@@ -450,16 +496,19 @@ def claim_and_download_one(
                 info.summary,
             )
             budget.release_slot()
-            return LoaderStepResult(action="skip")
+            return LoaderStepResult(action="skip", skip_kind="permanent")
 
         if info.category in ("auth", "proxy"):
+            with cursor_factory(commit=True) as cur:
+                release_claim_fn(cur, claimed.video_id)
             log.error(
                 "audio_loader: systemic %s failure for %s: %s",
                 info.category,
                 claimed.video_id,
                 info.summary,
             )
-            return LoaderStepResult(action="abort")
+            budget.release_slot()
+            return LoaderStepResult(action="systemic_skip")
 
         log.warning(
             "audio_loader: retryable failure for %s: %s",
@@ -467,7 +516,7 @@ def claim_and_download_one(
             info.summary,
         )
         budget.release_slot()
-        return LoaderStepResult(action="skip")
+        return LoaderStepResult(action="skip", skip_kind="retryable")
 
     return LoaderStepResult(
         action="enqueue",
@@ -512,8 +561,15 @@ def save_one(
 # Workers
 # ---------------------------------------------------------------------
 
-def audio_loader_worker(audio_q: queue.Queue, budget: SessionBudget) -> None:
+def audio_loader_worker(
+    audio_q: queue.Queue,
+    budget: SessionBudget,
+    stats: SessionStats,
+    *,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> None:
     logging.info("audio_loader: started")
+    consecutive_systemic_failures = 0
 
     while True:
         step = claim_and_download_one(budget)
@@ -524,14 +580,40 @@ def audio_loader_worker(audio_q: queue.Queue, budget: SessionBudget) -> None:
             return
 
         if step.action == "abort":
+            stats.mark_aborted()
             log.error("audio_loader: stopping session due to systemic download failure")
             audio_q.put(None)
             return
 
+        if step.action == "systemic_skip":
+            consecutive_systemic_failures += 1
+            if consecutive_systemic_failures >= SYSTEMIC_FAILURE_ABORT_AFTER:
+                stats.mark_aborted()
+                log.error(
+                    "audio_loader: stopping session after %d consecutive systemic failures",
+                    consecutive_systemic_failures,
+                )
+                audio_q.put(None)
+                return
+            stats.inc_systemic_cooldown()
+            log.warning(
+                "audio_loader: systemic failure (%d/%d); cooling down %ds before retry",
+                consecutive_systemic_failures,
+                SYSTEMIC_FAILURE_ABORT_AFTER,
+                SYSTEMIC_FAILURE_COOLDOWN_S,
+            )
+            sleep_fn(SYSTEMIC_FAILURE_COOLDOWN_S)
+            continue
+
         if step.action == "skip":
+            if step.skip_kind == "permanent":
+                stats.inc_skipped_permanent()
+            elif step.skip_kind == "retryable":
+                stats.inc_skipped_retryable()
             continue
 
         assert step.item is not None
+        consecutive_systemic_failures = 0
         logging.info("audio_loader: downloaded %s", step.item.video_id)
         audio_q.put(step.item)
 
@@ -554,7 +636,7 @@ def transcriber_worker(audio_q: queue.Queue, save_q: queue.Queue) -> None:
             audio_q.task_done()
 
 
-def saver_worker(save_q: queue.Queue) -> None:
+def saver_worker(save_q: queue.Queue, stats: SessionStats) -> None:
     logging.info("saver: started")
 
     while True:
@@ -564,6 +646,7 @@ def saver_worker(save_q: queue.Queue) -> None:
                 return
 
             save_one(item)
+            stats.inc_saved()
             logging.info("saver: video %s saved", item.video_id)
         finally:
             if isinstance(item, TranscriptResult):
@@ -594,14 +677,32 @@ def _thread_entry(
         exit_fn(1)
 
 
+def _log_session_summary(stats: SessionStats) -> None:
+    elapsed_s = max(0.0, time.monotonic() - stats.started_monotonic)
+    elapsed_h = elapsed_s / 3600.0
+    rate = stats.saved_count / elapsed_h if elapsed_h > 0 else 0.0
+    log.info(
+        "session_summary: saved=%d skipped_permanent=%d skipped_retryable=%d "
+        "systemic_cooldowns=%d session_aborted=%s elapsed_s=%.0f rate_per_hour=%.1f",
+        stats.saved_count,
+        stats.skipped_permanent,
+        stats.skipped_retryable,
+        stats.systemic_cooldowns,
+        stats.session_aborted,
+        elapsed_s,
+        rate,
+    )
+
+
 def run_one_session(budget: SessionBudget) -> None:
+    stats = SessionStats()
     audio_q = queue.Queue(maxsize=AUDIO_QUEUE_SIZE)
     save_q = queue.Queue(maxsize=SAVE_QUEUE_SIZE)
 
     threads = [
         threading.Thread(
             target=_thread_entry,
-            args=(audio_loader_worker, audio_q, budget),
+            args=(audio_loader_worker, audio_q, budget, stats),
             daemon=True,
         ),
         threading.Thread(
@@ -611,7 +712,7 @@ def run_one_session(budget: SessionBudget) -> None:
         ),
         threading.Thread(
             target=_thread_entry,
-            args=(saver_worker, save_q),
+            args=(saver_worker, save_q, stats),
             daemon=True,
         ),
     ]
@@ -621,6 +722,8 @@ def run_one_session(budget: SessionBudget) -> None:
 
     for t in threads:
         t.join()
+
+    _log_session_summary(stats)
 
 
 def run_scheduler_cycle(

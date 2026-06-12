@@ -21,4 +21,4 @@ WMVI intentionally uses two separate virtual environments.
 Transcription services run in a dedicated virtual environment to avoid
 installing heavy ML dependencies on machines that do not transcribe media.
 
-It is recommended to install requirements.txt and requirements-transcription.txt to two separate venvs. The transcription folder has more info on setting up for transcription.
+It is recommended to install requirements.txt and requirements-transcription.txt to two separate venvs. See [transcription/README.md](transcription/README.md) for GPU setup, checklist, and platform runbooks (YouTube / podcast).
