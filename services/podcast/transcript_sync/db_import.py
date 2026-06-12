@@ -53,7 +53,7 @@ def apply_transcript_batch(
         for r in rows
     ]
     template = "(%s, %s, %s::timestamptz)"
-    execute_values(
+    returned = execute_values(
         cur,
         _UPDATE_SQL,
         values,
@@ -61,7 +61,7 @@ def apply_transcript_batch(
         page_size=len(values),
         fetch=True,
     )
-    updated_ids = {str(row[0]) for row in cur.fetchall()}
+    updated_ids = {str(row[0]) for row in (returned or [])}
     registered = 0
     for episode_id in updated_ids:
         ensure_post_registered(

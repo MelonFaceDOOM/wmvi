@@ -486,6 +486,54 @@ class _FakeCursor:
         ]
 
 
+def test_apply_transcript_batch_uses_execute_values_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """execute_values(fetch=True) returns rows; a second fetchall() is always empty."""
+    from services.podcast.transcript_sync.db_import import (
+        TranscriptApplyRow,
+        apply_transcript_batch,
+    )
+
+    ts = datetime(2026, 6, 12, tzinfo=timezone.utc)
+    rows = [
+        TranscriptApplyRow(
+            episode_id="ep_1_a",
+            transcript="hello",
+            transcript_updated_at=ts,
+        ),
+    ]
+
+    class FakeCursor:
+        def fetchall(self):
+            pytest.fail("apply_transcript_batch must not call cursor.fetchall()")
+
+    fake_cur = FakeCursor()
+    registered: list[str] = []
+
+    def fake_execute_values(cur, sql, argslist, template=None, page_size=100, fetch=False):
+        assert fetch is True
+        assert cur is fake_cur
+        return [("ep_1_a",)]
+
+    def fake_register(cur, *, platform, key1, key2=""):
+        registered.append(key1)
+
+    monkeypatch.setattr(
+        "services.podcast.transcript_sync.db_import.execute_values",
+        fake_execute_values,
+    )
+    monkeypatch.setattr(
+        "services.podcast.transcript_sync.db_import.ensure_post_registered",
+        fake_register,
+    )
+
+    result = apply_transcript_batch(fake_cur, rows)
+    assert result.updated == 1
+    assert result.registered == 1
+    assert registered == ["ep_1_a"]
+
+
 def _fake_export_cursor(*args, **kwargs):
     return _FakeCursor()
 

@@ -60,7 +60,12 @@ from services.podcast.transcript_sync.resolve import (  # noqa: E402
     target_episode_id,
 )
 from services.podcast.transcript_sync.rss_url import normalize_rss_url  # noqa: E402
-from storage.content_sync import download_bundle, list_export_bundle_ids  # noqa: E402
+from content_sync import db_sync_state  # noqa: E402
+from storage.content_sync import (  # noqa: E402
+    download_bundle,
+    list_export_bundle_ids,
+    list_pending_bundle_ids,
+)
 from storage.nitwitch_paths import CONTENT_SYNC_SUBDIR  # noqa: E402
 
 
@@ -388,9 +393,26 @@ def main() -> None:
                     "SELECT last_imported_bundle_at FROM sm.content_sync_state WHERE id = 'global'"
                 )
                 row = cur.fetchone()
+                last_imported = row[0] if row else None
                 if row:
                     print(f"\n=== sm.content_sync_state ===")
-                    print(f"  last_imported_bundle_at: {row[0]}")
+                    print(f"  last_imported_bundle_at: {last_imported}")
+
+                pending = list_pending_bundle_ids(last_imported)
+                print(f"\n=== Import queue (nitwitch/local listing) ===")
+                print(f"  bundles on source: {len(bundle_ids)}")
+                print(f"  pending import (bundle_id > watermark): {len(pending)}")
+                if pending:
+                    print(f"  pending ids: {pending}")
+                    if bundle_id not in pending and last_imported is not None:
+                        print(
+                            f"\n  >> Bundle {bundle_id!r} is BEFORE the import watermark; "
+                            "automatic import will not retry it. Use:\n"
+                            "     python -m services.content_sync.import --prod "
+                            f"--bundle {bundle_id}"
+                        )
+                elif last_imported is not None:
+                    print("  (none — import timer will idle until next export)")
         finally:
             close_pool()
 

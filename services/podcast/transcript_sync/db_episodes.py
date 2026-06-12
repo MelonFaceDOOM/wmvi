@@ -52,7 +52,7 @@ def insert_new_episodes(cur, rows: Sequence[EpisodeInsertRow]) -> int:
         for r in rows
     ]
     template = "(%s, %s, %s, %s, %s, %s::timestamptz, %s)"
-    execute_values(
+    rows = execute_values(
         cur,
         _INSERT_EPISODES_SQL,
         values,
@@ -60,7 +60,7 @@ def insert_new_episodes(cur, rows: Sequence[EpisodeInsertRow]) -> int:
         page_size=len(values),
         fetch=True,
     )
-    return len(cur.fetchall())
+    return len(rows or [])
 
 
 def episode_insert_from_export(

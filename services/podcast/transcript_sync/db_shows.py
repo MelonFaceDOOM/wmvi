@@ -113,7 +113,7 @@ def upsert_shows(cur, rows: list[ShowRow]) -> dict[str, int]:
         for r in by_rss.values()
     ]
     template = "(%s, %s, %s, %s, %s::timestamptz, %s, %s)"
-    execute_values(
+    rows = execute_values(
         cur,
         _UPSERT_SHOWS_SQL,
         values,
@@ -122,7 +122,7 @@ def upsert_shows(cur, rows: list[ShowRow]) -> dict[str, int]:
         fetch=True,
     )
     out: dict[str, int] = {}
-    for show_id, rss in cur.fetchall():
+    for show_id, rss in rows or []:
         key = normalize_rss_url(str(rss))
         if key:
             out[key] = int(show_id)
