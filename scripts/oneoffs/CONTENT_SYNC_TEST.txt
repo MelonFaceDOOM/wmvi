@@ -15,6 +15,10 @@ python -m scripts.migrate_db --prod
 python -m scripts.content_sync import --prod --bundle BUNDLE_ID --dry-run
 python -m scripts.content_sync import --prod --bundle BUNDLE_ID
 
+# --- Bundle diagnose (no DB write) ---
+python -m scripts.oneoffs.content_sync_podcast_bundle_check --source nitwitch --bundle BUNDLE_ID
+python -m scripts.oneoffs.content_sync_podcast_bundle_check --source nitwitch --check-db --prod
+
 # --- Verify (prod) ---
 # SELECT * FROM sm.content_sync_state;
 # Episodes with transcript but no registry (should be empty after import):
