@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Iterable, Optional, Protocol
 
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 from openai._exceptions import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
 
@@ -60,6 +60,29 @@ class RequestClient(Protocol):
         """
 
 
+def _parse_chat_completion_response(
+    resp: Any,
+    *,
+    output_parser: Callable[[str], dict[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not getattr(resp, "choices", None):
+        raise RuntimeError("Model response has no choices.")
+    content = getattr(resp.choices[0].message, "content", None)
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("Model response content is empty.")
+
+    usage = getattr(resp, "usage", None)
+    meta = {
+        "model": getattr(resp, "model", None),
+        "usage": {
+            "prompt_tokens": getattr(usage, "prompt_tokens", None) if usage is not None else None,
+            "completion_tokens": getattr(usage, "completion_tokens", None) if usage is not None else None,
+            "total_tokens": getattr(usage, "total_tokens", None) if usage is not None else None,
+        },
+    }
+    return output_parser(content), meta
+
+
 class AzureClaimsClient:
     def __init__(
         self,
@@ -96,22 +119,44 @@ class AzureClaimsClient:
                 {"role": "user", "content": user_prompt},
             ],
         )
-        if not getattr(resp, "choices", None):
-            raise RuntimeError("Model response has no choices.")
-        content = getattr(resp.choices[0].message, "content", None)
-        if not isinstance(content, str) or not content.strip():
-            raise RuntimeError("Model response content is empty.")
+        return _parse_chat_completion_response(resp, output_parser=self._output_parser)
 
-        usage = getattr(resp, "usage", None)
-        meta = {
-            "model": getattr(resp, "model", None),
-            "usage": {
-                "prompt_tokens": getattr(usage, "prompt_tokens", None) if usage is not None else None,
-                "completion_tokens": getattr(usage, "completion_tokens", None) if usage is not None else None,
-                "total_tokens": getattr(usage, "total_tokens", None) if usage is not None else None,
-            },
-        }
-        return self._output_parser(content), meta
+
+class OpenAIClaimsClient:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        system_prompt_builder: Callable[[dict[str, Any]], str],
+        user_prompt_builder: Callable[[dict[str, Any]], str],
+        response_schema: dict[str, Any],
+        output_parser: Callable[[str], dict[str, Any]],
+        base_url: str | None = None,
+    ) -> None:
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        self._client = OpenAI(**kwargs)
+        self._model = model
+        self._system_prompt_builder = system_prompt_builder
+        self._user_prompt_builder = user_prompt_builder
+        self._response_schema = response_schema
+        self._output_parser = output_parser
+
+    def perform(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        system_prompt = self._system_prompt_builder(payload)
+        user_prompt = self._user_prompt_builder(payload)
+        resp = self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            response_format={"type": "json_schema", "json_schema": self._response_schema},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return _parse_chat_completion_response(resp, output_parser=self._output_parser)
 
 
 RETRYABLE_ERROR_MARKERS = (

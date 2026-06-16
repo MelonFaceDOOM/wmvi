@@ -38,4 +38,10 @@ scoring results
 make changes & iterate and re-score
 review results across diff embedding attempts
 
-the problem is the claims won't be consistent across diff extraction attempts, so i either wait until i'm satisfied and choose one file extraction set, or I choose contrastive/similar posts, and just choose posts that are expected to have a narrow set of possible claims extracted
+the problem is the claims won't be consistent across diff extraction attempts,
+so i either wait until i'm satisfied and choose one file extraction set,
+or I choose contrastive/similar posts, and just choose posts that are expected to have a narrow set
+of possible claims extracted
+
+SOLUTION: just do it on claims. refine claim extraction until it's good,
+then freeze set of claims and use that to iterate on embedding refinement

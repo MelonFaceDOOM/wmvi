@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
-from dotenv import load_dotenv
 from openai._exceptions import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
 from apps.claim_extractor.api_requester import (
@@ -21,7 +20,7 @@ from apps.claim_extractor.api_requester import (
     classify_error_text,
     default_is_retryable_exception,
 )
-from apps.claim_extractor.extraction_core import build_azure_claims_client, format_input_text
+from apps.claim_extractor.extraction_core import build_azure_claims_client, format_input_text, load_azure_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT_FILE = REPO_ROOT / "data" / "posts_for_term.json"
@@ -35,8 +34,6 @@ DEFAULT_N_POSTS = 0
 DEFAULT_TARGET_RPM = 90
 DEFAULT_429_COOLDOWN_S = 20.0
 
-load_dotenv()
-
 MODEL_NAME = "gpt-5.4-mini"
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 SYSTEM_PROMPT = (PROMPTS_DIR / "extract_system.txt").read_text(encoding="utf-8-sig")
@@ -44,9 +41,6 @@ USER_PROMPT = (PROMPTS_DIR / "extract_user.txt").read_text(encoding="utf-8-sig")
 SYSTEM_PROMPT_CLAIMS_ONLY = (PROMPTS_DIR / "extract_system_claims_only.txt").read_text(encoding="utf-8-sig")
 USER_PROMPT_CLAIMS_ONLY = (PROMPTS_DIR / "extract_user_claims_only.txt").read_text(encoding="utf-8-sig")
 
-AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY")
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
 
 class PostsJsonStreamWriter:
     def __init__(self, final_path: Path, *, meta: dict[str, Any]) -> None:
@@ -82,11 +76,12 @@ class PostsJsonStreamWriter:
 
 
 def _build_client(*, claims_only: bool = False) -> AzureClaimsClient:
+    cfg = load_azure_config()
     return build_azure_claims_client(
         model=MODEL_NAME,
-        api_key=AZURE_OPENAI_KEY,
-        azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        api_version=AZURE_OPENAI_API_VERSION,
+        api_key=cfg.key,
+        azure_endpoint=cfg.endpoint,
+        api_version=cfg.api_version,
         claims_only=claims_only,
         system_prompt_builder=lambda payload: _build_system_prompt(
             max_claims=int(payload["max_claims"]),

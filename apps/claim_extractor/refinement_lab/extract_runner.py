@@ -14,7 +14,8 @@ from apps.claim_extractor.api_requester import (
     ThrottlePolicy,
     default_is_retryable_exception,
 )
-from apps.claim_extractor.extraction_core import build_azure_claims_client
+# refinement_lab uses personal OpenAI; swap import to build_azure_claims_client to use Azure.
+from apps.claim_extractor.extraction_core import build_openai_claims_client as build_claims_client
 from apps.claim_extractor.refinement_lab import db, prompt_vars
 from apps.claim_extractor.refinement_lab.db import PromptProfile
 
@@ -29,8 +30,10 @@ def run_profile_on_posts(
     profile: PromptProfile,
     problem_posts: list[dict[str, Any]],
     *,
+    model: str | None = None,
     max_workers: int = DEFAULT_MAX_WORKERS,
     on_progress: Callable[[int, int, str], None] | None = None,
+    write_reference: bool = False,
 ) -> tuple[int, int]:
     """
     Extract claims for each problem post using ``profile`` prompts.
@@ -41,7 +44,7 @@ def run_profile_on_posts(
         return 0, 0
 
     profile_id = profile.id
-    model = profile.model
+    run_model = model or profile.model
     max_claims = profile.max_claims
 
     def system_builder(payload: dict[str, Any]) -> str:
@@ -50,8 +53,8 @@ def run_profile_on_posts(
     def user_builder(payload: dict[str, Any]) -> str:
         return str(payload["user_prompt"])
 
-    client = build_azure_claims_client(
-        model=model,
+    client = build_claims_client(
+        model=run_model,
         claims_only=True,
         system_prompt_builder=system_builder,
         user_prompt_builder=user_builder,
@@ -99,25 +102,39 @@ def run_profile_on_posts(
         if on_progress:
             on_progress(done, len(problem_posts), result.task_id)
         if result.status == RequestStatus.SUCCESS and result.output is not None:
-            db.upsert_profile_extraction(
-                conn,
-                profile_id=profile_id,
-                task_id=result.task_id,
-                status="success",
-                output_json=result.output,
-                error=None,
-                model=model,
-            )
+            if write_reference:
+                claims = result.output.get("claims") if isinstance(result.output, dict) else []
+                if not isinstance(claims, list):
+                    claims = []
+                db.upsert_reference_claims(
+                    conn,
+                    task_id=result.task_id,
+                    claims=claims,
+                    source="generated",
+                    generated_from_profile_id=profile_id,
+                    generated_model=run_model,
+                )
+            else:
+                db.upsert_profile_extraction(
+                    conn,
+                    profile_id=profile_id,
+                    task_id=result.task_id,
+                    status="success",
+                    output_json=result.output,
+                    error=None,
+                    model=run_model,
+                )
             success += 1
         else:
-            db.upsert_profile_extraction(
-                conn,
-                profile_id=profile_id,
-                task_id=result.task_id,
-                status="failed",
-                output_json=None,
-                error=result.error or "unknown error",
-                model=model,
-            )
+            if not write_reference:
+                db.upsert_profile_extraction(
+                    conn,
+                    profile_id=profile_id,
+                    task_id=result.task_id,
+                    status="failed",
+                    output_json=None,
+                    error=result.error or "unknown error",
+                    model=run_model,
+                )
             failed += 1
     return success, failed

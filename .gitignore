@@ -32,5 +32,4 @@ podcast_samples.txt
 db/migrations/*.sql text eol=lf
 
 data/
-apps/claim_extractor/data/
-apps/claim_extractor/labeler_lab/data/*.sqlite
+

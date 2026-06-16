@@ -20,8 +20,14 @@ if str(_REPO_ROOT) not in sys.path:
 import streamlit as st
 
 from apps.claim_extractor.claim_normalize import normalize_claim_text
+# refinement_lab uses personal OpenAI; swap imports to check_azure_connectivity / load_azure_config for Azure.
+from apps.claim_extractor.extraction_core import (
+    check_openai_connectivity as check_llm_connectivity,
+    load_openai_config as load_llm_config,
+)
 from apps.claim_extractor.learned.constants import REPO_ROOT
-from apps.claim_extractor.refinement_lab import db, extract_runner, posts_data, prompt_vars
+from apps.claim_extractor.refinement_lab import db, extract_runner, optimizer, posts_data, prompt_vars
+from apps.claim_extractor.refinement_lab.meta_defaults import META_PROMPT_SPECS, validate_meta_prompt
 from apps.claim_extractor.refinement_lab.models import DEFAULT_MODEL, SEED_MODELS
 from apps.claim_extractor.scoring_inputs import context_text_for_post_row
 
@@ -98,21 +104,21 @@ def _claim_norm_set(claims: list | None) -> set[str]:
     return {normalize_claim_text(t) for t in posts_data.claim_texts(claims) if normalize_claim_text(t)}
 
 
-def _render_claim_diff(baseline: list | None, profile_claims: list | None) -> None:
-    base_set = _claim_norm_set(baseline)
+def _render_claim_diff(reference: list | None, profile_claims: list | None) -> None:
+    ref_set = _claim_norm_set(reference)
     prof_set = _claim_norm_set(profile_claims)
-    only_base = base_set - prof_set
-    only_prof = prof_set - base_set
-    if only_base:
-        st.caption("Only in baseline:")
-        for t in sorted(only_base):
+    only_ref = ref_set - prof_set
+    only_prof = prof_set - ref_set
+    if only_ref:
+        st.caption("Only in Reference:")
+        for t in sorted(only_ref):
             st.markdown(f"- {t}")
     if only_prof:
         st.caption("Only in this profile:")
         for t in sorted(only_prof):
             st.markdown(f"- {t}")
-    if not only_base and not only_prof and base_set:
-        st.caption("Claim set matches baseline (normalized text).")
+    if not only_ref and not only_prof and ref_set:
+        st.caption("Claim set matches Reference (normalized text).")
 
 
 @st.cache_data(show_spinner=True)
@@ -144,7 +150,7 @@ def _load_posts(path_str: str) -> tuple[list, str | None]:
 
 def _open_db(path: Path):
     conn = db.connect(path)
-    db.init_schema(conn)
+    db.init_lab(conn)
     return conn
 
 
@@ -287,6 +293,7 @@ def _render_browse_tab(conn, posts: list, posts_err: str | None) -> None:
                     comment=note,
                     source="browse",
                 )
+                db.sync_baseline_extractions(conn)
                 st.success("Marked as problem.")
                 st.rerun()
     with c_skip:
@@ -364,13 +371,42 @@ def _render_profiles_tab(conn) -> None:
         st.success("Saved.")
         st.rerun()
 
+    notes = db.fetch_profile_notes(conn, profile_id)
+    if notes:
+        with st.expander("Profile notes (optimizer)", expanded=False):
+            for n in notes:
+                st.markdown(f"**{n['kind']}** · {n['created_at']}")
+                st.text(n["content"][:4000])
+
     problem_posts = db.fetch_problem_posts_sorted(conn, descending=False)
     st.write(f"Problem posts to extract: **{len(problem_posts)}**")
     if not problem_posts:
         st.warning("Mark problem posts first on the Browse tab.")
         return
 
-    if st.button("Run on all problem posts", key=f"prof_run_{profile_id}"):
+    test_col, run_col = st.columns([1, 1])
+    with test_col:
+        if st.button("Test OpenAI connection", key=f"prof_test_openai_{profile_id}"):
+            with st.spinner("Testing OpenAI connection…"):
+                ok, message = check_llm_connectivity(model)
+            if ok:
+                st.success(message)
+            else:
+                st.error(message)
+
+    with run_col:
+        run_clicked = st.button("Run on all problem posts", key=f"prof_run_{profile_id}")
+
+    if run_clicked:
+        if not system_prompt.strip() and not user_prompt.strip():
+            st.warning("System and user prompts are both empty. Add at least one prompt before running.")
+            return
+        try:
+            load_llm_config()
+        except RuntimeError as exc:
+            st.error(f"OpenAI not configured: {exc}")
+            return
+
         profile = db.get_profile(conn, profile_id)
         if profile is None:
             st.error("Profile not found.")
@@ -397,24 +433,83 @@ def _render_profiles_tab(conn) -> None:
                     state="complete" if fail == 0 else "error",
                 )
                 st.success(f"Extraction finished: **{ok}** ok, **{fail}** failed.")
-            except Exception as e:
+                if fail:
+                    st.info("Open the Compare tab to see per-post extraction errors.")
+            except RuntimeError as exc:
                 progress.empty()
                 status.update(label="Failed", state="error")
-                st.exception(e)
+                st.error(str(exc))
+            except Exception as exc:
+                progress.empty()
+                status.update(label="Failed", state="error")
+                st.error(f"Run failed: {exc}")
+
+
+def _reference_claims_list(conn, task_id: str) -> list[dict]:
+    ref = db.get_reference_claims(conn, task_id)
+    return list(ref.claims) if ref else []
+
+
+def _render_reference_tab(conn, *, tid: str, block_idx: int) -> None:
+    with st.container(border=True):
+        st.markdown("**:gold[Reference (gold)]** — editable ground truth (no prompts)")
+        ref = db.get_reference_claims(conn, tid)
+        if ref and ref.updated_at:
+            st.caption(f"Source: **{ref.source}** · updated {ref.updated_at}")
+        claims = _reference_claims_list(conn, tid)
+        texts = posts_data.claim_texts(claims)
+        for i, t in enumerate(texts):
+            c1, c2, c3 = st.columns([6, 1, 1])
+            with c1:
+                edited = st.text_input(
+                    f"claim_{i}",
+                    value=t,
+                    key=f"ref_edit_{block_idx}_{tid}_{i}",
+                    label_visibility="collapsed",
+                )
+            with c2:
+                if st.button("Save", key=f"ref_save_{block_idx}_{tid}_{i}"):
+                    try:
+                        db.edit_reference_claim(conn, tid, i, edited)
+                        st.rerun()
+                    except IndexError as e:
+                        st.error(str(e))
+            with c3:
+                if st.button("Del", key=f"ref_del_{block_idx}_{tid}_{i}"):
+                    try:
+                        db.delete_reference_claim(conn, tid, i)
+                        st.rerun()
+                    except IndexError as e:
+                        st.error(str(e))
+        if not texts:
+            st.caption("(no reference claims yet)")
+        new_claim = st.text_input("New claim", key=f"ref_new_{block_idx}_{tid}", placeholder="Add a reference claim…")
+        if st.button("Add claim", key=f"ref_add_{block_idx}_{tid}"):
+            if not new_claim.strip():
+                st.warning("Enter claim text.")
+            else:
+                db.add_reference_claim(conn, tid, new_claim.strip())
+                st.rerun()
 
 
 def _render_compare_extraction_tab(
     *,
+    conn,
     pp: dict,
     post_row: dict,
     tid: str,
-    prof: db.PromptProfile | None,
+    prof: db.PromptProfile,
     hit: dict | None,
+    reference_claims: list | None,
+    block_idx: int,
 ) -> None:
-    if prof is None:
-        _render_claim_list(pp.get("baseline_claims"), key_prefix=f"base_{tid}")
-        return
     st.caption(f"Model: `{prof.model}` · max_claims={prof.max_claims}")
+    ev = db.get_evaluation(conn, prof.id, tid)
+    if ev and ev.get("f1") is not None:
+        st.caption(
+            f"vs Reference — P={ev.get('precision', 0):.2f} "
+            f"R={ev.get('recall', 0):.2f} F1={ev.get('f1', 0):.2f}"
+        )
     if hit is None:
         st.caption("(not run yet)")
         return
@@ -426,7 +521,7 @@ def _render_compare_extraction_tab(
     out = hit.get("output_json")
     claims = out.get("claims") if isinstance(out, dict) else None
     _render_claim_list(claims, key_prefix=f"prof_{prof.id}_{tid}")
-    _render_claim_diff(pp.get("baseline_claims"), claims)
+    _render_claim_diff(reference_claims, claims)
     with st.expander("Rendered prompts (preview)", expanded=False):
         try:
             sys_r, usr_r = prompt_vars.render_profile_prompts(
@@ -465,36 +560,47 @@ def _render_compare_post_block(
     ctx = context_text_for_post_row(post_row)
     _show_post_text(ctx, key=f"compare_post_{block_idx}_{tid}")
 
+    reference_claims = _reference_claims_list(conn, tid)
     extractions = db.fetch_extractions_for_task(conn, tid)
     extraction_by_profile = {e["profile_id"]: e for e in extractions}
-    profiles_sorted = sorted(profiles, key=lambda p: p.id)
-    tab_labels = ["baseline"] + [p.name for p in profiles_sorted]
+
+    baseline_prof = db.get_profile_by_name(conn, db.BASELINE_PROFILE_NAME)
+    non_baseline = [p for p in sorted(profiles, key=lambda x: x.id) if p.name != db.BASELINE_PROFILE_NAME]
+
+    tab_labels = ["Reference", "Baseline"] + [p.name for p in non_baseline]
     tabs = st.tabs(tab_labels)
 
     with tabs[0]:
-        _render_compare_extraction_tab(
-            pp=pp, post_row=post_row, tid=tid, prof=None, hit=None
-        )
-    for i, prof in enumerate(profiles_sorted):
-        with tabs[i + 1]:
+        _render_reference_tab(conn, tid=tid, block_idx=block_idx)
+
+    with tabs[1]:
+        if baseline_prof is None:
+            st.caption("Baseline profile not found.")
+        else:
+            hit = extraction_by_profile.get(baseline_prof.id)
             _render_compare_extraction_tab(
+                conn=conn,
+                pp=pp,
+                post_row=post_row,
+                tid=tid,
+                prof=baseline_prof,
+                hit=hit,
+                reference_claims=reference_claims,
+                block_idx=block_idx,
+            )
+
+    for i, prof in enumerate(non_baseline):
+        with tabs[i + 2]:
+            _render_compare_extraction_tab(
+                conn=conn,
                 pp=pp,
                 post_row=post_row,
                 tid=tid,
                 prof=prof,
                 hit=extraction_by_profile.get(prof.id),
+                reference_claims=reference_claims,
+                block_idx=block_idx,
             )
-
-    orphan_hits = [
-        e for e in extractions if e["profile_id"] not in {p.id for p in profiles_sorted}
-    ]
-    for e in orphan_hits:
-        st.caption(f"Orphan extraction (profile {e['profile_id']} deleted)")
-        if e["status"] == "failed":
-            st.error(e.get("error") or "failed")
-        else:
-            claims = e.get("output_json", {}).get("claims") if e.get("output_json") else None
-            _render_claim_list(claims, key_prefix=f"orphan_{e['profile_id']}_{tid}")
 
 
 def _render_compare_tab(conn) -> None:
@@ -521,10 +627,165 @@ def _render_compare_tab(conn) -> None:
     if not profiles:
         st.info("Create and run a prompt profile on the Profiles tab to compare extractions.")
 
+    eval_profiles = [p for p in profiles if p.name != db.BASELINE_PROFILE_NAME]
+    if eval_profiles:
+        eval_sel = {f"{p.id}: {p.name}": p for p in eval_profiles}
+        eval_key = st.selectbox("Evaluate profile vs Reference", options=list(eval_sel.keys()))
+        eval_prof = eval_sel[eval_key]
+        expensive = st.text_input("Judge model", value=eval_prof.model, key="compare_judge_model")
+        if st.button("Run evaluation vs Reference", key="compare_run_eval"):
+            try:
+                load_llm_config()
+                with st.spinner("Judging…"):
+                    optimizer.judge_profile_against_reference(
+                        conn,
+                        eval_prof,
+                        filtered,
+                        judge_model=expensive.strip() or eval_prof.model,
+                    )
+                st.success("Evaluation complete.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
     for i, pp in enumerate(filtered):
         if i > 0:
             st.divider()
         _render_compare_post_block(conn, pp, profiles, block_idx=i)
+
+
+def _render_optimize_tab(conn) -> None:
+    st.caption("Configure objective, generate Reference gold claims, and run the autonomous optimizer.")
+
+    problem_posts = db.fetch_problem_posts_sorted(conn, descending=False)
+    profiles = db.list_profiles(conn)
+    if not problem_posts:
+        st.warning("Mark problem posts on the Browse tab first.")
+        return
+
+    st.subheader("Objective")
+    obj = db.get_meta_prompt(conn, "objective") or ""
+    new_obj = st.text_area("Optimization objective", value=obj, height=120, key="opt_objective")
+    if st.button("Save objective", key="opt_save_obj"):
+        db.upsert_meta_prompt(conn, "objective", new_obj)
+        st.success("Saved.")
+        st.rerun()
+
+    with st.expander("Meta-prompt templates", expanded=False):
+        st.caption("Required placeholders are validated on save.")
+        for name in sorted(META_PROMPT_SPECS.keys()):
+            tpl = db.get_meta_prompt(conn, name) or META_PROMPT_SPECS[name]["template"]
+            req = ", ".join(f"`{{{v}}}`" for v in META_PROMPT_SPECS[name]["required"])
+            st.markdown(f"**{name}** — requires {req}")
+            edited = st.text_area(name, value=tpl, height=160, key=f"meta_{name}")
+            if st.button(f"Save {name}", key=f"save_meta_{name}"):
+                try:
+                    db.upsert_meta_prompt(conn, name, edited)
+                    st.success(f"Saved {name}.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
+    st.divider()
+    st.subheader("Reference setup")
+    st.warning(
+        "Generating Reference **overwrites** all Reference claims for every problem post, "
+        "including manual edits."
+    )
+    if not profiles:
+        st.info("Create a profile first.")
+    else:
+        prof_map = {f"{p.id}: {p.name}": p for p in profiles}
+        ref_prof_key = st.selectbox("Profile (prompts only)", options=list(prof_map.keys()), key="opt_ref_prof")
+        ref_prof = prof_map[ref_prof_key]
+        ref_model = st.text_input("Expensive model for Reference", value=ref_prof.model, key="opt_ref_model")
+        if st.button("Generate Reference from profile", key="opt_gen_ref"):
+            try:
+                load_llm_config()
+                with st.status("Generating Reference…", expanded=True) as status:
+                    prog = st.progress(0.0)
+
+                    def on_progress(done: int, total: int, msg: str) -> None:
+                        prog.progress(min(1.0, done / max(total, 1)), text=f"{msg} ({done}/{total})")
+
+                    ok, fail = extract_runner.run_profile_on_posts(
+                        conn,
+                        ref_prof,
+                        problem_posts,
+                        model=ref_model.strip() or ref_prof.model,
+                        on_progress=on_progress,
+                        write_reference=True,
+                    )
+                    status.update(label=f"Done — {ok} ok, {fail} failed", state="complete")
+                st.success(f"Reference updated: **{ok}** posts.")
+            except Exception as exc:
+                st.error(str(exc))
+
+    st.divider()
+    st.subheader("Improvement loop")
+    if not profiles:
+        return
+    inp_map = {f"{p.id}: {p.name}": p for p in profiles}
+    inp_key = st.selectbox("Input profile", options=list(inp_map.keys()), key="opt_in_prof")
+    input_prof = inp_map[inp_key]
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        cheap_model = st.text_input("Cheap model", value=input_prof.model, key="opt_cheap")
+    with c2:
+        expensive_model = st.text_input("Expensive model", value="gpt-5.4", key="opt_expensive")
+    with c3:
+        max_iters = st.number_input("Max iterations", min_value=1, max_value=10, value=3, key="opt_max_iters")
+    patience = st.number_input("Patience (no-improve stops)", min_value=1, max_value=5, value=2, key="opt_patience")
+
+    if st.button("Run optimization", key="opt_run", type="primary"):
+        try:
+            load_llm_config()
+            cfg = optimizer.OptimizationConfig(
+                expensive_model=expensive_model.strip() or input_prof.model,
+                cheap_model=cheap_model.strip() or input_prof.model,
+                max_iters=int(max_iters),
+                patience=int(patience),
+            )
+            log_box = st.empty()
+            logs: list[str] = []
+
+            def on_progress(msg: str) -> None:
+                logs.append(msg)
+                log_box.code("\n".join(logs[-12:]))
+
+            with st.status("Optimizing…", expanded=True):
+                result = optimizer.run_optimization(
+                    conn,
+                    input_prof,
+                    problem_posts,
+                    cfg,
+                    on_progress=on_progress,
+                )
+            st.success(f"Run complete (id={result.get('run_id')}).")
+            if result.get("summary"):
+                st.json(result["summary"])
+        except Exception as exc:
+            st.error(str(exc))
+
+    st.divider()
+    st.subheader("Run history")
+    runs = db.list_optimization_runs(conn, limit=10)
+    if not runs:
+        st.caption("(no runs yet)")
+    for run in runs:
+        with st.expander(f"Run {run['id']} · {run['input_profile_name']} · {run['status']} · {run['created_at']}"):
+            st.json(run.get("config") or {})
+            if run.get("summary"):
+                st.json(run["summary"])
+            iters = db.fetch_iterations_for_run(conn, run["id"])
+            for it in iters:
+                st.markdown(
+                    f"**Iter {it['iter_index']}** · profile `{it.get('profile_name')}` · "
+                    f"accepted={it['accepted']}"
+                )
+                if it.get("metrics"):
+                    m = it["metrics"]
+                    st.caption(f"macro F1={m.get('macro_f1')} · micro F1={m.get('micro_f1')}")
 
 
 def main() -> None:
@@ -556,13 +817,17 @@ def main() -> None:
     conn = _open_db(Path(db_path))
     posts, posts_err = _load_posts(posts_path)
 
-    tab_browse, tab_profiles, tab_compare = st.tabs(["Browse", "Profiles", "Compare"])
+    tab_browse, tab_profiles, tab_compare, tab_optimize = st.tabs(
+        ["Browse", "Profiles", "Compare", "Optimize"]
+    )
     with tab_browse:
         _render_browse_tab(conn, posts, posts_err)
     with tab_profiles:
         _render_profiles_tab(conn)
     with tab_compare:
         _render_compare_tab(conn)
+    with tab_optimize:
+        _render_optimize_tab(conn)
 
     conn.close()
 
