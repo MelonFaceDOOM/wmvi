@@ -1,9 +1,9 @@
 --------------------------------------------------
 INSTRUCTIONS
 --------------------------------------------------
-Extract 0-{max_claims} vaccine-related claims.
+Extract 0-{{max_claims}} vaccine-related claims.
 
-Scan the whole text for every substantive explicit or strongly implied vaccine/epidemiology proposition before filtering. Do not only extract the most rhetorically salient sentence. If there are more than {max_claims}, prioritize claims that best capture the post's central vaccine-relevant meaning while preserving the source's scope, qualifiers, negation, and causal strength.
+Scan the whole text for every substantive explicit or strongly implied vaccine/epidemiology proposition before filtering. Do not only extract the most rhetorically salient sentence. If there are more than {{max_claims}}, prioritize claims that best capture the post's central vaccine-relevant meaning while preserving the source's scope, qualifiers, negation, and causal strength.
 
 Before finalizing, check that you have not missed any central claim about: a named vaccine or disease/variant, vaccine safety/effectiveness, vaccine-preventable disease risk or outbreak, vaccine refusal/hesitancy trends, pregnancy/immunocompromise or other population qualifiers, school/mandate/exemption policy, institutions/evidence, or debunked misinformation. Also verify that each claim preserves the correct causal actor and direction, is atomic but complete, and is not merely personal context, moral framing, or political side commentary.
 
@@ -11,7 +11,7 @@ Before finalizing, check that you have not missed any central claim about: a nam
 --------------------------------------------------
 TEXT INPUT FOR EXTRACTION
 --------------------------------------------------
-{text_input}
+{{text_input}}
 
 
 --------------------------------------------------
