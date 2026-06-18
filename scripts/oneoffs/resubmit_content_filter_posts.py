@@ -17,7 +17,6 @@ from apps.claim_extractor.api_requester import (
 from apps.claim_extractor.extraction_core import format_input_text
 from apps.claim_extractor.get_claims import (
     DEFAULT_MAX_CLAIMS,
-    MODEL_NAME,
     _build_client,
     _stable_task_id,
 )
@@ -109,6 +108,12 @@ def main() -> None:
     for result in requester.run(tasks):
         if result.status == RequestStatus.SUCCESS:
             ok += 1
+            claim_count = 0
+            if isinstance(result.output, dict) and isinstance(result.output.get("claims"), list):
+                claim_count = len(result.output["claims"])
+            print(f"[success] task_id={result.task_id} claims={claim_count}", flush=True)
+        else:
+            print(f"[failure] task_id={result.task_id} {result.error or 'unknown error'}", flush=True)
 
     pct = round(100.0 * ok / len(tasks))
     print(f"{pct}% succeeded")
