@@ -65,19 +65,23 @@ def _meta_template(conn, name: str) -> str:
 
 
 class _StructuredJudgeClient:
-    """RequestClient adapter for per-post diagnose calls."""
+    """RequestClient adapter for per-post diagnose calls.
 
-    def __init__(self, *, model: str, conn) -> None:
+    Runs inside worker threads, so it must not touch the SQLite connection
+    (connections are single-thread only). The objective + template are
+    pre-rendered on the main thread and passed in as plain strings.
+    """
+
+    def __init__(self, *, model: str, objective: str, template: str) -> None:
         self._model = model
-        self._conn = conn
+        self._objective = objective
+        self._template = template
 
     def perform(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-        objective = _objective(self._conn)
-        template = _meta_template(self._conn, "diagnose_post")
         user = render_meta_template(
-            template,
+            self._template,
             {
-                "objective": objective,
+                "objective": self._objective,
                 "post_text": str(payload["post_text"]),
                 "reference_claims": json.dumps(payload["reference_claims"], ensure_ascii=False, indent=2),
                 "candidate_claims": json.dumps(payload["candidate_claims"], ensure_ascii=False, indent=2),
@@ -99,7 +103,7 @@ def generate_reference_from_profile(
     *,
     model: str,
     on_progress: Callable[[int, int, str], None] | None = None,
-) -> tuple[int, int]:
+) -> tuple[int, int, list[dict[str, str]]]:
     return extract_runner.run_profile_on_posts(
         conn,
         profile,
@@ -133,7 +137,11 @@ def judge_profile_against_reference(
 ) -> dict[str, Any]:
     """Per-post LLM judge; persist evaluations. Returns aggregate metrics."""
     extractions = db.fetch_extractions_for_profile(conn, profile.id)
-    client = _StructuredJudgeClient(model=judge_model, conn=conn)
+    client = _StructuredJudgeClient(
+        model=judge_model,
+        objective=_objective(conn),
+        template=_meta_template(conn, "diagnose_post"),
+    )
     throttle = ThrottlePolicy(target_requests_per_minute=60, global_429_cooldown_s=15.0)
     requester = ConcurrentApiRequester(
         client=client,
@@ -162,12 +170,14 @@ def judge_profile_against_reference(
         )
 
     per_post: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
     done = 0
     for result in requester.run(tasks):
         done += 1
         if on_progress:
             on_progress(done, len(tasks), result.task_id)
         if result.status != RequestStatus.SUCCESS or result.output is None:
+            failures.append({"task_id": result.task_id, "error": result.error or "unknown error"})
             continue
         alignment = result.output
         prf = metrics.prf_from_alignment(alignment)
@@ -192,7 +202,14 @@ def judge_profile_against_reference(
         )
 
     agg = metrics.aggregate_per_post(per_post)
-    return {"per_post": per_post, "aggregate": agg}
+    return {
+        "per_post": per_post,
+        "aggregate": agg,
+        "n_tasks": len(tasks),
+        "n_judged": len(per_post),
+        "n_failed": len(failures),
+        "failures": failures,
+    }
 
 
 def _summarize_problems(conn, *, judge_model: str, issue_notes: list[dict[str, Any]], profile: PromptProfile) -> dict[str, Any]:
@@ -333,8 +350,12 @@ def run_optimization(
     )
 
     def prog(msg: str) -> None:
+        db.touch_optimization_run(conn, run_id)
         if on_progress:
             on_progress(msg)
+
+    def _heartbeat(done: int, total: int, _msg: str) -> None:
+        db.touch_optimization_run(conn, run_id)
 
     created_profiles: list[int] = []
     best_profile = input_profile
@@ -349,15 +370,29 @@ def run_optimization(
             problem_posts,
             model=config.cheap_model,
             max_workers=config.max_workers,
+            on_progress=_heartbeat,
         )
         prog("Judging input profile vs Reference…")
-        judge_profile_against_reference(
+        judge_result = judge_profile_against_reference(
             conn,
             input_profile,
             problem_posts,
             judge_model=config.expensive_model,
             max_workers=config.max_workers,
+            on_progress=_heartbeat,
         )
+        if judge_result["n_judged"] == 0:
+            sample = judge_result["failures"][:3]
+            detail = "; ".join(f"{f['task_id']}: {f['error']}" for f in sample) or "no detail"
+            raise RuntimeError(
+                f"Judge ({config.expensive_model}) failed on all "
+                f"{judge_result['n_tasks']} post(s); cannot optimize. First errors: {detail}"
+            )
+        if judge_result["n_failed"]:
+            prog(
+                f"Warning: judge failed on {judge_result['n_failed']}/{judge_result['n_tasks']} "
+                "post(s); proceeding with the rest."
+            )
         evals = db.fetch_evaluations_for_profile(conn, input_profile.id)
         per_post = [
             {
@@ -433,15 +468,29 @@ def run_optimization(
                 problem_posts,
                 model=config.cheap_model,
                 max_workers=config.max_workers,
+                on_progress=_heartbeat,
             )
             prog(f"Iteration {iteration}: judging new profile…")
-            judge_profile_against_reference(
+            cand_judge = judge_profile_against_reference(
                 conn,
                 new_profile,
                 problem_posts,
                 judge_model=config.expensive_model,
                 max_workers=config.max_workers,
+                on_progress=_heartbeat,
             )
+            if cand_judge["n_judged"] == 0:
+                sample = cand_judge["failures"][:3]
+                detail = "; ".join(f"{f['task_id']}: {f['error']}" for f in sample) or "no detail"
+                raise RuntimeError(
+                    f"Iteration {iteration}: judge ({config.expensive_model}) failed on all "
+                    f"{cand_judge['n_tasks']} post(s); cannot evaluate candidate. First errors: {detail}"
+                )
+            if cand_judge["n_failed"]:
+                prog(
+                    f"Iteration {iteration}: judge failed on "
+                    f"{cand_judge['n_failed']}/{cand_judge['n_tasks']} post(s); scoring the rest."
+                )
             new_evals = db.fetch_evaluations_for_profile(conn, new_id)
             new_per_post = [
                 {

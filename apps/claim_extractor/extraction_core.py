@@ -363,35 +363,20 @@ def openai_structured_completion(
     max_completion_tokens: int = _DEFAULT_STRUCTURED_MAX_TOKENS,
 ) -> dict[str, Any]:
     """Single OpenAI chat completion with JSON schema response."""
-    from openai._exceptions import APIStatusError
+    from apps.claim_extractor.api_requester import _create_structured_chat_completion
 
     client = _build_openai_sdk_client()
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
-    fmt = {"type": "json_schema", "json_schema": schema}
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0,
-            response_format=fmt,
-            max_completion_tokens=max_completion_tokens,
-        )
-    except APIStatusError as exc:
-        status = getattr(exc, "status_code", None)
-        err = str(exc).lower()
-        if status == 400 and "max_completion_tokens" in err and "unsupported" in err:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0,
-                response_format=fmt,
-                max_tokens=max_completion_tokens,
-            )
-        else:
-            raise
+    resp = _create_structured_chat_completion(
+        client,
+        model=model,
+        messages=messages,
+        response_schema=schema,
+        max_completion_tokens=max_completion_tokens,
+    )
     if not getattr(resp, "choices", None):
         raise RuntimeError("Model response has no choices.")
     content = getattr(resp.choices[0].message, "content", None)

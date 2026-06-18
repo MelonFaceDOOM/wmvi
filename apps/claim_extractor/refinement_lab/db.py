@@ -250,6 +250,12 @@ def upsert_problem_post(
     conn.commit()
 
 
+def delete_problem_post(conn: sqlite3.Connection, task_id: str) -> bool:
+    cur = conn.execute("DELETE FROM problem_posts WHERE task_id = ?", (task_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def insert_problem_post_ignore(
     conn: sqlite3.Connection,
     *,
@@ -842,11 +848,36 @@ def update_optimization_run(
     conn.commit()
 
 
+def touch_optimization_run(conn: sqlite3.Connection, run_id: int) -> None:
+    """Heartbeat: bump ``updated_at`` so liveness can be inferred for running runs."""
+    conn.execute(
+        "UPDATE optimization_runs SET updated_at = datetime('now') WHERE id = ?",
+        (run_id,),
+    )
+    conn.commit()
+
+
+def mark_stale_running_runs(conn: sqlite3.Connection, *, max_idle_seconds: int) -> int:
+    """Flag ``running`` runs with no heartbeat within ``max_idle_seconds`` as interrupted."""
+    cur = conn.execute(
+        """
+        UPDATE optimization_runs
+        SET status = 'interrupted', updated_at = datetime('now')
+        WHERE status = 'running'
+          AND (julianday('now') - julianday(updated_at)) * 86400.0 > ?
+        """,
+        (max_idle_seconds,),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def list_optimization_runs(conn: sqlite3.Connection, limit: int = 20) -> list[dict[str, Any]]:
     rows = conn.execute(
         """
         SELECT r.id, r.input_profile_id, r.status, r.config_json, r.summary_json,
-               r.created_at, r.updated_at, p.name AS input_profile_name
+               r.created_at, r.updated_at, p.name AS input_profile_name,
+               (julianday('now') - julianday(r.updated_at)) * 86400.0 AS idle_seconds
         FROM optimization_runs r
         JOIN prompt_profiles p ON p.id = r.input_profile_id
         ORDER BY r.created_at DESC LIMIT ?
@@ -877,6 +908,7 @@ def list_optimization_runs(conn: sqlite3.Connection, limit: int = 20) -> list[di
                 "summary": summary,
                 "created_at": str(r["created_at"]),
                 "updated_at": str(r["updated_at"]),
+                "idle_seconds": float(r["idle_seconds"]) if r["idle_seconds"] is not None else None,
             }
         )
     return result

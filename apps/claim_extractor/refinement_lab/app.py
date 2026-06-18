@@ -8,8 +8,8 @@ From the **repository root**::
 
 from __future__ import annotations
 
-import hashlib
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -19,7 +19,6 @@ if str(_REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from apps.claim_extractor.claim_normalize import normalize_claim_text
 # refinement_lab uses personal OpenAI; swap imports to check_azure_connectivity / load_azure_config for Azure.
 from apps.claim_extractor.extraction_core import (
     check_openai_connectivity as check_llm_connectivity,
@@ -31,35 +30,31 @@ from apps.claim_extractor.refinement_lab.meta_defaults import META_PROMPT_SPECS,
 from apps.claim_extractor.refinement_lab.models import DEFAULT_MODEL, SEED_MODELS
 from apps.claim_extractor.scoring_inputs import context_text_for_post_row
 
-_PREVIEW_LONG_CHARS = 1000
-_PREVIEW_LONG_LINES = 12
 _PREVIEW_MAX_HEIGHT_PX = 420
+_PREVIEW_MIN_HEIGHT_PX = 68
 
 
-def _text_area_height(text: str, *, min_h: int = 68, max_h: int = 420, px_per_line: int = 20) -> int:
+def _text_area_height(
+    text: str,
+    *,
+    min_h: int = _PREVIEW_MIN_HEIGHT_PX,
+    max_h: int = _PREVIEW_MAX_HEIGHT_PX,
+    px_per_line: int = 20,
+) -> int:
     raw_lines = text.splitlines() or [""]
     visual_lines = sum(max(1, (len(line) + 89) // 90) for line in raw_lines)
     return min(max_h, max(min_h, 16 + visual_lines * px_per_line))
 
 
-def _preview_is_long(text: str) -> bool:
-    return len(text) > _PREVIEW_LONG_CHARS or (text.count("\n") + 1) > _PREVIEW_LONG_LINES
-
-
 def _show_post_text(text: str, *, key: str) -> None:
-    """Single read-only text box; long posts scroll inside a capped height."""
+    """Read-only text box sized to content, capped with scroll for very long posts."""
     if not text.strip():
         st.caption("(empty post text)")
         return
-    height: int | str = (
-        _text_area_height(text, max_h=_PREVIEW_MAX_HEIGHT_PX)
-        if _preview_is_long(text)
-        else "content"
-    )
     st.text_area(
         "post",
         value=text,
-        height=height,
+        height=_text_area_height(text),
         disabled=True,
         key=key,
         label_visibility="collapsed",
@@ -71,24 +66,14 @@ def _preview_text_area(title: str, text: str, *, key: str) -> None:
     if not text.strip():
         st.caption("(empty)")
         return
-    if _preview_is_long(text):
-        st.text_area(
-            title,
-            value=text,
-            height=_text_area_height(text, max_h=_PREVIEW_MAX_HEIGHT_PX),
-            disabled=True,
-            key=key,
-            label_visibility="collapsed",
-        )
-    else:
-        st.text_area(
-            title,
-            value=text,
-            height="content",
-            disabled=True,
-            key=key,
-            label_visibility="collapsed",
-        )
+    st.text_area(
+        title,
+        value=text,
+        height=_text_area_height(text),
+        disabled=True,
+        key=key,
+        label_visibility="collapsed",
+    )
 
 
 def _render_claim_list(claims: list | None, *, key_prefix: str) -> None:
@@ -98,27 +83,6 @@ def _render_claim_list(claims: list | None, *, key_prefix: str) -> None:
         return
     for i, t in enumerate(texts):
         st.markdown(f"{i + 1}. {t}")
-
-
-def _claim_norm_set(claims: list | None) -> set[str]:
-    return {normalize_claim_text(t) for t in posts_data.claim_texts(claims) if normalize_claim_text(t)}
-
-
-def _render_claim_diff(reference: list | None, profile_claims: list | None) -> None:
-    ref_set = _claim_norm_set(reference)
-    prof_set = _claim_norm_set(profile_claims)
-    only_ref = ref_set - prof_set
-    only_prof = prof_set - ref_set
-    if only_ref:
-        st.caption("Only in Reference:")
-        for t in sorted(only_ref):
-            st.markdown(f"- {t}")
-    if only_prof:
-        st.caption("Only in this profile:")
-        for t in sorted(only_prof):
-            st.markdown(f"- {t}")
-    if not only_ref and not only_prof and ref_set:
-        st.caption("Claim set matches Reference (normalized text).")
 
 
 @st.cache_data(show_spinner=True)
@@ -154,16 +118,39 @@ def _open_db(path: Path):
     return conn
 
 
-def _shuffle_queue(queue: list, *, seed: int) -> list:
-    if len(queue) < 2:
-        return list(queue)
-    return sorted(
-        queue,
-        key=lambda item: int(
-            hashlib.sha256(f"browse|{seed}|{item[1]}".encode()).hexdigest()[:16],
-            16,
-        ),
-    )
+def _lab_db_path() -> Path:
+    return Path(st.session_state["refine_db_in"])
+
+
+def _frag_rerun() -> None:
+    st.rerun(scope="fragment")
+
+
+def _app_rerun() -> None:
+    st.rerun(scope="app")
+
+
+def _bump_lab_data() -> None:
+    st.session_state["lab_data_revision"] = st.session_state.get("lab_data_revision", 0) + 1
+
+
+def _show_run_failures(failures: list[dict[str, str]], *, title: str = "Errors") -> None:
+    if not failures:
+        return
+    lines = [f"{item['task_id']}: {item['error']}" for item in failures]
+    if len(lines) <= 8:
+        for line in lines:
+            st.error(line)
+        return
+    with st.expander(f"{title} ({len(lines)} posts)", expanded=True):
+        st.code("\n".join(lines))
+
+
+def _ensure_selectbox_key(key: str, options: list[str], *, preferred: str | None = None) -> None:
+    if not options:
+        return
+    if st.session_state.get(key) not in options:
+        st.session_state[key] = preferred if preferred in options else options[0]
 
 
 def _render_status_filter(key_prefix: str) -> set[str]:
@@ -225,8 +212,12 @@ def _render_post_header(post_row: dict, task_id: str, *, extra: str = "") -> Non
     st.markdown(line)
 
 
-def _render_browse_tab(conn, posts: list, posts_err: str | None) -> None:
+def _render_source_data_tab_content(conn, posts: list, posts_err: str | None) -> None:
     st.caption("Review source posts and mark extraction problems or skip.")
+
+    st.text_input("SQLite path", key="refine_db_in")
+    st.text_input("Source posts JSON", key="refine_posts_in")
+
     if posts_err:
         st.error(posts_err)
         return
@@ -250,10 +241,21 @@ def _render_browse_tab(conn, posts: list, posts_err: str | None) -> None:
         enabled_platforms=enabled_platforms,
     )
 
-    shuffle = st.checkbox("Shuffle browse queue", value=True, key="browse_shuffle")
-    seed = int(st.session_state.get("browse_seed", 42))
-    if shuffle and len(queue) > 1:
-        queue = _shuffle_queue(queue, seed=seed)
+    shuffle_key = "source_data_shuffled_queue"
+    if st.button("Shuffle", key="source_data_shuffle", disabled=len(queue) < 2):
+        shuffled = list(queue)
+        random.shuffle(shuffled)
+        st.session_state[shuffle_key] = shuffled
+        _frag_rerun()
+
+    stored = st.session_state.get(shuffle_key)
+    if stored:
+        stored_ids = {tid for _, tid in stored}
+        current_ids = {tid for _, tid in queue}
+        if stored_ids == current_ids:
+            queue = stored
+        else:
+            del st.session_state[shuffle_key]
 
     if not enabled_status:
         st.warning("Enable at least one status filter.")
@@ -262,7 +264,7 @@ def _render_browse_tab(conn, posts: list, posts_err: str | None) -> None:
         st.warning("Enable at least one platform in **Platform filter**.")
         return
 
-    st.write(f"**{len(queue)}** post(s) in browse queue")
+    st.write(f"**{len(queue)}** post(s) in queue")
     if not queue:
         st.info("No posts match filters (or all reviewed).")
         return
@@ -281,30 +283,55 @@ def _render_browse_tab(conn, posts: list, posts_err: str | None) -> None:
     with c_mark:
         if st.button("Mark as problem", key=f"browse_mark_{tid}"):
             note = (comment or "").strip()
-            if not note:
-                st.error("Add a comment describing the extraction problem.")
-            else:
-                db.upsert_problem_post(
-                    conn,
-                    task_id=tid,
-                    post_row=post_row,
-                    baseline_claims=posts_data.baseline_claims_from_post(post_row),
-                    baseline_status=posts_data.extraction_status(post_row),
-                    comment=note,
-                    source="browse",
-                )
-                db.sync_baseline_extractions(conn)
-                st.success("Marked as problem.")
-                st.rerun()
+            db.upsert_problem_post(
+                conn,
+                task_id=tid,
+                post_row=post_row,
+                baseline_claims=posts_data.baseline_claims_from_post(post_row),
+                baseline_status=posts_data.extraction_status(post_row),
+                comment=note,
+                source="browse",
+            )
+            db.sync_baseline_extractions(conn)
+            st.success("Marked as problem.")
+            _frag_rerun()
     with c_skip:
         if st.button("Skip", key=f"browse_skip_{tid}"):
             db.add_reviewed_skip(conn, tid)
-            st.rerun()
+            _frag_rerun()
 
 
-def _render_profiles_tab(conn) -> None:
+@st.fragment
+def _render_source_data_tab() -> None:
+    conn = _open_db(_lab_db_path())
+    try:
+        posts, posts_err = _load_posts(st.session_state["refine_posts_in"])
+        _render_source_data_tab_content(conn, posts, posts_err)
+    finally:
+        conn.close()
+
+
+@st.fragment
+def _render_profiles_tab() -> None:
+    conn = _open_db(_lab_db_path())
+    try:
+        _render_profiles_tab_content(conn)
+    finally:
+        conn.close()
+
+
+def _render_profiles_tab_content(conn) -> None:
     profiles = db.list_profiles(conn)
     st.caption("Prompt profiles run **claims-only** extraction on the problem post set only.")
+
+    flash_run = st.session_state.pop("flash_prof_run", None)
+    if flash_run:
+        ok = int(flash_run["ok"])
+        fail = int(flash_run["fail"])
+        st.success(f"Extraction finished: **{ok}** ok, **{fail}** failed.")
+        if fail:
+            _show_run_failures(flash_run.get("failures") or [], title="Extraction errors")
+            st.info("Open the Browse tab to see per-post extraction errors.")
 
     with st.expander("Variable bank", expanded=False):
         for k in prompt_vars.list_var_keys():
@@ -313,24 +340,33 @@ def _render_profiles_tab(conn) -> None:
     c_new, _ = st.columns([1, 3])
     with c_new:
         new_name = st.text_input("New profile name", key="new_profile_name", placeholder="e.g. epidemiologist_v2")
-        if st.button("Create profile"):
+        if st.button("Create profile", key="prof_create"):
             if not new_name.strip():
                 st.error("Name required.")
             else:
                 pid = db.create_profile_from_latest(conn, new_name.strip())
                 st.success(f"Created profile id={pid}")
                 st.session_state["edit_profile_id"] = pid
-                st.rerun()
+                created = db.get_profile(conn, pid)
+                if created is not None:
+                    st.session_state["edit_profile_select"] = f"{pid}: {created.name}"
+                _frag_rerun()
 
     if not profiles:
         st.info("Create a profile to edit prompts and run extraction.")
         return
 
     profile_options = {f"{p.id}: {p.name}": p.id for p in profiles}
-    default_id = st.session_state.get("edit_profile_id", profiles[0].id)
-    default_key = next((k for k, v in profile_options.items() if v == default_id), list(profile_options.keys())[0])
-    sel = st.selectbox("Edit profile", options=list(profile_options.keys()), index=list(profile_options.keys()).index(default_key))
-    profile_id = profile_options[sel]
+    option_keys = list(profile_options.keys())
+    preferred_key = next(
+        (k for k, v in profile_options.items() if v == st.session_state.get("edit_profile_id", profiles[0].id)),
+        option_keys[0],
+    )
+    _ensure_selectbox_key("edit_profile_select", option_keys, preferred=preferred_key)
+
+    st.selectbox("Edit profile", options=option_keys, key="edit_profile_select")
+    profile_id = profile_options[st.session_state["edit_profile_select"]]
+    st.session_state["edit_profile_id"] = profile_id
     profile = db.get_profile(conn, profile_id)
     if profile is None:
         st.error("Profile not found.")
@@ -340,7 +376,8 @@ def _render_profiles_tab(conn) -> None:
     model_options = list(SEED_MODELS)
     if profile.model not in model_options:
         model_options = [profile.model, *model_options]
-    model_sel = st.selectbox("Model", options=model_options, index=model_options.index(profile.model), key=f"prof_model_{profile_id}")
+    _ensure_selectbox_key(f"prof_model_{profile_id}", model_options)
+    model_sel = st.selectbox("Model", options=model_options, key=f"prof_model_{profile_id}")
     custom_model = st.text_input("Or custom model deployment", value="", key=f"prof_model_custom_{profile_id}")
     model = custom_model.strip() or model_sel
     max_claims = st.number_input("Max claims", min_value=1, max_value=20, value=profile.max_claims, key=f"prof_mc_{profile_id}")
@@ -369,7 +406,7 @@ def _render_profiles_tab(conn) -> None:
             max_claims=int(max_claims),
         )
         st.success("Saved.")
-        st.rerun()
+        _frag_rerun()
 
     notes = db.fetch_profile_notes(conn, profile_id)
     if notes:
@@ -381,7 +418,7 @@ def _render_profiles_tab(conn) -> None:
     problem_posts = db.fetch_problem_posts_sorted(conn, descending=False)
     st.write(f"Problem posts to extract: **{len(problem_posts)}**")
     if not problem_posts:
-        st.warning("Mark problem posts first on the Browse tab.")
+        st.warning("Mark problem posts first on the Source Data tab.")
         return
 
     test_col, run_col = st.columns([1, 1])
@@ -421,7 +458,7 @@ def _render_profiles_tab(conn) -> None:
                 progress.progress(min(1.0, done / state["total"]), text=f"{msg} ({done}/{total})")
 
             try:
-                ok, fail = extract_runner.run_profile_on_posts(
+                ok, fail, failures = extract_runner.run_profile_on_posts(
                     conn,
                     profile,
                     problem_posts,
@@ -432,9 +469,13 @@ def _render_profiles_tab(conn) -> None:
                     label=f"Done — {ok} succeeded, {fail} failed",
                     state="complete" if fail == 0 else "error",
                 )
-                st.success(f"Extraction finished: **{ok}** ok, **{fail}** failed.")
-                if fail:
-                    st.info("Open the Compare tab to see per-post extraction errors.")
+                st.session_state["flash_prof_run"] = {
+                    "ok": ok,
+                    "fail": fail,
+                    "failures": failures,
+                }
+                _bump_lab_data()
+                _app_rerun()
             except RuntimeError as exc:
                 progress.empty()
                 status.update(label="Failed", state="error")
@@ -451,57 +492,52 @@ def _reference_claims_list(conn, task_id: str) -> list[dict]:
 
 
 def _render_reference_tab(conn, *, tid: str, block_idx: int) -> None:
-    with st.container(border=True):
-        st.markdown("**:gold[Reference (gold)]** — editable ground truth (no prompts)")
-        ref = db.get_reference_claims(conn, tid)
-        if ref and ref.updated_at:
-            st.caption(f"Source: **{ref.source}** · updated {ref.updated_at}")
-        claims = _reference_claims_list(conn, tid)
-        texts = posts_data.claim_texts(claims)
-        for i, t in enumerate(texts):
-            c1, c2, c3 = st.columns([6, 1, 1])
-            with c1:
-                edited = st.text_input(
-                    f"claim_{i}",
-                    value=t,
-                    key=f"ref_edit_{block_idx}_{tid}_{i}",
-                    label_visibility="collapsed",
-                )
-            with c2:
-                if st.button("Save", key=f"ref_save_{block_idx}_{tid}_{i}"):
-                    try:
-                        db.edit_reference_claim(conn, tid, i, edited)
-                        st.rerun()
-                    except IndexError as e:
-                        st.error(str(e))
-            with c3:
-                if st.button("Del", key=f"ref_del_{block_idx}_{tid}_{i}"):
-                    try:
-                        db.delete_reference_claim(conn, tid, i)
-                        st.rerun()
-                    except IndexError as e:
-                        st.error(str(e))
-        if not texts:
-            st.caption("(no reference claims yet)")
-        new_claim = st.text_input("New claim", key=f"ref_new_{block_idx}_{tid}", placeholder="Add a reference claim…")
-        if st.button("Add claim", key=f"ref_add_{block_idx}_{tid}"):
-            if not new_claim.strip():
-                st.warning("Enter claim text.")
-            else:
-                db.add_reference_claim(conn, tid, new_claim.strip())
-                st.rerun()
+    st.markdown("**Reference**")
+    ref = db.get_reference_claims(conn, tid)
+    if ref and ref.updated_at:
+        st.caption(f"Source: **{ref.source}** · updated {ref.updated_at}")
+    claims = _reference_claims_list(conn, tid)
+    texts = posts_data.claim_texts(claims)
+    for i, t in enumerate(texts):
+        c1, c2, c3 = st.columns([6, 1, 1])
+        with c1:
+            edited = st.text_input(
+                f"claim_{i}",
+                value=t,
+                key=f"ref_edit_{block_idx}_{tid}_{i}",
+                label_visibility="collapsed",
+            )
+        with c2:
+            if st.button("Save", key=f"ref_save_{block_idx}_{tid}_{i}"):
+                try:
+                    db.edit_reference_claim(conn, tid, i, edited)
+                    _frag_rerun()
+                except IndexError as e:
+                    st.error(str(e))
+        with c3:
+            if st.button("Del", key=f"ref_del_{block_idx}_{tid}_{i}"):
+                try:
+                    db.delete_reference_claim(conn, tid, i)
+                    _frag_rerun()
+                except IndexError as e:
+                    st.error(str(e))
+    if not texts:
+        st.caption("(no reference claims yet)")
+    new_claim = st.text_input("New claim", key=f"ref_new_{block_idx}_{tid}", placeholder="Add a reference claim…")
+    if st.button("Add claim", key=f"ref_add_{block_idx}_{tid}"):
+        if not new_claim.strip():
+            st.warning("Enter claim text.")
+        else:
+            db.add_reference_claim(conn, tid, new_claim.strip())
+            _frag_rerun()
 
 
 def _render_compare_extraction_tab(
     *,
     conn,
-    pp: dict,
-    post_row: dict,
     tid: str,
     prof: db.PromptProfile,
     hit: dict | None,
-    reference_claims: list | None,
-    block_idx: int,
 ) -> None:
     st.caption(f"Model: `{prof.model}` · max_claims={prof.max_claims}")
     ev = db.get_evaluation(conn, prof.id, tid)
@@ -521,146 +557,154 @@ def _render_compare_extraction_tab(
     out = hit.get("output_json")
     claims = out.get("claims") if isinstance(out, dict) else None
     _render_claim_list(claims, key_prefix=f"prof_{prof.id}_{tid}")
-    _render_claim_diff(reference_claims, claims)
-    with st.expander("Rendered prompts (preview)", expanded=False):
-        try:
-            sys_r, usr_r = prompt_vars.render_profile_prompts(
-                system_prompt=prof.system_prompt,
-                user_prompt=prof.user_prompt,
-                post_row=post_row,
-                max_claims=prof.max_claims,
-            )
-            st.markdown("**System**")
-            st.code(sys_r, language=None)
-            st.markdown("**User**")
-            st.code(usr_r, language=None)
-        except ValueError as e:
-            st.error(str(e))
+
+
+def _sync_browse_post_views_from_global(
+    *,
+    task_ids: tuple[str, ...],
+    selected_view: str,
+    view_options: list[str],
+) -> None:
+    last = st.session_state.get("browse_last_synced_profile_view")
+    if last is not None and last != selected_view:
+        for tid in task_ids:
+            st.session_state[f"browse_post_view_{tid}"] = selected_view
+    st.session_state["browse_last_synced_profile_view"] = selected_view
+    for tid in task_ids:
+        st.session_state.setdefault(f"browse_post_view_{tid}", selected_view)
+        if st.session_state[f"browse_post_view_{tid}"] not in view_options:
+            st.session_state[f"browse_post_view_{tid}"] = selected_view
 
 
 def _render_compare_post_block(
     conn,
     pp: dict,
-    profiles: list[db.PromptProfile],
     *,
+    view_options: list[str],
+    profile_by_name: dict[str, db.PromptProfile],
     block_idx: int,
 ) -> None:
     post_row = pp["post_row"]
     tid = pp["task_id"]
-    _render_post_header(
-        post_row,
-        tid,
-        extra=f"marked **{pp['source']}** · baseline **{pp['baseline_status']}**",
-    )
-    if pp.get("comment"):
-        st.markdown(f"**Comment:** {pp['comment']}")
-    if pp.get("created_at"):
-        st.caption(f"Added {pp['created_at']}")
 
-    ctx = context_text_for_post_row(post_row)
-    _show_post_text(ctx, key=f"compare_post_{block_idx}_{tid}")
+    with st.container(border=True):
+        _render_post_header(
+            post_row,
+            tid,
+            extra=f"marked **{pp['source']}** · baseline **{pp['baseline_status']}**",
+        )
+        if pp.get("comment"):
+            st.markdown(f"**Comment:** {pp['comment']}")
+        if pp.get("created_at"):
+            st.caption(f"Added {pp['created_at']}")
 
-    reference_claims = _reference_claims_list(conn, tid)
-    extractions = db.fetch_extractions_for_task(conn, tid)
-    extraction_by_profile = {e["profile_id"]: e for e in extractions}
+        ctx = context_text_for_post_row(post_row)
+        _show_post_text(ctx, key=f"compare_post_{block_idx}_{tid}")
 
-    baseline_prof = db.get_profile_by_name(conn, db.BASELINE_PROFILE_NAME)
-    non_baseline = [p for p in sorted(profiles, key=lambda x: x.id) if p.name != db.BASELINE_PROFILE_NAME]
+        if st.button("Remove from problem set", key=f"browse_remove_{block_idx}_{tid}"):
+            db.delete_problem_post(conn, tid)
+            _frag_rerun()
 
-    tab_labels = ["Reference", "Baseline"] + [p.name for p in non_baseline]
-    tabs = st.tabs(tab_labels)
+        st.divider()
 
-    with tabs[0]:
-        _render_reference_tab(conn, tid=tid, block_idx=block_idx)
+        reference_claims = _reference_claims_list(conn, tid)
+        extractions = db.fetch_extractions_for_task(conn, tid)
+        extraction_by_profile = {e["profile_id"]: e for e in extractions}
 
-    with tabs[1]:
-        if baseline_prof is None:
-            st.caption("Baseline profile not found.")
+        st.segmented_control(
+            "Profile",
+            view_options,
+            key=f"browse_post_view_{tid}",
+            label_visibility="collapsed",
+        )
+        post_view = st.session_state[f"browse_post_view_{tid}"]
+
+        if post_view == "Reference":
+            _render_reference_tab(conn, tid=tid, block_idx=block_idx)
         else:
-            hit = extraction_by_profile.get(baseline_prof.id)
-            _render_compare_extraction_tab(
-                conn=conn,
-                pp=pp,
-                post_row=post_row,
-                tid=tid,
-                prof=baseline_prof,
-                hit=hit,
-                reference_claims=reference_claims,
-                block_idx=block_idx,
-            )
-
-    for i, prof in enumerate(non_baseline):
-        with tabs[i + 2]:
-            _render_compare_extraction_tab(
-                conn=conn,
-                pp=pp,
-                post_row=post_row,
-                tid=tid,
-                prof=prof,
-                hit=extraction_by_profile.get(prof.id),
-                reference_claims=reference_claims,
-                block_idx=block_idx,
-            )
+            prof = profile_by_name.get(post_view)
+            if prof is None:
+                st.warning(f"Profile “{post_view}” not found.")
+            else:
+                _render_compare_extraction_tab(
+                    conn=conn,
+                    tid=tid,
+                    prof=prof,
+                    hit=extraction_by_profile.get(prof.id),
+                )
 
 
-def _render_compare_tab(conn) -> None:
+@st.fragment
+def _render_compare_tab() -> None:
+    conn = _open_db(_lab_db_path())
+    try:
+        _render_compare_tab_content(conn)
+    finally:
+        conn.close()
+
+
+def _render_compare_tab_content(conn) -> None:
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            padding: 1rem 1.1rem 1.15rem;
+            margin-bottom: 0.25rem;
+            background-color: rgba(151, 166, 195, 0.09);
+            border-radius: 0.65rem;
+            box-shadow: 0 1px 2px rgba(49, 51, 63, 0.08);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     problem_posts = db.fetch_problem_posts_sorted(conn, descending=True)
     profiles = db.list_profiles(conn)
     if not problem_posts:
-        st.info("No problem posts yet. Mark some on the Browse tab.")
+        st.info("No problem posts yet. Mark some on the Source Data tab.")
         return
 
-    platforms = sorted({posts_data.platform_name(pp["post_row"]) for pp in problem_posts})
-    compare_platforms = _render_platform_filter(platforms, "compare")
-    filtered = [
-        pp for pp in problem_posts if posts_data.platform_name(pp["post_row"]) in compare_platforms
-    ] if compare_platforms else []
+    sorted_profiles = sorted(profiles, key=lambda x: x.id)
+    view_options = ["Reference"] + [p.name for p in sorted_profiles]
+    task_ids = tuple(pp["task_id"] for pp in problem_posts)
+    st.session_state["browse_task_ids"] = task_ids
+    selected_view = st.selectbox(
+        "View",
+        view_options,
+        key="browse_profile_view",
+    )
+    _sync_browse_post_views_from_global(
+        task_ids=task_ids,
+        selected_view=selected_view,
+        view_options=view_options,
+    )
 
-    if platforms and not compare_platforms:
-        st.warning("Enable at least one platform filter.")
-        return
-    if not filtered:
-        st.info("No problem posts match platform filter.")
-        return
+    st.caption(f"**{len(problem_posts)}** problem post(s)")
+    if selected_view != "Reference" and not profiles:
+        st.info("Create and run a prompt profile on the Profiles tab.")
 
-    st.caption(f"**{len(filtered)}** problem post(s)")
-    if not profiles:
-        st.info("Create and run a prompt profile on the Profiles tab to compare extractions.")
+    profile_by_name = {p.name: p for p in profiles}
 
-    eval_profiles = [p for p in profiles if p.name != db.BASELINE_PROFILE_NAME]
-    if eval_profiles:
-        eval_sel = {f"{p.id}: {p.name}": p for p in eval_profiles}
-        eval_key = st.selectbox("Evaluate profile vs Reference", options=list(eval_sel.keys()))
-        eval_prof = eval_sel[eval_key]
-        expensive = st.text_input("Judge model", value=eval_prof.model, key="compare_judge_model")
-        if st.button("Run evaluation vs Reference", key="compare_run_eval"):
-            try:
-                load_llm_config()
-                with st.spinner("Judging…"):
-                    optimizer.judge_profile_against_reference(
-                        conn,
-                        eval_prof,
-                        filtered,
-                        judge_model=expensive.strip() or eval_prof.model,
-                    )
-                st.success("Evaluation complete.")
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
-
-    for i, pp in enumerate(filtered):
-        if i > 0:
-            st.divider()
-        _render_compare_post_block(conn, pp, profiles, block_idx=i)
+    for i, pp in enumerate(problem_posts):
+        _render_compare_post_block(
+            conn,
+            pp,
+            view_options=view_options,
+            profile_by_name=profile_by_name,
+            block_idx=i,
+        )
+        if i < len(problem_posts) - 1:
+            st.write("")
 
 
-def _render_optimize_tab(conn) -> None:
-    st.caption("Configure objective, generate Reference gold claims, and run the autonomous optimizer.")
+def _render_optimize_tab_content(conn) -> None:
+    st.caption("Configure objective, generate Reference claims, and run the autonomous optimizer.")
 
     problem_posts = db.fetch_problem_posts_sorted(conn, descending=False)
     profiles = db.list_profiles(conn)
     if not problem_posts:
-        st.warning("Mark problem posts on the Browse tab first.")
+        st.warning("Mark problem posts on the Source Data tab first.")
         return
 
     st.subheader("Objective")
@@ -669,7 +713,7 @@ def _render_optimize_tab(conn) -> None:
     if st.button("Save objective", key="opt_save_obj"):
         db.upsert_meta_prompt(conn, "objective", new_obj)
         st.success("Saved.")
-        st.rerun()
+        _frag_rerun()
 
     with st.expander("Meta-prompt templates", expanded=False):
         st.caption("Required placeholders are validated on save.")
@@ -682,12 +726,21 @@ def _render_optimize_tab(conn) -> None:
                 try:
                     db.upsert_meta_prompt(conn, name, edited)
                     st.success(f"Saved {name}.")
-                    st.rerun()
+                    _frag_rerun()
                 except ValueError as e:
                     st.error(str(e))
 
     st.divider()
     st.subheader("Reference setup")
+    flash_ref = st.session_state.pop("flash_opt_ref_gen", None)
+    if flash_ref:
+        ok = int(flash_ref["ok"])
+        fail = int(flash_ref["fail"])
+        if fail:
+            st.warning(f"Reference updated for **{ok}** posts; **{fail}** failed.")
+            _show_run_failures(flash_ref.get("failures") or [], title="Reference generation errors")
+        else:
+            st.success(f"Reference updated: **{ok}** posts.")
     st.warning(
         "Generating Reference **overwrites** all Reference claims for every problem post, "
         "including manual edits."
@@ -696,7 +749,9 @@ def _render_optimize_tab(conn) -> None:
         st.info("Create a profile first.")
     else:
         prof_map = {f"{p.id}: {p.name}": p for p in profiles}
-        ref_prof_key = st.selectbox("Profile (prompts only)", options=list(prof_map.keys()), key="opt_ref_prof")
+        prof_keys = list(prof_map.keys())
+        _ensure_selectbox_key("opt_ref_prof", prof_keys)
+        ref_prof_key = st.selectbox("Profile (prompts only)", options=prof_keys, key="opt_ref_prof")
         ref_prof = prof_map[ref_prof_key]
         ref_model = st.text_input("Expensive model for Reference", value=ref_prof.model, key="opt_ref_model")
         if st.button("Generate Reference from profile", key="opt_gen_ref"):
@@ -708,7 +763,7 @@ def _render_optimize_tab(conn) -> None:
                     def on_progress(done: int, total: int, msg: str) -> None:
                         prog.progress(min(1.0, done / max(total, 1)), text=f"{msg} ({done}/{total})")
 
-                    ok, fail = extract_runner.run_profile_on_posts(
+                    ok, fail, failures = extract_runner.run_profile_on_posts(
                         conn,
                         ref_prof,
                         problem_posts,
@@ -716,17 +771,33 @@ def _render_optimize_tab(conn) -> None:
                         on_progress=on_progress,
                         write_reference=True,
                     )
-                    status.update(label=f"Done — {ok} ok, {fail} failed", state="complete")
-                st.success(f"Reference updated: **{ok}** posts.")
+                    status.update(
+                        label=f"Done — {ok} ok, {fail} failed",
+                        state="complete" if fail == 0 else "error",
+                    )
+                st.session_state["flash_opt_ref_gen"] = {
+                    "ok": ok,
+                    "fail": fail,
+                    "failures": failures,
+                }
+                _bump_lab_data()
+                _app_rerun()
             except Exception as exc:
                 st.error(str(exc))
 
     st.divider()
     st.subheader("Improvement loop")
+    flash_opt = st.session_state.pop("flash_opt_run", None)
+    if flash_opt:
+        st.success(f"Run complete (id={flash_opt.get('run_id')}).")
+        if flash_opt.get("summary"):
+            st.json(flash_opt["summary"])
     if not profiles:
         return
     inp_map = {f"{p.id}: {p.name}": p for p in profiles}
-    inp_key = st.selectbox("Input profile", options=list(inp_map.keys()), key="opt_in_prof")
+    inp_keys = list(inp_map.keys())
+    _ensure_selectbox_key("opt_in_prof", inp_keys)
+    inp_key = st.selectbox("Input profile", options=inp_keys, key="opt_in_prof")
     input_prof = inp_map[inp_key]
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -761,19 +832,44 @@ def _render_optimize_tab(conn) -> None:
                     cfg,
                     on_progress=on_progress,
                 )
-            st.success(f"Run complete (id={result.get('run_id')}).")
-            if result.get("summary"):
-                st.json(result["summary"])
+            st.session_state["flash_opt_run"] = {
+                "run_id": result.get("run_id"),
+                "summary": result.get("summary"),
+            }
+            _bump_lab_data()
+            _app_rerun()
         except Exception as exc:
             st.error(str(exc))
 
     st.divider()
     st.subheader("Run history")
+    _RUN_STALE_SECONDS = 180
     runs = db.list_optimization_runs(conn, limit=10)
     if not runs:
         st.caption("(no runs yet)")
     for run in runs:
-        with st.expander(f"Run {run['id']} · {run['input_profile_name']} · {run['status']} · {run['created_at']}"):
+        status = run["status"]
+        idle = run.get("idle_seconds")
+        label_status = status
+        if status == "running":
+            if idle is not None and idle > _RUN_STALE_SECONDS:
+                label_status = "running? (stale)"
+            else:
+                label_status = "running"
+        with st.expander(f"Run {run['id']} · {run['input_profile_name']} · {label_status} · {run['created_at']}"):
+            if status == "running":
+                idle_txt = f"{int(idle)}s ago" if idle is not None else "unknown"
+                if idle is not None and idle > _RUN_STALE_SECONDS:
+                    st.warning(
+                        f"No activity for **{idle_txt}** (last heartbeat). This run is likely "
+                        "stopped (e.g. tab/server closed). If it were live, the heartbeat would "
+                        "update every few seconds. Reopen the run's source or mark it stopped below."
+                    )
+                    if st.button("Mark as stopped", key=f"opt_mark_stopped_{run['id']}"):
+                        db.update_optimization_run(conn, run["id"], status="interrupted")
+                        _frag_rerun()
+                else:
+                    st.info(f"Active — last heartbeat **{idle_txt}**. Reopen this tab to refresh.")
             st.json(run.get("config") or {})
             if run.get("summary"):
                 st.json(run["summary"])
@@ -788,48 +884,35 @@ def _render_optimize_tab(conn) -> None:
                     st.caption(f"macro F1={m.get('macro_f1')} · micro F1={m.get('micro_f1')}")
 
 
+@st.fragment
+def _render_optimize_tab() -> None:
+    conn = _open_db(_lab_db_path())
+    try:
+        _render_optimize_tab_content(conn)
+    finally:
+        conn.close()
+
+
 def main() -> None:
     st.set_page_config(page_title="Claim extraction refinement", layout="wide")
     st.title("Claim extraction refinement lab")
 
-    with st.sidebar:
-        st.header("Settings")
-        default_db = str(db.default_db_path())
-        db_path = st.text_input("SQLite path", value=st.session_state.get("refine_db_path", default_db), key="refine_db_in")
-        st.session_state["refine_db_path"] = db_path
-        posts_default = str(REPO_ROOT / "data" / "posts_with_claims_full.json")
-        posts_path = st.text_input(
-            "Source posts JSON",
-            value=st.session_state.get("refine_posts_path", posts_default),
-            key="refine_posts_in",
-        )
-        st.session_state["refine_posts_path"] = posts_path
-        st.number_input("Browse shuffle seed", value=42, step=1, key="browse_seed")
-        if st.button("Clear posts cache"):
-            _load_posts.clear()
-            st.success("Posts cache cleared.")
+    default_db = str(db.default_db_path())
+    default_posts = str(REPO_ROOT / "data" / "posts_with_claims_full.json")
+    st.session_state.setdefault("refine_db_in", default_db)
+    st.session_state.setdefault("refine_posts_in", default_posts)
 
-        st.divider()
-        st.markdown("**Prompt variables**")
-        for k in prompt_vars.list_var_keys():
-            st.caption(f"`{{{k}}}` — {prompt_vars.display_name(k)}")
-
-    conn = _open_db(Path(db_path))
-    posts, posts_err = _load_posts(posts_path)
-
-    tab_browse, tab_profiles, tab_compare, tab_optimize = st.tabs(
-        ["Browse", "Profiles", "Compare", "Optimize"]
+    tab_source, tab_profiles, tab_browse, tab_optimize = st.tabs(
+        ["Source Data", "Profiles", "Browse", "Optimize"]
     )
-    with tab_browse:
-        _render_browse_tab(conn, posts, posts_err)
+    with tab_source:
+        _render_source_data_tab()
     with tab_profiles:
-        _render_profiles_tab(conn)
-    with tab_compare:
-        _render_compare_tab(conn)
+        _render_profiles_tab()
+    with tab_browse:
+        _render_compare_tab()
     with tab_optimize:
-        _render_optimize_tab(conn)
-
-    conn.close()
+        _render_optimize_tab()
 
 
 if __name__ == "__main__":

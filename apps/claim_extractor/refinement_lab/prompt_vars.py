@@ -25,22 +25,6 @@ def _platform(post: dict[str, Any]) -> str:
     return posts_data.platform_name(post)
 
 
-def _reddit_submission_title(post: dict[str, Any]) -> str:
-    return str(post.get("reddit_submission_title") or "")
-
-
-def _reddit_comment_submission_title(post: dict[str, Any]) -> str:
-    return str(post.get("reddit_comment_submission_title") or "")
-
-
-def _youtube_video_title(post: dict[str, Any]) -> str:
-    return str(post.get("youtube_video_title") or "")
-
-
-def _podcast_name(post: dict[str, Any]) -> str:
-    return str(post.get("podcast_name") or "")
-
-
 def _task_id(post: dict[str, Any]) -> str:
     return stable_task_id(post)
 
@@ -53,10 +37,6 @@ VAR_EXTRACTORS: dict[str, Any] = {
     "text_coreference_resolved": _text_coreference_resolved,
     "text": _plain_text,
     "platform": _platform,
-    "reddit_submission_title": _reddit_submission_title,
-    "reddit_comment_submission_title": _reddit_comment_submission_title,
-    "youtube_video_title": _youtube_video_title,
-    "podcast_name": _podcast_name,
     "task_id": _task_id,
     "text_input": _text_input,
 }
@@ -65,10 +45,6 @@ VAR_DISPLAY_NAMES: dict[str, str] = {
     "text_coreference_resolved": "Post text (coref-resolved, else plain)",
     "text": "Post text (plain)",
     "platform": "Platform",
-    "reddit_submission_title": "Reddit submission title",
-    "reddit_comment_submission_title": "Reddit parent submission title",
-    "youtube_video_title": "YouTube video title",
-    "podcast_name": "Podcast name",
     "task_id": "Task ID",
     "text_input": "Formatted input (titles + body, same as get_claims)",
     "max_claims": "Max claims (from profile setting)",

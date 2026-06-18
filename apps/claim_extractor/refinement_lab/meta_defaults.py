@@ -20,7 +20,7 @@ META_PROMPT_SPECS: dict[str, dict[str, Any]] = {
         "template": """\
 {objective}
 
-Compare reference (gold) claims vs candidate (cheap model) claims for one post.
+Compare reference claims vs candidate (cheap model) claims for one post.
 
 Post text:
 {post_text}
@@ -78,7 +78,7 @@ Propose small, targeted prompt edits (not a full rewrite). Return JSON:
   "user_prompt": "...",
   "changes": [{{"target": "system"|"user", "summary": "...", "addresses_category": "..."}}]
 }}
-Keep {{var}} placeholders like {{text_input}} and {{max_claims}} intact.
+Keep profile variable placeholders (text_input, max_claims, etc.) intact in the proposed prompts.
 """,
     },
     "evaluate": {
@@ -260,4 +260,26 @@ def seed_default_meta_prompts(conn) -> None:
             "INSERT INTO meta_prompts (name, template) VALUES ('objective', ?)",
             (DEFAULT_OBJECTIVE.strip(),),
         )
+    _repair_meta_prompt_templates(conn)
     conn.commit()
+
+
+def _repair_meta_prompt_templates(conn) -> None:
+    """Reset any stored meta-prompt whose template has stray ``{placeholder}`` tokens.
+
+    Legacy templates embedded examples like ``{{var}}`` which the renderer parses as
+    a required ``{var}`` substitution, causing "Missing template value" at run time.
+    Each meta-prompt's full set of valid placeholders equals its ``required`` set, so
+    any extra token is invalid and the template is restored to the current default.
+    """
+    for name, spec in META_PROMPT_SPECS.items():
+        row = conn.execute("SELECT template FROM meta_prompts WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            continue
+        found = set(_VAR_PATTERN.findall(str(row[0] or "")))
+        extras = found - set(spec["required"])
+        if extras:
+            conn.execute(
+                "UPDATE meta_prompts SET template = ? WHERE name = ?",
+                (str(spec["template"]).strip(), name),
+            )

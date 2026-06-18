@@ -60,6 +60,41 @@ class RequestClient(Protocol):
         """
 
 
+_DEFAULT_STRUCTURED_MAX_COMPLETION_TOKENS = 4096
+
+
+def _create_structured_chat_completion(
+    client: Any,
+    *,
+    model: str,
+    messages: list[dict[str, str]],
+    response_schema: dict[str, Any],
+    max_completion_tokens: int = _DEFAULT_STRUCTURED_MAX_COMPLETION_TOKENS,
+) -> Any:
+    """Chat completion with JSON schema; handles reasoning-model API quirks."""
+    fmt = {"type": "json_schema", "json_schema": response_schema}
+
+    def _call(**kwargs: Any) -> Any:
+        return client.chat.completions.create(model=model, messages=messages, response_format=fmt, **kwargs)
+
+    try:
+        return _call(temperature=0, max_completion_tokens=max_completion_tokens)
+    except APIStatusError as exc:
+        status = getattr(exc, "status_code", None)
+        err = str(exc).lower()
+        if status == 400 and "max_completion_tokens" in err and "unsupported" in err:
+            return _call(temperature=0, max_tokens=max_completion_tokens)
+        if status == 400 and "temperature" in err:
+            try:
+                return _call(max_completion_tokens=max_completion_tokens)
+            except APIStatusError as exc2:
+                err2 = str(exc2).lower()
+                if getattr(exc2, "status_code", None) == 400 and "max_completion_tokens" in err2 and "unsupported" in err2:
+                    return _call(max_tokens=max_completion_tokens)
+                raise
+        raise
+
+
 def _parse_chat_completion_response(
     resp: Any,
     *,
@@ -110,14 +145,14 @@ class AzureClaimsClient:
     def perform(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         system_prompt = self._system_prompt_builder(payload)
         user_prompt = self._user_prompt_builder(payload)
-        resp = self._client.chat.completions.create(
+        resp = _create_structured_chat_completion(
+            self._client,
             model=self._model,
-            temperature=0,
-            response_format={"type": "json_schema", "json_schema": self._response_schema},
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
+            response_schema=self._response_schema,
         )
         return _parse_chat_completion_response(resp, output_parser=self._output_parser)
 
@@ -147,14 +182,14 @@ class OpenAIClaimsClient:
     def perform(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         system_prompt = self._system_prompt_builder(payload)
         user_prompt = self._user_prompt_builder(payload)
-        resp = self._client.chat.completions.create(
+        resp = _create_structured_chat_completion(
+            self._client,
             model=self._model,
-            temperature=0,
-            response_format={"type": "json_schema", "json_schema": self._response_schema},
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
+            response_schema=self._response_schema,
         )
         return _parse_chat_completion_response(resp, output_parser=self._output_parser)
 

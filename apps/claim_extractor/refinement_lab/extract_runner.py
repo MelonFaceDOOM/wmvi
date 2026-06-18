@@ -34,14 +34,14 @@ def run_profile_on_posts(
     max_workers: int = DEFAULT_MAX_WORKERS,
     on_progress: Callable[[int, int, str], None] | None = None,
     write_reference: bool = False,
-) -> tuple[int, int]:
+) -> tuple[int, int, list[dict[str, str]]]:
     """
     Extract claims for each problem post using ``profile`` prompts.
 
-    Returns (success_count, failure_count).
+    Returns (success_count, failure_count, failure_details).
     """
     if not problem_posts:
-        return 0, 0
+        return 0, 0, []
 
     profile_id = profile.id
     run_model = model or profile.model
@@ -96,6 +96,7 @@ def run_profile_on_posts(
 
     success = 0
     failed = 0
+    failures: list[dict[str, str]] = []
     done = 0
     for result in requester.run(tasks):
         done += 1
@@ -126,6 +127,8 @@ def run_profile_on_posts(
                 )
             success += 1
         else:
+            err = result.error or "unknown error"
+            failures.append({"task_id": result.task_id, "error": err})
             if not write_reference:
                 db.upsert_profile_extraction(
                     conn,
@@ -133,8 +136,8 @@ def run_profile_on_posts(
                     task_id=result.task_id,
                     status="failed",
                     output_json=None,
-                    error=result.error or "unknown error",
+                    error=err,
                     model=run_model,
                 )
             failed += 1
-    return success, failed
+    return success, failed, failures
