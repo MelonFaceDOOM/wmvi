@@ -1,0 +1,208 @@
+"""Encode claim texts for an embedding profile and persist vectors + metrics.
+
+Heavy arrays go to disk as float32 ``.npy``; metadata + hardware metrics go to
+SQLite and a ``metrics.json`` sidecar. The encoder model is cached process-wide.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import streamlit as st
+
+from apps.claim_extractor.embedding_lab.claims_data import ClaimGroup
+from apps.claim_extractor.embedding_lab.db import EmbedProfile
+from apps.claim_extractor.learned.encode import encode_texts, load_sentence_transformer
+
+VECTORS_FILE = "vectors.npy"
+INDEX_FILE = "index.json"
+METRICS_FILE = "metrics.json"
+LABELS_FILE_TMPL = "cluster_{cluster_profile_id}.npy"
+
+_ENCODE_CHUNK = 2048
+
+
+@st.cache_resource(show_spinner=False)
+def get_encoder(model_id: str) -> Any:
+    """Process-wide cached sentence-transformers model."""
+    return load_sentence_transformer(model_id)
+
+
+def _peak_ram_mb() -> float | None:
+    try:
+        import resource
+
+        # ru_maxrss is KiB on Linux.
+        return float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+    except Exception:
+        return None
+
+
+def _torch_cuda() -> Any | None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return torch
+    except Exception:
+        return None
+    return None
+
+
+def _apply_doc_instruction(texts: list[str], instruction: str) -> list[str]:
+    instr = (instruction or "").strip()
+    if not instr:
+        return texts
+    return [f"{instr} {t}" for t in texts]
+
+
+def _group_to_dict(group: ClaimGroup) -> dict[str, Any]:
+    return {
+        "claim_text": group.claim_text,
+        "count": group.count,
+        "sources": [
+            {
+                "task_id": s.task_id,
+                "claim_index": s.claim_index,
+                "row_id": s.row_id,
+            }
+            for s in group.sources
+        ],
+    }
+
+
+def normalize_index(index: dict[str, Any]) -> dict[str, Any]:
+    """Ensure ``groups`` is present; synthesize from legacy per-row index if needed."""
+    if index.get("groups"):
+        if not index.get("claim_texts"):
+            index["claim_texts"] = [g.get("claim_text", "") for g in index["groups"]]
+        return index
+
+    claim_texts = index.get("claim_texts") or []
+    task_ids = index.get("task_ids") or []
+    claim_indices = index.get("claim_indices") or []
+    row_ids = index.get("row_ids") or []
+    groups: list[dict[str, Any]] = []
+    for i, text in enumerate(claim_texts):
+        groups.append(
+            {
+                "claim_text": text,
+                "count": 1,
+                "sources": [
+                    {
+                        "task_id": task_ids[i] if i < len(task_ids) else "?",
+                        "claim_index": int(claim_indices[i]) if i < len(claim_indices) else 0,
+                        "row_id": row_ids[i] if i < len(row_ids) else f"?:{i}",
+                    }
+                ],
+            }
+        )
+    index["groups"] = groups
+    if not index.get("claim_texts"):
+        index["claim_texts"] = claim_texts
+    return index
+
+
+def run_embedding(
+    *,
+    profile: EmbedProfile,
+    groups: list[ClaimGroup],
+    source_hash: str,
+    source_path: str,
+    source_claim_count: int,
+    artifact_dir: Path,
+    on_progress: Callable[[int, int, str], None] | None = None,
+) -> dict[str, Any]:
+    """Encode one vector per claim group, write artifacts, and return metrics."""
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    raw_texts = [g.claim_text for g in groups]
+    texts = _apply_doc_instruction(raw_texts, profile.doc_instruction)
+    total = len(texts)
+
+    encoder = get_encoder(profile.model_id)
+
+    torch = _torch_cuda()
+    device = "cuda" if torch is not None else "cpu"
+    if torch is not None:
+        try:
+            torch.cuda.reset_peak_memory_stats()
+        except Exception:
+            pass
+    ram_before = _peak_ram_mb()
+
+    t0 = time.monotonic()
+    chunks: list[np.ndarray] = []
+    done = 0
+    for start in range(0, total, _ENCODE_CHUNK):
+        chunk = texts[start : start + _ENCODE_CHUNK]
+        vecs = encode_texts(encoder, chunk, normalize_embeddings=profile.normalize)
+        chunks.append(np.asarray(vecs, dtype=np.float32))
+        done += len(chunk)
+        if on_progress:
+            on_progress(done, total, f"Encoded {done}/{total}")
+    wall_seconds = time.monotonic() - t0
+
+    vectors = (
+        np.vstack(chunks).astype(np.float32, copy=False)
+        if chunks
+        else np.zeros((0, 0), dtype=np.float32)
+    )
+    vector_dim = int(vectors.shape[1]) if vectors.ndim == 2 and vectors.shape[0] else 0
+
+    vectors_path = artifact_dir / VECTORS_FILE
+    np.save(vectors_path, vectors)
+    index = {
+        "model_id": profile.model_id,
+        "source_hash": source_hash,
+        "claim_texts": raw_texts,
+        "groups": [_group_to_dict(g) for g in groups],
+    }
+    (artifact_dir / INDEX_FILE).write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+
+    ram_after = _peak_ram_mb()
+    peak_gpu_mb = None
+    if torch is not None:
+        try:
+            peak_gpu_mb = float(torch.cuda.max_memory_allocated()) / (1024.0 * 1024.0)
+        except Exception:
+            peak_gpu_mb = None
+
+    artifact_bytes = int(vectors_path.stat().st_size) if vectors_path.is_file() else 0
+    metrics = {
+        "device": device,
+        "wall_seconds": round(wall_seconds, 3),
+        "claims_per_sec": round(total / wall_seconds, 2) if wall_seconds > 0 else None,
+        "peak_ram_mb": round(ram_after, 1) if ram_after is not None else None,
+        "ram_delta_mb": (
+            round(ram_after - ram_before, 1) if ram_after is not None and ram_before is not None else None
+        ),
+        "peak_gpu_mb": round(peak_gpu_mb, 1) if peak_gpu_mb is not None else None,
+        "artifact_bytes": artifact_bytes,
+        "claim_count": total,
+        "source_claim_count": source_claim_count,
+        "vector_dim": vector_dim,
+        "model_id": profile.model_id,
+    }
+    (artifact_dir / METRICS_FILE).write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+    return metrics
+
+
+def load_run_arrays(artifact_dir: Path) -> tuple[np.ndarray, dict[str, Any]]:
+    """Load vectors + normalized index for an embed run."""
+    vectors = np.load(artifact_dir / VECTORS_FILE)
+    index = json.loads((artifact_dir / INDEX_FILE).read_text(encoding="utf-8"))
+    return np.asarray(vectors, dtype=np.float32), normalize_index(index)
+
+
+def embed_query(model_id: str, text: str, *, query_instruction: str) -> np.ndarray:
+    """Embed a single search phrase, prepending the query instruction (query side only)."""
+    encoder = get_encoder(model_id)
+    instr = (query_instruction or "").strip()
+    payload = f"{instr} {text}".strip() if instr else text
+    vec = encode_texts(encoder, [payload], normalize_embeddings=True)
+    return np.asarray(vec, dtype=np.float32)[0]
