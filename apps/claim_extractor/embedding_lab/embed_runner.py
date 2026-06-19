@@ -43,15 +43,126 @@ def _peak_ram_mb() -> float | None:
         return None
 
 
-def _torch_cuda() -> Any | None:
+def probe_cuda() -> dict[str, Any]:
+    """Lightweight PyTorch CUDA probe (no model load)."""
+    info: dict[str, Any] = {
+        "cuda_available": False,
+        "device": "cpu",
+        "cuda_device_name": None,
+        "cuda_device_count": 0,
+        "cuda_version": None,
+        "torch_version": None,
+    }
     try:
         import torch
 
+        info["torch_version"] = torch.__version__
         if torch.cuda.is_available():
-            return torch
+            info["cuda_available"] = True
+            info["device"] = "cuda"
+            info["cuda_device_count"] = int(torch.cuda.device_count())
+            info["cuda_device_name"] = torch.cuda.get_device_name(0)
+            info["cuda_version"] = torch.version.cuda
+    except Exception as exc:
+        info["torch_error"] = str(exc)
+    return info
+
+
+def _device_info_from_encoder(encoder: Any) -> dict[str, Any]:
+    """Merge PyTorch CUDA probe with the encoder's actual ``.device``."""
+    info = probe_cuda()
+    enc_dev = getattr(encoder, "device", None)
+    enc_dev_str = str(enc_dev) if enc_dev is not None else "unknown"
+    info["encoder_device"] = enc_dev_str
+    if "cuda" in enc_dev_str:
+        info["device"] = enc_dev_str if ":" in enc_dev_str else "cuda"
+    else:
+        info["device"] = "cpu"
+    return info
+
+
+def probe_compute_device(
+    *,
+    model_id: str | None = None,
+    run_encode_test: bool = False,
+) -> dict[str, Any]:
+    """Probe CUDA and optionally load the encoder + run a one-line encode test."""
+    info = probe_cuda()
+    if not model_id:
+        return info
+
+    try:
+        encoder = get_encoder(model_id)
+        info = _device_info_from_encoder(encoder)
+    except Exception as exc:
+        info["encoder_error"] = str(exc)
+        return info
+
+    if not run_encode_test:
+        return info
+
+    try:
+        vec = encode_texts(encoder, ["gpu device test"], normalize_embeddings=True)
+        info["encode_test_ok"] = True
+        info["encode_test_dim"] = int(vec.shape[1])
+    except Exception as exc:
+        info["encode_test_ok"] = False
+        info["encode_error"] = str(exc)
+    return info
+
+
+def format_device_report(info: dict[str, Any]) -> str:
+    """Markdown summary for the embedding-lab UI."""
+    lines: list[str] = []
+    if info.get("torch_error"):
+        lines.append(f"PyTorch error: `{info['torch_error']}`")
+    elif info.get("cuda_available"):
+        lines.append(
+            f"**CUDA available** — {info.get('cuda_device_name', '?')} "
+            f"({info.get('cuda_device_count', 0)} device(s)"
+            + (f", driver CUDA {info['cuda_version']}" if info.get("cuda_version") else "")
+            + ")"
+        )
+    else:
+        lines.append("**CUDA not available** — embedding will use CPU.")
+
+    if info.get("torch_version"):
+        lines.append(f"PyTorch `{info['torch_version']}`")
+
+    if info.get("encoder_device"):
+        lines.append(f"Encoder device: `{info['encoder_device']}`")
+
+    if info.get("encoder_error"):
+        lines.append(f"Encoder load failed: `{info['encoder_error']}`")
+    elif info.get("encode_test_ok") is True:
+        lines.append(f"Encode test: **OK** (dim {info.get('encode_test_dim')})")
+    elif info.get("encode_test_ok") is False:
+        lines.append(f"Encode test failed: `{info.get('encode_error', '?')}`")
+
+    return "\n\n".join(lines)
+
+
+def device_progress_message(info: dict[str, Any]) -> str:
+    """Short status line shown as soon as the encoder is loaded."""
+    enc = info.get("encoder_device") or info.get("device") or "cpu"
+    if "cuda" in str(enc):
+        name = info.get("cuda_device_name") or enc
+        return f"Using GPU — {name} (encoder on {enc})"
+    if info.get("cuda_available") and not str(enc).startswith("cuda"):
+        return f"Using CPU — encoder on {enc} (CUDA visible to PyTorch but not used)"
+    return f"Using CPU — encoder on {enc}"
+
+
+def _torch_cuda() -> Any | None:
+    info = probe_cuda()
+    if not info.get("cuda_available"):
+        return None
+    try:
+        import torch
+
+        return torch
     except Exception:
         return None
-    return None
 
 
 def _apply_doc_instruction(texts: list[str], instruction: str) -> list[str]:
@@ -125,12 +236,15 @@ def run_embedding(
     total = len(texts)
 
     encoder = get_encoder(profile.model_id)
+    device_info = _device_info_from_encoder(encoder)
+    device = str(device_info["device"])
+    if on_progress:
+        on_progress(0, total, device_progress_message(device_info))
 
-    torch = _torch_cuda()
-    device = "cuda" if torch is not None else "cpu"
-    if torch is not None:
+    torch_mod = _torch_cuda()
+    if torch_mod is not None:
         try:
-            torch.cuda.reset_peak_memory_stats()
+            torch_mod.cuda.reset_peak_memory_stats()
         except Exception:
             pass
     ram_before = _peak_ram_mb()
@@ -166,9 +280,9 @@ def run_embedding(
 
     ram_after = _peak_ram_mb()
     peak_gpu_mb = None
-    if torch is not None:
+    if torch_mod is not None:
         try:
-            peak_gpu_mb = float(torch.cuda.max_memory_allocated()) / (1024.0 * 1024.0)
+            peak_gpu_mb = float(torch_mod.cuda.max_memory_allocated()) / (1024.0 * 1024.0)
         except Exception:
             peak_gpu_mb = None
 

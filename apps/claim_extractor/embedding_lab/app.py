@@ -5,6 +5,8 @@ searching, graphing, clustering, and scoring an editable triplet eval set.
 From the **repository root** (so ``apps`` is importable), run::
 
   streamlit run apps/claim_extractor/embedding_lab/app.py
+
+Setup, corporate-network SSL, and run transfer: see ``embedding_lab/README.md``.
 """
 
 from __future__ import annotations
@@ -298,6 +300,28 @@ def _render_profiles_tab_content(conn) -> None:
         return
     assert bundle is not None
 
+    st.subheader("Compute device")
+    cuda_hint = embed_runner.probe_cuda()
+    st.caption(
+        "PyTorch sees: "
+        + (
+            f"CUDA ({cuda_hint.get('cuda_device_name', '?')})"
+            if cuda_hint.get("cuda_available")
+            else "CPU only (CUDA not available)"
+        )
+    )
+    gpu_col, _ = st.columns([1, 3])
+    with gpu_col:
+        if st.button("Test GPU / device", key=f"emb_gpu_test_{profile_id}"):
+            with st.spinner(f"Loading {model_id} and running encode test…"):
+                st.session_state[f"emb_gpu_info_{profile_id}"] = embed_runner.probe_compute_device(
+                    model_id=model_id,
+                    run_encode_test=True,
+                )
+    gpu_info = st.session_state.get(f"emb_gpu_info_{profile_id}")
+    if gpu_info:
+        st.markdown(embed_runner.format_device_report(gpu_info))
+
     existing = db.get_embed_run_for(conn, profile_id, bundle.source_hash)
     if existing:
         st.info(f"This profile already has a run for the current source (run id={existing['id']}).")
@@ -338,9 +362,17 @@ def _run_embedding(conn, profile: db.EmbedProfile, bundle: claims_data.ClaimsBun
     artifact_dir = db.artifacts_root() / f"profile_{profile.id}" / f"run_{bundle.source_hash[:12]}"
     with st.status(f"Embedding {bundle.claim_count} claims with {profile.model_id}…", expanded=True) as status:
         progress = st.progress(0.0)
+        device_logged = False
 
         def on_progress(done: int, total: int, msg: str) -> None:
-            progress.progress(min(1.0, done / max(total, 1)), text=f"{msg}")
+            nonlocal device_logged
+            progress.progress(min(1.0, done / max(total, 1)), text=msg if done else "Loading encoder…")
+            if not device_logged and done == 0:
+                status.write(msg)
+                status.update(label=msg)
+                device_logged = True
+            elif done > 0:
+                status.write(msg)
 
         try:
             metrics = embed_runner.run_embedding(
