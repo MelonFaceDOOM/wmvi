@@ -1,0 +1,12 @@
+# PyTorch (shared by claim_extractor learned stack + transcription).
+#
+# Default PyPI torch wheels are CPU-only on Windows/Linux. The extra index below
+# supplies CUDA 12.4 builds on those platforms; macOS keeps the PyPI CPU/MPS wheel.
+#
+# Verify after install:
+#   python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
+#
+# CPU-only install (smaller download): pip install -r requirements-torch-cpu.txt
+
+--extra-index-url https://download.pytorch.org/whl/cu124; platform_system != "Darwin"
+torch>=2.2.0,<2.7.0

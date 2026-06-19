@@ -1,0 +1,2 @@
+# Explicit CPU-only PyTorch (smaller than CUDA wheels). Use on machines without an NVIDIA GPU.
+torch>=2.2.0,<2.7.0

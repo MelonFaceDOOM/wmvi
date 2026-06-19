@@ -307,7 +307,11 @@ def _render_profiles_tab_content(conn) -> None:
         + (
             f"CUDA ({cuda_hint.get('cuda_device_name', '?')})"
             if cuda_hint.get("cuda_available")
-            else "CPU only (CUDA not available)"
+            else (
+                "CPU-only wheel (nvidia-smi GPU not usable by this Python — see README)"
+                if cuda_hint.get("cpu_only_wheel")
+                else "CPU only (CUDA not available)"
+            )
         )
     )
     gpu_col, _ = st.columns([1, 3])
@@ -356,6 +360,31 @@ def _render_profiles_tab_content(conn) -> None:
                 f"\u00b7 artifact: **{_fmt_metric((run.get('artifact_bytes') or 0) / 1e6, ' MB')}**\n"
                 f"- dir: `{run.get('artifact_dir')}`"
             )
+
+    st.divider()
+    st.subheader("Delete profile")
+    n_runs = len(runs)
+    st.caption(
+        f"Permanently delete **{profile.name}** (id={profile_id})"
+        + (
+            f" and **{n_runs}** embedding run(s) with on-disk vectors."
+            if n_runs
+            else " (no embedding runs yet)."
+        )
+    )
+    delete_confirm = st.checkbox("I understand this cannot be undone", key=f"emb_delete_confirm_{profile_id}")
+    if st.button(
+        "Delete profile",
+        key=f"emb_delete_{profile_id}",
+        disabled=not delete_confirm,
+    ):
+        if db.delete_embed_profile(conn, profile_id):
+            st.session_state.pop("emb_edit_profile_id", None)
+            st.session_state.pop(f"emb_gpu_info_{profile_id}", None)
+            st.success(f"Deleted profile {profile_id}.")
+            _app_rerun()
+        else:
+            st.error("Profile not found.")
 
 
 def _run_embedding(conn, profile: db.EmbedProfile, bundle: claims_data.ClaimsBundle) -> None:

@@ -74,6 +74,59 @@ To make this permanent: Windows **Environment Variables** (user or system) → a
 - Copy a `huggingface-cli download … --local-dir …` folder and set the
   embedding profile model to that local path.
 
+## GPU / CUDA
+
+`nvidia-smi` showing a GPU does **not** mean PyTorch can use it. Check in the
+embedding lab (**Test GPU / device**) or:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
+```
+
+| `torch.version.cuda` | `is_available()` | Meaning |
+|----------------------|------------------|---------|
+| `None` | `False` | **CPU-only PyTorch** — reinstall with CUDA wheels |
+| `12.4` | `True` | OK |
+| `12.4` | `False` | CUDA build but runtime blocked (driver, env, etc.) |
+
+### CPU-only wheel (most common on a fresh `pip install`)
+
+If the embedding lab still shows **CPU-only wheel** after `pip install -r …`, reinstall
+torch explicitly:
+
+```cmd
+pip install -r requirements-torch.txt
+```
+
+Or for a machine without an NVIDIA GPU:
+
+```cmd
+pip install -r requirements-torch-cpu.txt
+```
+
+Manual equivalent (CUDA 12.4):
+
+```cmd
+pip uninstall torch
+pip install "torch>=2.2.0,<2.7.0" --index-url https://download.pytorch.org/whl/cu124
+```
+
+Verify:
+
+```cmd
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+```
+
+Expect `True` and `NVIDIA RTX 5000 Ada Generation` (or similar).
+
+`requirements-torch.txt` (included by `requirements-learned.txt` and
+`requirements-transcription.txt`) adds the PyTorch CUDA index automatically on
+Windows/Linux. Install **from repo root** so relative `-r` paths resolve:
+
+```cmd
+pip install -r apps\claim_extractor\requirements-learned.txt
+```
+
 ## Transfer embedding runs between machines
 
 Embedding vectors and run metadata only (not model weights, clusters, or triplet

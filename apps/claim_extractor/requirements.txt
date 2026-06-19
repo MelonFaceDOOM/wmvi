@@ -4,6 +4,9 @@
 #   pip install -r requirements.txt
 #   pip install -r apps/claim_extractor/requirements.txt
 #
+# PyTorch is installed via requirements-torch.txt (CUDA 12.4 wheels on Windows/Linux).
+# CPU-only hosts: pip install -r requirements-torch-cpu.txt before the files below.
+#
 # Subsets (if you only need part of the pipeline):
 #   Labeler lab + Ridge scoring only  →  requirements-learned.txt
 #   Coref stage only                   →  requirements-coref.txt

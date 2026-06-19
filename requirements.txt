@@ -100,3 +100,4 @@ six==1.17.0
 
 # --- Claim extractor (optional; torch + Streamlit + coref extras) ---
 # pip install -r apps/claim_extractor/requirements.txt
+# PyTorch CUDA wheels: requirements-torch.txt (via requirements-learned.txt)

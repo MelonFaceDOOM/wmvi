@@ -57,6 +57,8 @@ def probe_cuda() -> dict[str, Any]:
         import torch
 
         info["torch_version"] = torch.__version__
+        info["torch_built_cuda"] = torch.version.cuda
+        info["cpu_only_wheel"] = torch.version.cuda is None
         if torch.cuda.is_available():
             info["cuda_available"] = True
             info["device"] = "cuda"
@@ -125,6 +127,21 @@ def format_device_report(info: dict[str, Any]) -> str:
         )
     else:
         lines.append("**CUDA not available** — embedding will use CPU.")
+        if info.get("cpu_only_wheel"):
+            lines.append(
+                "This PyTorch build has **no CUDA support** (CPU-only wheel). "
+                "`nvidia-smi` can show a GPU, but this Python install cannot use it."
+            )
+            lines.append(
+                "Reinstall from repo root: `pip install -r requirements-torch.txt` "
+                "(or see `requirements-torch-cpu.txt` for CPU-only hosts)"
+            )
+        elif info.get("torch_built_cuda"):
+            lines.append(
+                f"PyTorch was built for CUDA {info['torch_built_cuda']} but "
+                "`torch.cuda.is_available()` is false — check drivers, `CUDA_VISIBLE_DEVICES`, "
+                "or whether another process holds the GPU."
+            )
 
     if info.get("torch_version"):
         lines.append(f"PyTorch `{info['torch_version']}`")

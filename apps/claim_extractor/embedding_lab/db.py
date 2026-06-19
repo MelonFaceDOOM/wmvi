@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -206,6 +207,27 @@ def update_embed_profile(
         (name.strip(), model_id, doc_instruction, query_instruction, 1 if normalize else 0, profile_id),
     )
     conn.commit()
+
+
+def delete_embed_profile(
+    conn: sqlite3.Connection,
+    profile_id: int,
+    *,
+    remove_artifacts: bool = True,
+) -> bool:
+    """Delete a profile and its runs (DB CASCADE). Optionally remove artifact files."""
+    if get_embed_profile(conn, profile_id) is None:
+        return False
+
+    profile_dir = artifacts_root() / f"profile_{profile_id}"
+    cur = conn.execute("DELETE FROM embed_profiles WHERE id = ?", (profile_id,))
+    conn.commit()
+    if cur.rowcount == 0:
+        return False
+
+    if remove_artifacts and profile_dir.is_dir():
+        shutil.rmtree(profile_dir, ignore_errors=True)
+    return True
 
 
 # --- Embedding runs ---

@@ -167,7 +167,15 @@ def check_cuda(_ctx: CheckContext) -> Result:
 
         if torch.cuda.is_available():
             return _ok(f"CUDA: {torch.cuda.get_device_name(0)}")
-        return _warn("CUDA not available (CPU-only transcription)")
+        if torch.version.cuda is None:
+            return _warn(
+                "CUDA not available: CPU-only PyTorch wheel "
+                "(reinstall: pip install -r requirements-torch.txt from repo root)"
+            )
+        return _warn(
+            f"CUDA not available (PyTorch built for CUDA {torch.version.cuda}; "
+            "check driver / CUDA_VISIBLE_DEVICES)"
+        )
     except Exception as e:
         return _fail(f"torch CUDA check failed: {e}")
 
