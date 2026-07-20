@@ -1,0 +1,3 @@
+# Optional punctuation restoration for nlp/punct.py
+# (same pin as transcription/requirements-transcription.txt)
+deepmultilingualpunctuation==1.0.1

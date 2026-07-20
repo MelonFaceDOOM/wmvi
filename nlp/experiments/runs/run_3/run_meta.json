@@ -1,0 +1,23 @@
+{
+  "created_at": "2026-07-20T19:45:07Z",
+  "input": "/home/melon/wmvi/nlp/experiments/posts_for_term_raw.json",
+  "phases": [
+    "chunk",
+    "punct",
+    "report"
+  ],
+  "limit": null,
+  "prep_stats": {
+    "posts": 18706,
+    "punct_enabled": true,
+    "punct_restored": 460,
+    "punct_skipped_or_unchanged": 18246,
+    "chunk_enabled": true,
+    "chunk_posts": 18706,
+    "coref_enabled": false,
+    "coref_changed": 0,
+    "coref_failed": 0,
+    "coref_changed_rate": 0.0
+  },
+  "continuing": true
+}
