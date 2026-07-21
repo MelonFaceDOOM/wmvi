@@ -80,6 +80,14 @@ class MembershipChange:
     subset_name: str
 
 
+@dataclass(frozen=True)
+class CaseCollision:
+    """Multiple DB rows whose names collide after lowercasing."""
+
+    lower_name: str
+    variants: tuple[tuple[int, str], ...]  # (term_id, name)
+
+
 @dataclass
 class MigrationPlan:
     adds: list[str] = field(default_factory=list)
@@ -89,6 +97,8 @@ class MigrationPlan:
     membership_removes: list[MembershipChange] = field(default_factory=list)
     subsets_to_create: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    case_collisions: list[CaseCollision] = field(default_factory=list)
+    blocking_errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -99,6 +109,7 @@ class MigrationPlan:
                 "membership_adds": len(self.membership_adds),
                 "membership_removes": len(self.membership_removes),
                 "subsets_to_create": len(self.subsets_to_create),
+                "case_collisions": len(self.case_collisions),
             },
             "adds": sorted(self.adds),
             "case_renames": [asdict(r) for r in self.case_renames],
@@ -107,7 +118,27 @@ class MigrationPlan:
             "membership_removes": [asdict(m) for m in self.membership_removes],
             "subsets_to_create": sorted(self.subsets_to_create),
             "warnings": list(self.warnings),
+            "case_collisions": [
+                {
+                    "lower_name": c.lower_name,
+                    "variants": [
+                        {"term_id": tid, "name": name} for tid, name in c.variants
+                    ],
+                }
+                for c in self.case_collisions
+            ],
+            "blocking_errors": list(self.blocking_errors),
+            "safe_to_apply": not self.blocking_errors,
         }
+
+
+def assert_safe_to_apply(plan: MigrationPlan) -> None:
+    """Raise if the plan must not be applied (e.g. ambiguous case-variant rows)."""
+    if plan.blocking_errors:
+        raise RuntimeError(
+            "Refusing to apply — resolve blocking errors first:\n  - "
+            + "\n  - ".join(plan.blocking_errors)
+        )
 
 
 def normalize_term(raw: str) -> str:
@@ -170,6 +201,30 @@ def slice_hit_context(text: str, match_start: int, match_end: int, *, pad: int =
     return text[s:e]
 
 
+def _group_db_terms_by_lower(
+    db_terms: Sequence[tuple[int, str]],
+) -> tuple[dict[str, tuple[int, str]], list[CaseCollision]]:
+    """Split unambiguous lower→(id,name) map from multi-row case collisions."""
+    groups: dict[str, list[tuple[int, str]]] = {}
+    for term_id, name in db_terms:
+        key = normalize_term(name)
+        groups.setdefault(key, []).append((int(term_id), str(name)))
+
+    by_lower: dict[str, tuple[int, str]] = {}
+    collisions: list[CaseCollision] = []
+    for key, variants in sorted(groups.items()):
+        # Dedupe identical (id, name) if caller passed duplicates.
+        uniq: dict[int, str] = {}
+        for tid, nm in variants:
+            uniq[tid] = nm
+        items = tuple(sorted(uniq.items(), key=lambda x: x[0]))
+        if len(items) > 1:
+            collisions.append(CaseCollision(lower_name=key, variants=items))
+        else:
+            by_lower[key] = items[0]
+    return by_lower, collisions
+
+
 def compute_plan(
     desired: DesiredState,
     *,
@@ -186,21 +241,25 @@ def compute_plan(
             + ("…" if len(desired.collisions) > 20 else "")
         )
 
-    by_lower: dict[str, tuple[int, str]] = {}
-    for term_id, name in db_terms:
-        key = normalize_term(name)
-        if key in by_lower and by_lower[key][0] != term_id:
-            plan.warnings.append(
-                f"DB has multiple terms that lower() to {key!r}: "
-                f"id={by_lower[key][0]} {by_lower[key][1]!r} vs id={term_id} {name!r}"
-            )
-            continue
-        by_lower[key] = (int(term_id), str(name))
+    by_lower, collisions = _group_db_terms_by_lower(db_terms)
+    plan.case_collisions = collisions
+    for col in collisions:
+        variants_txt = ", ".join(f"id={tid} {name!r}" for tid, name in col.variants)
+        plan.blocking_errors.append(
+            f"DB has multiple terms that lower() to {col.lower_name!r}: {variants_txt}. "
+            "Resolve manually (merge/delete extras) before apply — otherwise renames, "
+            "membership sync, and deletes are ambiguous."
+        )
+
+    # Ambiguous keys must not participate in rename/delete/membership identity.
+    ambiguous_lowers = {c.lower_name for c in collisions}
 
     existing_subsets = {str(s) for s in db_subsets}
     plan.subsets_to_create = sorted(desired.subsets - existing_subsets)
 
     for name in sorted(desired.terms):
+        if name in ambiguous_lowers:
+            continue
         if name not in by_lower:
             plan.adds.append(name)
         else:
@@ -215,12 +274,18 @@ def compute_plan(
             plan.deletes.append((term_id, current))
 
     # Memberships: after renames/adds, identity is lower name.
+    # Skip ambiguous lowers so we do not silently touch the wrong row.
     current_mem: set[tuple[str, str]] = set()
     for term_name, subset_name in db_memberships:
-        current_mem.add((normalize_term(term_name), str(subset_name)))
+        key = normalize_term(term_name)
+        if key in ambiguous_lowers:
+            continue
+        current_mem.add((key, str(subset_name)))
 
     desired_mem: set[tuple[str, str]] = set()
     for term, subsets in desired.memberships.items():
+        if term in ambiguous_lowers:
+            continue
         for subset in subsets:
             desired_mem.add((term, subset))
 
@@ -409,7 +474,11 @@ def export_delete_contexts(plan: MigrationPlan, out_path: Path, *, pad: int = CO
 
 
 def apply_plan(plan: MigrationPlan, desired: DesiredState) -> dict[str, Any]:
-    """Apply migration in one transaction."""
+    """Apply migration in one transaction.
+
+    Raises ``RuntimeError`` if ``plan.blocking_errors`` is non-empty.
+    """
+    assert_safe_to_apply(plan)
     with getcursor(commit=True) as cur:
         # 1) Ensure subsets
         for subset_name in plan.subsets_to_create:
@@ -595,6 +664,23 @@ def main(argv: list[str] | None = None) -> int:
                 f"db={'prod' if args.prod else 'dev'}",
                 flush=True,
             )
+            if plan.warnings:
+                print("warnings:", flush=True)
+                for w in plan.warnings:
+                    print(f"  - {w}", flush=True)
+            if plan.blocking_errors:
+                print("blocking_errors (apply refused):", flush=True)
+                for err in plan.blocking_errors:
+                    print(f"  - {err}", flush=True)
+                _print_json(
+                    {
+                        "ok": False,
+                        "safe_to_apply": False,
+                        "blocking_errors": plan.blocking_errors,
+                        "case_collisions": plan.to_dict()["case_collisions"],
+                    }
+                )
+                return 2
             if not args.yes:
                 resp = input("Type 'yes' to proceed: ").strip().lower()
                 if resp != "yes":
