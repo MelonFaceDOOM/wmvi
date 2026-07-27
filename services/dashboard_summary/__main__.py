@@ -9,6 +9,9 @@ python -m services.dashboard_summary
 TO RUN ON PROD:
 python -m services.dashboard_summary --prod
 
+Destination via SUMMARY_STORAGE_KIND=local|azure|nitwitch
+(default: local). nitwitch needs NITWITCH_UPLOAD_* in .env.
+
 calls must come from root dir (wmvi):
 """
 

@@ -11,7 +11,12 @@ from typing import Any
 from dotenv import load_dotenv
 
 from db.db import init_pool, getcursor, close_pool
-from services.storage import StorageBackend, LocalFileStorage, AzureBlobStorage
+from services.storage import (
+    StorageBackend,
+    LocalFileStorage,
+    AzureBlobStorage,
+    NitwitchUploadStorage,
+)
 
 
 load_dotenv()
@@ -37,6 +42,9 @@ def get_storage_backend() -> StorageBackend:
 
     if kind == "azure":
         return AzureBlobStorage.from_env()
+
+    if kind == "nitwitch":
+        return NitwitchUploadStorage()
 
     raise ValueError(f"Unsupported SUMMARY_STORAGE_KIND: {kind!r}")
 

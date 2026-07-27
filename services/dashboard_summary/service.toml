@@ -1,5 +1,5 @@
 [service]
-description = "saves database summary to azure acc"
+description = "saves database summary to local/azure/nitwitch (SUMMARY_STORAGE_KIND)"
 type = "oneshot"
 runtime = "base"
 
