@@ -22,7 +22,7 @@ WHAT TO EXTRACT
 --------------------------------------------------
 Prefer distinctive, central propositions (numbers, place, schedule, mechanism, institution, comparison, exception). Implicit claims count: "I'd like to get vaccinated, not with what they're doing with bill gates" → a proposition about compromised trustworthiness of the vaccine program, not a copy of the wording.
 
-Drop: definitional/truism background/small asides that are not important to the central arguments presented or not a meaningful vaccine-related claim.
+Drop: definitional/truism background, speaker-meta, unresolved hedges, restatements of the same idea, and name-drops that are not part of an argument. Mentioning a disease is not enough.
 
 Empty output is allowed.
 
@@ -31,35 +31,21 @@ Empty output is allowed.
 CLAIM FORMATTING
 --------------------------------------------------
 
-General vs particular
-Write each claim as a standalone vaccine-related proposition that could sit in a spreadsheet with no post attached. Strong rewording of the source can be expected: a personal story, a news item, and a documented case will end up formatted similarly.
-Default: generalize away the particular person, family, or local incident, and state the implied regular pattern — who/what can happen, to which vaccine or disease, under which conditions.
-- "The speaker's child was vaccinated with MMR and died" → "Children can die after receiving the MMR vaccine."
-- "A doctor I know had 4 patients who developed rashes after the MMR vaccine" → "The MMR vaccine can cause rashes."
-
-Keep a detail when dropping it would change the epidemiological meaning: vaccine vs product, disease, variant, population, outcome, mechanism, certainty, limiting conditions, and (when they are the point of the report) place, time, or institution.
-- "The first measles case this year in Minnesota was a 12-year-old boy" → keep first-case, year, Minnesota, and age/sex.
-- "My 12 year old son got measles while we were visiting Minnesota" → No claim since the only generalizable claim that could be extracted from this post is "kids can get measles", which breaks the truism rule.
-- Keep MMR vs measles vaccine, Hib vs hepatitis B, rubella vs measles, pregnant people vs everyone, vaccinated vs unvaccinated, dose/timing, named outbreaks, first cases, historical campaigns.
-
-Do not keep narrator identity, kinship, or a one-person immunization card as if it were the claim. Do not invent a broader vaccine, disease, population, or certainty than the source supports.
-
 Preserve the author's meaning
 - If the author rejects or debunks a claim, extract the author's asserted correction, not the rejected rumor and not a meta description of the author.
   - "People say MMR causes autism but that's garbage" → "MMR vaccination does not cause autism."
   - Not "Vaccines cause autism." and not "The author thinks the MMR-autism claim is false."
-- If the author condemns a policy or action, extract the evaluative proposition, not only the dry event and not a description of the author.
-  - "Why did you cancel pro-vaccine PSAs in the middle of a measles outbreak?" → "Canceling pro-vaccine public service announcements during a measles outbreak is harmful."
-- First-person *stance* is extractable once depersonalized. "I would not take a measles vaccine" → "The measles vaccine should be refused" (or "Measles vaccination is unacceptable"), not "The speaker would not take a measles vaccine."
-- First-person *status or biography* is not a claim unless it implies a general proposition. "I'm fully vaccinated" / "my kids are vaccinated" / "I was not immunized" → omit, or convert only the implied general (catch-up vaccination, pre-vaccine childhood disease, etc.).
 - If an unresolved hedge or double negative is present ("it's not that vaccines never fail"), either resolve it to a clear proposition ("Vaccines can fail to prevent infection") or omit it. Do not extract the hedge as-is.
 
 Standalone
 - State the proposition itself. No "This post says...", "The author claims...", "According to the OP...".
-- Forbidden referring expressions (rewrite without them or drop the claim): "the speaker", "the author", "the poster", "the OP", "the commenter", "the narrator", "the individual", "the person" when it means the narrator, "someone my age" as a stand-in for the narrator, and "the speaker's childhood/time".
 - Name vaccine, disease, population, outcome, place, time, institution, or mechanism when they appear in the input (including titles). Drop pronouns and dangling NPs ("it", "they", "the child", "this").
-- Do not use the narrator as a date. "when I was a girl we vaccinated" → "Routine childhood vaccination has been practiced for decades" (or a named era if the input supplies one). Not "Routine vaccination has been used since the speaker's childhood."
-- If you cannot write the sentence without pointing at the post or the narrator, omit it.
+- If you cannot write the sentence without pointing at the post, omit it.
+
+Anecdotes and scope
+- Convert anecdotes to the general proposition they imply, keeping the specific vaccine/disease/outcome/place/time/institution/population/mechanism. "a doctor I know had 4 patients who developed rashes after the MMR vaccine" → "The MMR vaccine can cause rashes."
+- Keep a specific event only when it is epidemiologically meaningful (outbreaks, first cases, historical campaigns, named incidents).
+- Do not broaden: MMR vs. measles vaccine, Hib vs. hepatitis B, rubella vs. measles, pregnant people vs. everyone, vaccinated vs. unvaccinated. Keep certainty and limiting conditions.
 
 Split vs merge
 - Default: extract separately when each clause is independently assertable (different vaccine, disease, outcome, population, or policy).
@@ -70,13 +56,8 @@ Split vs merge
 REJECT / REWRITE
 --------------------------------------------------
 - Vague: reject "The child got better after vaccination." Rewrite only if the input names the pieces: "Measles symptoms resolved in a child after MMR vaccination."
-- Truism (unless that is the dispute): "Measles is a disease."; "Vaccines are given to prevent disease."; "The MMR vaccine is a vaccine."; "People want to avoid measles."
-- Speaker-meta / narrator-indexical (reject; do not keep by swapping in "the speaker" or "the individual"):
-  - "The speaker would not vaccinate."; "The speaker is not anti-vaccine."; "The speaker's children are vaccinated."; "The speaker is fully vaccinated."
-  - "The individual was not immunized against polio, measles, influenza, HPV, and hepatitis."
-  - "The speaker wanted to get vaccinated."
-  - "People born around the speaker's time would have received the MMR vaccine."
-  - "A measles vaccine was introduced during the speaker's childhood."
+- Truism (unless that is the dispute): "Measles is a disease."; "Vaccines are given to prevent disease."; "The MMR vaccine is a vaccine."
+- Speaker-meta: "The speaker would not vaccinate."; "The speaker's father died of lung cancer."; "The speaker is not anti-vaccine."
 - Unresolved hedge: "It's not that I don't think vaccines never fail."
 
 
@@ -183,26 +164,3 @@ Output:
 }
 
 (Do not extract "The speaker would not vaccinate" or "The child was fine after deliberate exposure.")
-
-Input: You're not an anti-vaccine? No, I'm not anti-vaccine. If you show me a vaccine that was safe and did what it was supposed to, I would have no problem with it. Measles — would I take a measles vaccine? No. Are your kids vaccinated? Yeah, all my kids are vaccinated. And I'm fully vaccinated.
-
-Output:
-{
-  "claims": [
-    { "claim": "Vaccines are acceptable when they are shown to be safe and effective at their intended purpose.", "claim_vaccine_alignment_score": 0.75 },
-    { "claim": "The measles vaccine should be refused even when other vaccines are accepted.", "claim_vaccine_alignment_score": 0.0 }
-  ]
-}
-
-(Do not extract "The speaker is not anti-vaccine", "The speaker would not take a measles vaccine", "The speaker's children are vaccinated", or "The speaker is fully vaccinated.")
-
-Input: I made a post because I was not immunized against polio, measles, influenza, HPV, hepatitis, and the other shots someone my age would get. I wanted to get vaccinated.
-
-Output:
-{
-  "claims": [
-    { "claim": "People who missed routine childhood vaccines, including polio, measles, influenza, HPV, and hepatitis, can still seek catch-up vaccination.", "claim_vaccine_alignment_score": 1.0 }
-  ]
-}
-
-(Do not extract "The individual was not immunized …" or "The speaker wanted to get vaccinated.")

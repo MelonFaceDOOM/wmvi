@@ -2,24 +2,19 @@
 INSTRUCTIONS
 --------------------------------------------------
 
-Extract 0-{{max_claims}} vaccine-related claims.
+Extract 0-{{max_claims}} vaccine-related claims, including strongly implied conclusions, not only the most rhetorically prominent line.
 
-First identify all substantive vaccine-related propositions in the text, including both explicit claims and strongly implied conclusions. Do not focus only on the most rhetorically prominent statement.
+If more claims are present than {{max_claims}}, keep those that best represent the source's central meaning, stay distinct, and keep qualifiers.
 
-If more claims are present than {{max_claims}}, prioritize claims that:
-- best represent the central vaccine-related meaning of the source
-- represent distinct meaningful assertions
-- preserve important qualifiers and scope
+Convert anecdotes to the broader proposition they imply; skip moral judgments and unrelated political commentary that do not yield one.
 
-Before finalizing, verify that you have checked for claims involving:
-- named vaccines, diseases, or variants
-- vaccine safety or effectiveness
-- vaccine-preventable disease risk, severity, outbreaks, or transmission
-- vaccine hesitancy or refusal
-- population-specific claims (e.g., pregnancy, immunocompromise, children)
-- mandates, exemptions, institutions, or evidence
-
-Do not include claims that are only personal anecdotes, moral judgments, or unrelated political commentary unless they contain a broader vaccine-related proposition.
+Last pass for each candidate claim:
+- Would this sentence be understandable in a spreadsheet with no post attached? If not, rewrite using names from the input or drop it.
+- Does it mention the speaker, the author, the individual, the narrator, or "the speaker's childhood/time"? Rewrite without that person or drop it.
+- Is it only one person's vaccination card, family vaccination status, or "I'm not anti-vax"? Drop, unless you can state a depersonalized stance or a general epi proposition.
+- Would a domain expert treat this as definitional ("measles is a disease")? If yes, drop unless that is the dispute.
+- If two sentences say the same thing, keep the sharper one.
+- Assign claim_vaccine_alignment_score using only 0, 0.25, 0.5, 0.75, or 1. Score the extracted proposition, not the author.
 
 --------------------------------------------------
 TEXT INPUT FOR EXTRACTION
@@ -34,8 +29,8 @@ Return JSON only:
 
 {
   "claims": [
-    { "claim": "..." }
+    { "claim": "...", "claim_vaccine_alignment_score": 0.5 }
   ]
 }
 
-Each claim object must contain only the "claim" string field.
+Each claim object must contain "claim" and "claim_vaccine_alignment_score" only. Alignment must be one of 0, 0.25, 0.5, 0.75, 1.

@@ -1,0 +1,41 @@
+--------------------------------------------------
+INSTRUCTIONS
+--------------------------------------------------
+
+Extract 0-{{max_claims}} vaccine-related claims.
+
+First identify all substantive vaccine-related propositions in the text, including both explicit claims and strongly implied conclusions. Do not focus only on the most rhetorically prominent statement.
+
+If more claims are present than {{max_claims}}, prioritize claims that:
+- best represent the central vaccine-related meaning of the source
+- represent distinct meaningful assertions
+- preserve important qualifiers and scope
+
+Before finalizing, verify that you have checked for claims involving:
+- named vaccines, diseases, or variants
+- vaccine safety or effectiveness
+- vaccine-preventable disease risk, severity, outbreaks, or transmission
+- vaccine hesitancy or refusal
+- population-specific claims (e.g., pregnancy, immunocompromise, children)
+- mandates, exemptions, institutions, or evidence
+
+Do not include claims that are only personal anecdotes, moral judgments, or unrelated political commentary unless they contain a broader vaccine-related proposition.
+
+--------------------------------------------------
+TEXT INPUT FOR EXTRACTION
+--------------------------------------------------
+{{text_input}}
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+
+Return JSON only:
+
+{
+  "claims": [
+    { "claim": "..." }
+  ]
+}
+
+Each claim object must contain only the "claim" string field.
