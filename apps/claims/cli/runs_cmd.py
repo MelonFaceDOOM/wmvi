@@ -10,48 +10,60 @@ from apps.claims.cli import paths as path_helpers
 
 def cmd_runs_list(args: Namespace) -> int:
     corpus_filter = getattr(args, "corpus", None)
-    prefix = None
-    if corpus_filter:
-        slug = corpus_mod.validate_slug(str(corpus_filter))
-        prefix = f"{slug}__"
+    slug_filter = corpus_mod.validate_slug(str(corpus_filter)) if corpus_filter else None
 
     runs: list[dict] = []
     root = claims_io.runs_dir()
     if root.is_dir():
-        for p in sorted(root.iterdir()):
-            if not p.is_dir() or p.name.startswith("."):
+        for corpus_dir in sorted(root.iterdir()):
+            if not corpus_dir.is_dir() or corpus_dir.name.startswith("."):
                 continue
-            if prefix and not p.name.startswith(prefix):
+            if slug_filter and corpus_dir.name != slug_filter:
                 continue
-            entry: dict = {"name": p.name, "path": str(p)}
-            metrics_path = p / claims_io.METRICS_FILE
-            if metrics_path.is_file():
-                try:
-                    m = claims_io.read_json(metrics_path)
-                    entry["claim_count"] = m.get("claim_count")
-                    entry["vector_dim"] = m.get("vector_dim")
-                    entry["model_id"] = m.get("model_id")
-                    entry["wall_seconds"] = m.get("wall_seconds")
-                except Exception:  # noqa: BLE001
-                    pass
-            vectors = p / claims_io.VECTORS_FILE
-            if vectors.is_file():
-                entry["vectors_bytes"] = vectors.stat().st_size
-            runs.append(entry)
+            for p in sorted(corpus_dir.iterdir()):
+                if not p.is_dir() or p.name.startswith("."):
+                    continue
+                entry: dict = {
+                    "name": f"{corpus_dir.name}/{p.name}",
+                    "corpus": corpus_dir.name,
+                    "tag": p.name,
+                    "path": str(p),
+                }
+                metrics_path = p / claims_io.METRICS_FILE
+                if metrics_path.is_file():
+                    try:
+                        m = claims_io.read_json(metrics_path)
+                        entry["claim_count"] = m.get("claim_count")
+                        entry["vector_dim"] = m.get("vector_dim")
+                        entry["model_id"] = m.get("model_id")
+                        entry["wall_seconds"] = m.get("wall_seconds")
+                    except Exception:  # noqa: BLE001
+                        pass
+                vectors = p / claims_io.VECTORS_FILE
+                if vectors.is_file():
+                    entry["vectors_bytes"] = vectors.stat().st_size
+                runs.append(entry)
 
     experiments: list[dict] = []
-    exp_root = claims_io.experiments_dir()
-    if exp_root.is_dir():
-        for run_root in sorted(exp_root.iterdir()):
-            if not run_root.is_dir():
+    clustering = claims_io.clustering_experiments_dir()
+    if clustering.is_dir():
+        for corpus_dir in sorted(clustering.iterdir()):
+            if not corpus_dir.is_dir() or corpus_dir.name.startswith("."):
                 continue
-            if prefix and not run_root.name.startswith(prefix):
+            if slug_filter and corpus_dir.name != slug_filter:
                 continue
-            for exp in sorted(run_root.iterdir()):
-                if exp.is_dir():
-                    experiments.append(
-                        {"run": run_root.name, "name": exp.name, "path": str(exp)}
-                    )
+            for tag_dir in sorted(corpus_dir.iterdir()):
+                if not tag_dir.is_dir() or tag_dir.name.startswith("."):
+                    continue
+                for exp in sorted(tag_dir.iterdir()):
+                    if exp.is_dir() and not exp.name.startswith("."):
+                        experiments.append(
+                            {
+                                "run": f"{corpus_dir.name}/{tag_dir.name}",
+                                "name": exp.name,
+                                "path": str(exp),
+                            }
+                        )
 
     claims_io.emit_json(
         {
@@ -88,9 +100,14 @@ def cmd_runs_import(args: Namespace) -> int:
             if getattr(args, "corpus", None) and getattr(args, "model_tag", None):
                 slug = corpus_mod.validate_slug(str(args.corpus))
                 tag = corpus_mod.validate_model_tag(str(args.model_tag))
-                run_name = f"{slug}__{tag}"
+                run_name = f"{slug}/{tag}"
             else:
                 raise ValueError("Provide --run-name, or --corpus and --model-tag")
+        # Normalize legacy corpus__tag
+        raw = str(run_name)
+        if "__" in raw and "/" not in raw:
+            slug, _, tag = raw.partition("__")
+            run_name = f"{slug}/{tag}"
         summary = runs_xfer.import_run(
             from_zip=Path(args.from_zip),
             run_name=str(run_name),
@@ -109,5 +126,5 @@ def _resolve_run_dir(args: Namespace) -> Path:
     if getattr(args, "corpus", None):
         corpus = path_helpers.require_corpus(args)
         tag = path_helpers.resolve_model_tag(args)
-        return claims_io.runs_dir() / f"{corpus.slug}__{tag}"
+        return corpus.run_dir(tag)
     raise ValueError("Provide --run-dir, or --corpus and --model-tag")

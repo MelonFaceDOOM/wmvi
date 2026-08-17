@@ -13,7 +13,7 @@ import numpy as np
 from apps.claims import io as claims_io
 from apps.claims.types import EmbedConfig
 
-_DEFAULT_QUERIES_PATH = claims_io.labels_dir() / "cluster_eval_queries.json"
+_DEFAULT_QUERIES_PATH = claims_io.fixtures_dir() / "cluster_eval_queries.json"
 
 
 @dataclass
@@ -43,13 +43,37 @@ def load_eval_queries(path: Path | None = None) -> list[dict[str, Any]]:
     return data
 
 
-def embed_query(model_id: str, text: str, *, query_instruction: str = "") -> np.ndarray:
-    from apps.claims.embedding.encode import encode_texts, load_sentence_transformer
+def embed_query(
+    model_id: str,
+    text: str,
+    *,
+    prompt: str = "",
+    query_instruction: str = "",
+    doc_instruction: str = "",
+    device: str | None = None,
+    dtype: str | None = "auto",
+    max_seq_length: int | None = None,
+) -> np.ndarray:
+    """Embed a single query text for NN search against a corpus run.
 
-    encoder = load_sentence_transformer(model_id)
-    instr = (query_instruction or "").strip()
-    payload = f"{instr} {text}".strip() if instr else text
-    vec = encode_texts(encoder, [payload], normalize_embeddings=True)
+    For symmetric claim–claim search, pass the run's ``doc_instruction`` as
+    ``prompt`` (or ``doc_instruction``). ``query_instruction`` is kept for
+    back-compat and is used only when prompt/doc_instruction are empty.
+    """
+    from apps.claims.embedding.encode import (
+        DEFAULT_MAX_SEQ_LENGTH,
+        encode_texts,
+        load_sentence_transformer,
+    )
+
+    encoder = load_sentence_transformer(
+        model_id,
+        device=device,
+        dtype=dtype,
+        max_seq_length=max_seq_length if max_seq_length is not None else DEFAULT_MAX_SEQ_LENGTH,
+    )
+    p = (prompt or doc_instruction or query_instruction or "").strip() or None
+    vec = encode_texts(encoder, [text], normalize_embeddings=True, prompt=p)
     return np.asarray(vec, dtype=np.float32)[0]
 
 
@@ -90,7 +114,15 @@ def eval_query(
     if query_vector is not None:
         q = np.asarray(query_vector, dtype=np.float64)
     else:
-        q = embed_query(config.model_id, query, query_instruction=config.query_instruction)
+        q = embed_query(
+            config.model_id,
+            query,
+            doc_instruction=config.doc_instruction,
+            query_instruction=config.query_instruction,
+            device=config.device,
+            dtype=config.dtype,
+            max_seq_length=config.max_seq_length,
+        )
     scores = vectors @ q
     k = int(min(top_k, len(scores)))
     top = np.argsort(-scores)[:k]

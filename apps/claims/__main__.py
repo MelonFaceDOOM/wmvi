@@ -11,26 +11,30 @@ def _add_corpus_args(p: argparse.ArgumentParser, *, with_model_tag: bool = False
         "--corpus",
         type=str,
         default=None,
-        help="Corpus slug under data/inputs/<slug>/ (fills default paths)",
+        help="Corpus slug under data/corpora/<slug>/ (fills default paths)",
     )
     if with_model_tag:
         p.add_argument(
             "--model-tag",
             type=str,
             default=None,
-            help="Tag for run name <corpus>__<tag> under data/runs/ (default: derived from --model)",
+            help="Tag for run under data/runs/<corpus>/<tag>/ (default: derived from --model)",
         )
 
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="python -m apps.claims",
-        description="Claims pipeline (file-mode): extract, group, embed, train, cluster.",
+        description="Claims pipeline (file-mode): group, embed, annotate/select, train, cluster.",
     )
     sub = ap.add_subparsers(dest="command", required=True)
 
+    from apps.claims.cli.lifecycle_parsers import add_filter_args, register_lifecycle_parsers
+
+    register_lifecycle_parsers(sub)
+
     # --- corpus ---
-    corpus_p = sub.add_parser("corpus", help="Create/list/seed/status corpora under data/inputs/")
+    corpus_p = sub.add_parser("corpus", help="Create/list/seed/status corpora under data/corpora/")
     corpus_sub = corpus_p.add_subparsers(dest="corpus_cmd", required=True)
     c_create = corpus_sub.add_parser("create", help="Create a corpus directory + NOTES.md")
     c_create.add_argument("--name", type=str, required=True, help="Slug, e.g. measles")
@@ -40,10 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
     c_list.set_defaults(func="corpus-list")
     c_status = corpus_sub.add_parser("status", help="Detailed status for one corpus")
     c_status.add_argument("--name", type=str, required=True)
+    c_status.add_argument("--human", action="store_true", help="Also print human checklist")
     c_status.set_defaults(func="corpus-status")
     c_seed = corpus_sub.add_parser(
         "seed",
-        help="Fetch posts for search terms (+ date range) into data/inputs/<name>/posts.json",
+        help="Fetch posts for search terms (+ date range) into data/corpora/<name>/posts.json",
     )
     c_seed.add_argument("--name", type=str, required=True, help="Corpus slug")
     c_seed.add_argument("--terms", nargs="*", default=[], help="taxonomy.vaccine_term.name values")
@@ -72,11 +77,57 @@ def build_parser() -> argparse.ArgumentParser:
     c_copy.add_argument("--notes", type=str, default=None)
     c_copy.add_argument("--force", action="store_true")
     c_copy.set_defaults(func="corpus-copy-posts")
+    c_imp = corpus_sub.add_parser(
+        "import-claims",
+        help="Copy nested posts→chunks→claims JSON into a corpus as claims.json",
+    )
+    c_imp.add_argument("--name", type=str, required=True)
+    c_imp.add_argument(
+        "--from",
+        dest="source",
+        type=Path,
+        required=True,
+        help="Source nested claims JSON (e.g. data/measles_1.json)",
+    )
+    c_imp.add_argument("--create", action="store_true")
+    c_imp.add_argument("--notes", type=str, default=None)
+    c_imp.add_argument("--force", action="store_true")
+    c_imp.set_defaults(func="corpus-import-claims")
+    c_der = corpus_sub.add_parser(
+        "derive",
+        help=(
+            "Derive a Reddit-deweighted corpus: keep all non-Reddit posts, "
+            "downsample Reddit posts so Reddit claims ≈ target_ratio × other claims"
+        ),
+    )
+    c_der.add_argument("--from", dest="from_corpus", type=str, required=True, help="Parent corpus slug")
+    c_der.add_argument("--name", type=str, required=True, help="New corpus slug (e.g. measles_bal)")
+    c_der.add_argument(
+        "--target-ratio",
+        type=float,
+        default=1.0,
+        help="Reddit claims ≈ this × non-Reddit claims (default 1.0)",
+    )
+    c_der.add_argument("--seed", type=int, default=0, help="RNG seed for Reddit post sample")
+    c_der.add_argument(
+        "--group",
+        action="store_true",
+        help="Also run group on the new corpus after writing claims.json",
+    )
+    c_der.add_argument("--notes", type=str, default=None, help="NOTES.md body when creating")
+    c_der.add_argument("--force", action="store_true", help="Overwrite existing claims.json")
+    c_der.set_defaults(func="corpus-derive")
 
     # --- model ---
-    model_p = sub.add_parser("model", help="Register/list local embedder models under data/models/")
+    model_p = sub.add_parser(
+        "model",
+        help="Register/list local embedder models under data/models/registered/",
+    )
     model_sub = model_p.add_subparsers(dest="model_cmd", required=True)
-    m_reg = model_sub.add_parser("register", help="Symlink/copy a model dir to data/models/<tag>")
+    m_reg = model_sub.add_parser(
+        "register",
+        help="Symlink/copy a model dir to data/models/registered/<tag>",
+    )
     m_reg.add_argument("--path", type=Path, required=True)
     m_reg.add_argument("--tag", type=str, required=True)
     m_reg.add_argument("--mode", choices=("symlink", "copy"), default="symlink")
@@ -107,41 +158,16 @@ def build_parser() -> argparse.ArgumentParser:
     r_imp.set_defaults(func="runs-import")
 
     # --- validate ---
-    val_p = sub.add_parser("validate", help="Summarize posts-with-claims JSON")
+    val_p = sub.add_parser("validate", help="Summarize nested posts→chunks→claims JSON")
     _add_corpus_args(val_p)
     val_p.add_argument("--claims", type=Path, default=None)
     val_p.add_argument("--human", action="store_true", help="Also print human summary")
     val_p.set_defaults(func="validate")
 
-    # --- prepare ---
-    prepare_p = sub.add_parser("prepare", help="Pre-extract stages: trim / coref")
-    prepare_sub = prepare_p.add_subparsers(dest="prepare_cmd", required=True)
-    p_trim = prepare_sub.add_parser("trim", help="Sentence-boundary trim around hit spans")
-    _add_corpus_args(p_trim)
-    p_trim.add_argument("--posts", type=Path, default=None)
-    p_trim.add_argument("--out", type=Path, default=None)
-    p_trim.add_argument(
-        "--force",
-        action="store_true",
-        help="With --corpus and no --out, overwrite posts.json",
-    )
-    p_trim.set_defaults(func="prepare-trim")
-    p_coref = prepare_sub.add_parser("coref", help="Coreference resolution on posts JSON")
-    _add_corpus_args(p_coref)
-    p_coref.add_argument("--posts", type=Path, default=None)
-    p_coref.add_argument("--out", type=Path, default=None)
-    p_coref.add_argument("--batch-size", type=int, default=None)
-    p_coref.add_argument(
-        "--force",
-        action="store_true",
-        help="With --corpus and no --out, overwrite posts.json",
-    )
-    p_coref.set_defaults(func="prepare-coref")
-
     # --- group ---
     group_p = sub.add_parser("group", help="Collapse duplicate claims into groups JSON")
     _add_corpus_args(group_p)
-    group_p.add_argument("--claims", type=Path, default=None, help="posts-with-claims JSON")
+    group_p.add_argument("--claims", type=Path, default=None, help="Nested posts→chunks→claims JSON")
     group_p.add_argument("--out", type=Path, default=None, help="Output groups JSON")
     group_p.set_defaults(func="group")
 
@@ -154,14 +180,44 @@ def build_parser() -> argparse.ArgumentParser:
     embed_p.add_argument("--doc-instruction", type=str, default="")
     embed_p.add_argument("--query-instruction", type=str, default="")
     embed_p.add_argument("--no-normalize", action="store_true")
+    embed_p.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Encode batch size (default 16; safer for large models)",
+    )
+    embed_p.add_argument(
+        "--max-seq-length",
+        type=int,
+        default=512,
+        help="Tokenizer max length (default 512; avoid 32k OOM on Qwen3)",
+    )
+    embed_p.add_argument(
+        "--dtype",
+        type=str,
+        default="auto",
+        choices=("auto", "bfloat16", "float16", "float32"),
+        help="Weight dtype (auto=bfloat16 on CUDA)",
+    )
+    embed_p.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=("auto", "cuda", "cpu"),
+        help="Device for encoding",
+    )
     embed_p.add_argument("--limit", type=int, default=None, help="Embed only first N groups")
     embed_p.add_argument("--force", action="store_true", help="Overwrite existing run dir")
+    from apps.claims.cli.lifecycle_parsers import add_filter_args
+
+    add_filter_args(embed_p)
     embed_p.set_defaults(func="embed")
 
     # --- cluster ---
     cluster_p = sub.add_parser("cluster", help="Run one clustering config on a run dir")
     _add_corpus_args(cluster_p, with_model_tag=True)
     cluster_p.add_argument("--run-dir", type=Path, default=None)
+    add_filter_args(cluster_p)
     cluster_p.add_argument("--algorithm", type=str, required=True)
     cluster_p.add_argument("--params-json", type=str, default="{}")
     cluster_p.add_argument("--seed", type=int, default=0)
@@ -180,6 +236,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Named config (default=kmeans-800→agglo-25). Overrides leaf/narrative defaults.",
     )
     hier_p.add_argument("--run-dir", type=Path, default=None)
+    add_filter_args(hier_p)
     hier_p.add_argument("--leaf-algorithm", type=str, default=None)
     hier_p.add_argument("--leaf-params-json", type=str, default=None)
     hier_p.add_argument("--narrative-algorithm", type=str, default=None)
@@ -195,6 +252,7 @@ def build_parser() -> argparse.ArgumentParser:
     insp_p = sub.add_parser("inspect", help="Sample claim texts from clusters")
     _add_corpus_args(insp_p, with_model_tag=True)
     insp_p.add_argument("--run-dir", type=Path, default=None)
+    add_filter_args(insp_p)
     insp_p.add_argument("--labels", type=Path, required=True)
     insp_p.add_argument("--parent-labels", type=Path, default=None)
     insp_p.add_argument("--mode", type=str, default="mixed")
@@ -206,6 +264,80 @@ def build_parser() -> argparse.ArgumentParser:
     insp_p.add_argument("--out-dir", type=Path, default=None)
     insp_p.add_argument("--queries", type=Path, default=None)
     insp_p.set_defaults(func="inspect")
+
+    # --- neighbors ---
+    nn_p = sub.add_parser(
+        "neighbors",
+        help="Browse claim nearest neighbors from an embed run",
+    )
+    _add_corpus_args(nn_p, with_model_tag=True)
+    nn_p.add_argument("--run-dir", type=Path, default=None)
+    nn_mode = nn_p.add_mutually_exclusive_group(required=True)
+    nn_mode.add_argument(
+        "--claim-index",
+        type=int,
+        default=None,
+        help="Corpus claim index (row in vectors.npy)",
+    )
+    nn_mode.add_argument(
+        "--text",
+        type=str,
+        default=None,
+        help="Free-text query (embeds with run model_id, then NN search)",
+    )
+    nn_mode.add_argument(
+        "--sample",
+        type=int,
+        default=None,
+        help="Sample N random non-empty claims and show neighbors for each",
+    )
+    nn_p.add_argument("--top-k", type=int, default=15, help="Neighbors per anchor (default 15)")
+    nn_p.add_argument("--seed", type=int, default=0, help="RNG seed for --sample")
+    nn_p.add_argument(
+        "--exclude",
+        type=Path,
+        default=None,
+        help="File of claim_keys to skip when using --sample (json/jsonl/txt)",
+    )
+    from apps.claims.cli.lifecycle_parsers import add_filter_args as _add_filt_nn
+
+    _add_filt_nn(nn_p)
+    nn_p.add_argument("--human", action="store_true", help="Also print human-readable neighbors")
+    nn_p.set_defaults(func="neighbors")
+
+    # --- browse ---
+    br_p = sub.add_parser(
+        "browse",
+        help=(
+            "Sample claim texts for pointwise labeling "
+            "(default: corpus groups.json; optional embed-run index)"
+        ),
+    )
+    _add_corpus_args(br_p, with_model_tag=True)
+    br_p.add_argument(
+        "--run-dir",
+        type=Path,
+        default=None,
+        help="Optional embed run dir (samples its index.json instead of groups.json)",
+    )
+    br_p.add_argument(
+        "--sample",
+        type=int,
+        required=True,
+        help="Sample N random non-empty claims",
+    )
+    br_p.add_argument("--seed", type=int, default=0, help="RNG seed")
+    br_p.add_argument(
+        "--exclude",
+        type=Path,
+        default=None,
+        help="File of claim_keys already labeled (json/jsonl/txt)",
+    )
+    from apps.claims.cli.lifecycle_parsers import add_filter_args as _add_filt_br
+
+    _add_filt_br(br_p)
+    br_p.add_argument("--human", action="store_true", help="Also print human-readable claims")
+    br_p.set_defaults(func="browse")
 
     # --- prep-queries ---
     prep_p = sub.add_parser("prep-queries", help="Cache eval-query vectors for a model")
@@ -220,11 +352,64 @@ def build_parser() -> argparse.ArgumentParser:
     sweep_p = sub.add_parser("sweep", help="Run many clustering configs; write sweep.jsonl")
     _add_corpus_args(sweep_p, with_model_tag=True)
     sweep_p.add_argument("--run-dir", type=Path, default=None)
+    from apps.claims.cli.lifecycle_parsers import add_filter_args as _add_filt
+
+    _add_filt(sweep_p)
     sweep_p.add_argument("--configs", type=Path, required=True)
     sweep_p.add_argument("--seed", type=int, default=0)
     sweep_p.add_argument("--out-dir", type=Path, default=None)
     sweep_p.add_argument("--queries", type=Path, default=None)
     sweep_p.set_defaults(func="sweep")
+
+    # --- annotations ---
+    ann_p = sub.add_parser("annotations", help="List/show/remove corpus annotations")
+    ann_sub = ann_p.add_subparsers(dest="ann_cmd", required=True)
+    a_list = ann_sub.add_parser("list", help="List annotations for a corpus")
+    _add_corpus_args(a_list)
+    a_list.set_defaults(func="annotations-list")
+    a_show = ann_sub.add_parser("show", help="Show annotation meta + sample values")
+    _add_corpus_args(a_show)
+    a_show.add_argument("--name", type=str, required=True)
+    a_show.add_argument("--limit", type=int, default=20)
+    a_show.add_argument("--eq", type=str, default=None)
+    a_show.add_argument("--low", type=float, default=None)
+    a_show.add_argument("--high", type=float, default=None)
+    a_show.set_defaults(func="annotations-show")
+    a_diff = ann_sub.add_parser("diff", help="Diff two annotations")
+    _add_corpus_args(a_diff)
+    a_diff.add_argument("--left", type=str, required=True)
+    a_diff.add_argument("--right", type=str, required=True)
+    a_diff.add_argument("--limit", type=int, default=20)
+    a_diff.set_defaults(func="annotations-diff")
+    a_rm = ann_sub.add_parser("rm", help="Remove an annotation")
+    _add_corpus_args(a_rm)
+    a_rm.add_argument("--name", type=str, required=True)
+    a_rm.set_defaults(func="annotations-rm")
+
+    # --- select ---
+    sel_p = sub.add_parser(
+        "select",
+        help="Build a selection from an annotation + threshold (writes selections/<name>.json)",
+    )
+    _add_corpus_args(sel_p)
+    sel_p.add_argument("--annotation", type=str, required=True, help="Annotation name")
+    sel_p.add_argument("--name", type=str, required=True, help="Selection name to write")
+    sel_p.add_argument("--low", type=float, default=None, help="Inclusive lower bound")
+    sel_p.add_argument("--high", type=float, default=None, help="Inclusive upper bound")
+    sel_p.add_argument(
+        "--exclusive",
+        action="store_true",
+        help="Use open interval (exclude endpoints)",
+    )
+    sel_p.add_argument("--force", action="store_true")
+    sel_p.set_defaults(func="select")
+
+    # --- selections ---
+    sels_p = sub.add_parser("selections", help="List selections for a corpus")
+    sels_sub = sels_p.add_subparsers(dest="sels_cmd", required=True)
+    s_list = sels_sub.add_parser("list", help="List selections")
+    _add_corpus_args(s_list)
+    s_list.set_defaults(func="selections-list")
 
     # --- doctor ---
     doc_p = sub.add_parser("doctor", help="Self-check run dir / deps (JSON)")
@@ -264,17 +449,8 @@ def build_parser() -> argparse.ArgumentParser:
     disc_p.add_argument("--existing", type=Path, default=None, help="Existing triplets to exclude")
     disc_p.set_defaults(func="discover-triplets")
 
-    # --- extract ---
-    extract_p = sub.add_parser("extract", help="Extract claims from posts JSON (network)")
-    _add_corpus_args(extract_p)
-    extract_p.add_argument("--posts", type=Path, default=None)
-    extract_p.add_argument("--out", type=Path, default=None)
-    extract_p.add_argument("--n-posts", type=int, default=0)
-    extract_p.add_argument("--claims-only", action="store_true")
-    extract_p.set_defaults(func="extract")
-
     # --- ls-artifacts ---
-    ls_p = sub.add_parser("ls-artifacts", help="List models/labels/runs/corpora under data/")
+    ls_p = sub.add_parser("ls-artifacts", help="List models/fixtures/runs/corpora under data/")
     ls_p.set_defaults(func="ls-artifacts")
 
     return ap
@@ -311,6 +487,14 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.corpus_cmd import cmd_corpus_copy_posts
 
         return cmd_corpus_copy_posts(args)
+    if args.func == "corpus-import-claims":
+        from apps.claims.cli.corpus_cmd import cmd_corpus_import_claims
+
+        return cmd_corpus_import_claims(args)
+    if args.func == "corpus-derive":
+        from apps.claims.cli.corpus_cmd import cmd_corpus_derive
+
+        return cmd_corpus_derive(args)
     if args.func == "model-register":
         from apps.claims.cli.model_cmd import cmd_model_register
 
@@ -339,14 +523,6 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.validate_cmd import cmd_validate
 
         return cmd_validate(args)
-    if args.func == "prepare-trim":
-        from apps.claims.cli.validate_cmd import cmd_prepare_trim
-
-        return cmd_prepare_trim(args)
-    if args.func == "prepare-coref":
-        from apps.claims.cli.validate_cmd import cmd_prepare_coref
-
-        return cmd_prepare_coref(args)
     if args.func == "group":
         from apps.claims.cli.group_cmd import cmd_group
 
@@ -367,6 +543,14 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.cluster_cmd import cmd_inspect
 
         return cmd_inspect(args)
+    if args.func == "neighbors":
+        from apps.claims.cli.neighbors_cmd import cmd_neighbors
+
+        return cmd_neighbors(args)
+    if args.func == "browse":
+        from apps.claims.cli.browse_cmd import cmd_browse
+
+        return cmd_browse(args)
     if args.func == "prep-queries":
         from apps.claims.cli.cluster_cmd import cmd_prep_queries
 
@@ -379,6 +563,30 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.cluster_cmd import cmd_doctor
 
         return cmd_doctor(args)
+    if args.func == "annotations-list":
+        from apps.claims.cli.annotations_cmd import cmd_annotations_list
+
+        return cmd_annotations_list(args)
+    if args.func == "annotations-show":
+        from apps.claims.cli.annotations_cmd import cmd_annotations_show
+
+        return cmd_annotations_show(args)
+    if args.func == "annotations-diff":
+        from apps.claims.cli.annotations_cmd import cmd_annotations_diff
+
+        return cmd_annotations_diff(args)
+    if args.func == "annotations-rm":
+        from apps.claims.cli.annotations_cmd import cmd_annotations_rm
+
+        return cmd_annotations_rm(args)
+    if args.func == "select":
+        from apps.claims.cli.annotations_cmd import cmd_select
+
+        return cmd_select(args)
+    if args.func == "selections-list":
+        from apps.claims.cli.annotations_cmd import cmd_selections_list
+
+        return cmd_selections_list(args)
     if args.func == "train":
         from apps.claims.cli.train_cmd import cmd_train
 
@@ -391,10 +599,162 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.train_cmd import cmd_discover_triplets
 
         return cmd_discover_triplets(args)
-    if args.func == "extract":
-        from apps.claims.cli.extract_cmd import cmd_extract
 
-        return cmd_extract(args)
+    # Labeler lifecycle
+    if args.func == "labeler-intent-create":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_intent_create
+
+        return cmd_labeler_intent_create(args)
+    if args.func == "labeler-intent-list":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_intent_list
+
+        return cmd_labeler_intent_list(args)
+    if args.func == "labeler-intent-show":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_intent_show
+
+        return cmd_labeler_intent_show(args)
+    if args.func == "labeler-labels-add":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_labels_add
+
+        return cmd_labeler_labels_add(args)
+    if args.func == "labeler-labels-import":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_labels_import
+
+        return cmd_labeler_labels_import(args)
+    if args.func == "labeler-labels-browse":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_labels_browse
+
+        return cmd_labeler_labels_browse(args)
+    if args.func == "labeler-gold-sample":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_gold_sample
+
+        return cmd_labeler_gold_sample(args)
+    if args.func == "labeler-gold-add":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_gold_add
+
+        return cmd_labeler_gold_add(args)
+    if args.func == "labeler-gold-import":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_gold_import
+
+        return cmd_labeler_gold_import(args)
+    if args.func == "labeler-gold-status":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_gold_status
+
+        return cmd_labeler_gold_status(args)
+    if args.func == "labeler-gold-label":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_gold_label
+
+        return cmd_labeler_gold_label(args)
+    if args.func == "labeler-sample":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_sample
+
+        return cmd_labeler_sample(args)
+    if args.func == "labeler-dataset-freeze":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_dataset_freeze
+
+        return cmd_labeler_dataset_freeze(args)
+    if args.func == "labeler-train":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_train
+
+        return cmd_labeler_train(args)
+    if args.func == "labeler-eval":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_eval
+
+        return cmd_labeler_eval(args)
+    if args.func == "labeler-agent-eval":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_agent_eval
+
+        return cmd_labeler_agent_eval(args)
+    if args.func == "labeler-annotation-eval":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_annotation_eval
+
+        return cmd_labeler_annotation_eval(args)
+    if args.func == "labeler-promote":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_promote
+
+        return cmd_labeler_promote(args)
+    if args.func == "labeler-apply":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_apply
+
+        return cmd_labeler_apply(args)
+    if args.func == "labeler-models-list":
+        from apps.claims.cli.labeler_cmd import cmd_labeler_models_list
+
+        return cmd_labeler_models_list(args)
+
+    # Embedder lifecycle
+    if args.func == "embedder-intent-create":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_intent_create
+
+        return cmd_embedder_intent_create(args)
+    if args.func == "embedder-intent-list":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_intent_list
+
+        return cmd_embedder_intent_list(args)
+    if args.func == "embedder-intent-show":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_intent_show
+
+        return cmd_embedder_intent_show(args)
+    if args.func == "embedder-triplets-add":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_triplets_add
+
+        return cmd_embedder_triplets_add(args)
+    if args.func == "embedder-triplets-import-neighbors":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_triplets_import_neighbors
+
+        return cmd_embedder_triplets_import_neighbors(args)
+    if args.func == "embedder-triplets-import":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_triplets_import
+
+        return cmd_embedder_triplets_import(args)
+    if args.func == "embedder-sample":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_sample
+
+        return cmd_embedder_sample(args)
+    if args.func == "embedder-gold-sample":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_gold_sample
+
+        return cmd_embedder_gold_sample(args)
+    if args.func == "embedder-gold-add":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_gold_add
+
+        return cmd_embedder_gold_add(args)
+    if args.func == "embedder-gold-import":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_gold_import
+
+        return cmd_embedder_gold_import(args)
+    if args.func == "embedder-gold-status":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_gold_status
+
+        return cmd_embedder_gold_status(args)
+    if args.func == "embedder-gold-label":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_gold_label
+
+        return cmd_embedder_gold_label(args)
+    if args.func == "embedder-dataset-freeze":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_dataset_freeze
+
+        return cmd_embedder_dataset_freeze(args)
+    if args.func == "embedder-train":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_train
+
+        return cmd_embedder_train(args)
+    if args.func == "embedder-train-compare":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_train_compare
+
+        return cmd_embedder_train_compare(args)
+    if args.func == "embedder-eval":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_eval
+
+        return cmd_embedder_eval(args)
+    if args.func == "embedder-agent-eval":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_agent_eval
+
+        return cmd_embedder_agent_eval(args)
+    if args.func == "embedder-promote":
+        from apps.claims.cli.embedder_cmd import cmd_embedder_promote
+
+        return cmd_embedder_promote(args)
 
     from apps.claims.io import emit_json
 

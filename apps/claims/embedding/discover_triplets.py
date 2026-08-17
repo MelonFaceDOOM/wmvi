@@ -31,7 +31,7 @@ from apps.claims.embedding.triplet_neighbors import (
     format_neighbors_list,
     neighbors_for_claim_index,
 )
-from apps.claims.extraction.api_requester import (
+from nlp.claim_extraction.api_requester import (
     ConcurrentApiRequester,
     RequestStatus,
     RequestTask,
@@ -57,7 +57,7 @@ def run(
 ) -> dict[str, Any]:
     existing = list(existing or [])
     existing_texts = [a.text.strip() for a in existing if a.text.strip()]
-    log_path = unusable_log or (claims_io.labels_dir() / "unusable_claims.jsonl")
+    log_path = unusable_log or (claims_io.fixtures_dir() / "unusable_claims.jsonl")
     rng = random.Random()
 
     category_text = format_discovery_categories(collect_discovery_categories(existing))

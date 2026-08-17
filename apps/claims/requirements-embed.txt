@@ -1,0 +1,11 @@
+# Claims embedding / fine-tune extras (Qwen3-Embedding and similar).
+# Install on the GPU box after pulling:
+#   pip install -r requirements-torch.txt
+#   pip install -r apps/claims/requirements-embed.txt
+#
+# transformers>=4.51 required for Qwen3 architecture (KeyError: 'qwen3' otherwise).
+# peft required for `embedder train --lora` / `train-compare --lora` on 8B.
+
+transformers>=4.51.0,<5
+sentence-transformers>=3.4.0
+peft>=0.13.0

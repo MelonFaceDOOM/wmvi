@@ -1,4 +1,4 @@
-# `nlp/` — shared text prep + canonical claim prompts
+# `nlp/` — shared text prep + canonical claim extraction
 
 Project-level helpers used by claims (and anything else) before / during claim extraction:
 
@@ -7,19 +7,25 @@ Project-level helpers used by claims (and anything else) before / during claim e
 | [`trim.py`](trim.py) | Sentence-boundary spans + hit-window chunking (`syntok`) | root `requirements.txt` |
 | [`punct.py`](punct.py) | Gated punctuation restore for low-punct text | [`requirements-punct.txt`](requirements-punct.txt) |
 | [`coref.py`](coref.py) | Batch coreference rewrite (experimental; not in default prep) | [`requirements-coref.txt`](requirements-coref.txt) |
-| [`claim_extraction/`](claim_extraction/) | Canonical claims-only prompts + model defaults + punct→trim→explode prep | prompts only; LLM runner stays in `apps.claims.extraction` |
+| [`claim_extraction/`](claim_extraction/) | Canonical prompts, defaults, prep, schemas, concurrent requester, OpenAI/Azure client factories | root `openai` + `python-dotenv` for LLM helpers |
 
 ```python
 from nlp.trim import syntok_sentence_spans, trim_sentence_boundary
 from nlp.punct import needs_punctuation, restore_punctuation, remap_hits_to_text
 from nlp.coref import iter_coref_resolved_posts, process_payload
-from nlp.claim_extraction import MODEL_NAME, render_system, render_user
+from nlp.claim_extraction import (
+    MODEL_NAME,
+    render_system,
+    render_user,
+    format_input_text,
+    build_openai_claims_client,
+    ConcurrentApiRequester,
+)
 from nlp.claim_extraction.prep import prepare_and_explode
 from nlp.claim_extraction.nest import nest_posts_chunks_claims
 ```
 
-Claims posts-JSON I/O and CLI (`prepare trim` / `prepare coref`) wrap trim/coref in `apps.claims.prepare`.
-Batch claim extraction (`ConcurrentApiRequester`) lives in `apps.claims.extraction` and loads claims-only prompts from `nlp.claim_extraction`.
+Batch posts-JSON extract I/O is `nlp.claim_extraction.batch` (also used by `scripts.get_posts_extract_upload`). Prep helpers live under `nlp.claim_extraction.prep` / `nlp.trim` / `nlp.coref`. `apps.claims` is post-extract only (group → embed → annotate/select → cluster).
 
 End-to-end fetch → punct → trim → extract → upload:
 
@@ -63,7 +69,7 @@ Env knobs (see `coref.py`): `COREF_PIPE_BATCH_SIZE`, `COREF_MAX_CHARS`, `COREF_R
 
 - No batch “process all posts” service under `services/`
 - No decision yet on persisting chunks vs calling these at runtime
-- No full Azure/OpenAI client inside this package (runner stays in `apps.claims`)
+- Corpus/file-mode I/O stays in `apps.claims` (not under `nlp/`)
 
 ## Experiments
 

@@ -2,13 +2,15 @@
 
 Layout::
 
-    data/inputs/<slug>/
+    data/corpora/<slug>/
       NOTES.md
-      posts.json
-      claims.json
+      posts.json    # optional raw fetch
+      claims.json   # required: nested posts→chunks→claims
       groups.json
-    data/runs/<slug>__<model_tag>/
-    data/experiments/<slug>__<model_tag>/[<experiment>/]
+      annotations/
+      selections/
+    data/runs/<slug>/<model_tag>/
+    data/experiments/clustering/<slug>/<model_tag>/[<experiment>/]
 """
 
 from __future__ import annotations
@@ -56,7 +58,7 @@ class CorpusPaths:
 
     @property
     def root(self) -> Path:
-        return claims_io.inputs_dir() / self.slug
+        return claims_io.corpora_dir() / self.slug
 
     @property
     def posts(self) -> Path:
@@ -71,18 +73,29 @@ class CorpusPaths:
         return self.root / GROUPS_FILE
 
     @property
+    def annotations(self) -> Path:
+        return self.root / "annotations"
+
+    @property
+    def selections(self) -> Path:
+        return self.root / "selections"
+
+    @property
     def notes(self) -> Path:
         return self.root / NOTES_FILE
 
     def run_name(self, model_tag: str) -> str:
+        """Logical run id for display / zip names: ``<slug>/<tag>``."""
         tag = validate_model_tag(model_tag)
-        return f"{self.slug}__{tag}"
+        return f"{self.slug}/{tag}"
 
     def run_dir(self, model_tag: str) -> Path:
-        return claims_io.runs_dir() / self.run_name(model_tag)
+        tag = validate_model_tag(model_tag)
+        return claims_io.runs_dir() / self.slug / tag
 
     def experiments_root(self, model_tag: str) -> Path:
-        return claims_io.experiments_dir() / self.run_name(model_tag)
+        tag = validate_model_tag(model_tag)
+        return claims_io.clustering_experiments_dir() / self.slug / tag
 
     def experiment_dir(self, model_tag: str, name: str) -> Path:
         safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", name.strip()).strip("._-") or "exp"
@@ -110,15 +123,15 @@ class CorpusPaths:
             elif path.name == CLAIMS_FILE:
                 posts = data.get("posts") if isinstance(data, dict) else None
                 if isinstance(posts, list):
-                    info["post_count"] = len(posts)
-                    n_claims = 0
-                    for row in posts:
-                        if not isinstance(row, dict):
-                            continue
-                        out = row.get("claim_extraction_output")
-                        if isinstance(out, dict) and isinstance(out.get("claims"), list):
-                            n_claims += len(out["claims"])
+                    from apps.claims.claims_data import count_nested_claims
+
+                    post_count, n_claims = count_nested_claims(
+                        [p for p in posts if isinstance(p, dict)]
+                    )
+                    info["post_count"] = post_count
                     info["claim_count"] = n_claims
+                    if isinstance(data, dict) and data.get("claim_count") is not None:
+                        info["meta_claim_count"] = data.get("claim_count")
             elif path.name == GROUPS_FILE:
                 if isinstance(data, dict):
                     if data.get("claim_count") is not None:
@@ -130,33 +143,39 @@ class CorpusPaths:
             return info
 
         runs: list[dict[str, Any]] = []
-        if claims_io.runs_dir().is_dir():
-            prefix = f"{self.slug}__"
-            for p in sorted(claims_io.runs_dir().iterdir()):
-                if p.is_dir() and p.name.startswith(prefix):
-                    metrics_path = p / claims_io.METRICS_FILE
-                    entry: dict[str, Any] = {"name": p.name, "path": str(p)}
-                    if metrics_path.is_file():
-                        try:
-                            m = claims_io.read_json(metrics_path)
-                            entry["claim_count"] = m.get("claim_count")
-                            entry["vector_dim"] = m.get("vector_dim")
-                            entry["model_id"] = m.get("model_id")
-                        except Exception:  # noqa: BLE001
-                            pass
-                    runs.append(entry)
+        runs_root = claims_io.runs_dir() / self.slug
+        if runs_root.is_dir():
+            for p in sorted(runs_root.iterdir()):
+                if not p.is_dir() or p.name.startswith("."):
+                    continue
+                metrics_path = p / claims_io.METRICS_FILE
+                entry: dict[str, Any] = {
+                    "name": f"{self.slug}/{p.name}",
+                    "tag": p.name,
+                    "path": str(p),
+                }
+                if metrics_path.is_file():
+                    try:
+                        m = claims_io.read_json(metrics_path)
+                        entry["claim_count"] = m.get("claim_count")
+                        entry["vector_dim"] = m.get("vector_dim")
+                        entry["model_id"] = m.get("model_id")
+                    except Exception:  # noqa: BLE001
+                        pass
+                runs.append(entry)
 
         experiments: list[dict[str, Any]] = []
-        if claims_io.experiments_dir().is_dir():
-            prefix = f"{self.slug}__"
-            for run_root in sorted(claims_io.experiments_dir().iterdir()):
-                if not (run_root.is_dir() and run_root.name.startswith(prefix)):
+        clustering_root = claims_io.clustering_experiments_dir() / self.slug
+        if clustering_root.is_dir():
+            for tag_root in sorted(clustering_root.iterdir()):
+                if not tag_root.is_dir() or tag_root.name.startswith("."):
                     continue
-                for exp in sorted(run_root.iterdir()):
-                    if exp.is_dir():
+                for exp in sorted(tag_root.iterdir()):
+                    if exp.is_dir() and not exp.name.startswith("."):
                         experiments.append(
                             {
-                                "run": run_root.name,
+                                "run": f"{self.slug}/{tag_root.name}",
+                                "tag": tag_root.name,
                                 "name": exp.name,
                                 "path": str(exp),
                                 "mtime": exp.stat().st_mtime,
@@ -168,16 +187,72 @@ class CorpusPaths:
             latest = {k: v for k, v in latest.items() if k != "mtime"}
         experiments_out = [{k: v for k, v in e.items() if k != "mtime"} for e in experiments[:20]]
 
+        from apps.claims import annotations as ann_mod
+        from apps.claims import selections as sel_mod
+
+        annotations = []
+        for meta in ann_mod.list_annotations(self.root):
+            annotations.append(
+                {
+                    "name": meta.name,
+                    "count": meta.count,
+                    "producer": meta.producer,
+                    "producer_kind": meta.producer_kind,
+                    "model": meta.model or meta.model_id,
+                    "model_hash": meta.model_hash,
+                    "intent": meta.intent,
+                    "source_hash": (meta.source_hash or "")[:16] or None,
+                    "value_type": meta.value_type,
+                    "created_at": meta.created_at,
+                }
+            )
+        selections = [
+            {
+                "name": s.name,
+                "count": len(s.keys),
+                "from_annotation": s.from_annotation,
+                "predicate": s.predicate,
+            }
+            for s in sel_mod.list_selections(self.root)
+        ]
+
+        for entry in runs:
+            idx_path = Path(entry["path"]) / claims_io.INDEX_FILE
+            if idx_path.is_file():
+                try:
+                    idx = claims_io.read_json(idx_path)
+                    if idx.get("filter"):
+                        entry["filter"] = idx["filter"]
+                    if idx.get("source_hash"):
+                        entry["source_hash"] = str(idx["source_hash"])[:16]
+                except Exception:  # noqa: BLE001
+                    pass
+
+        claims_info = _file_info(self.claims)
+        groups_info = _file_info(self.groups)
+
         return {
             "slug": self.slug,
             "root": str(self.root),
             "posts": _file_info(self.posts),
-            "claims": _file_info(self.claims),
-            "groups": _file_info(self.groups),
+            "claims": claims_info,
+            "groups": groups_info,
             "notes": self.notes.is_file(),
+            "annotations": annotations,
+            "selections": selections,
             "runs": runs,
             "experiments": experiments_out,
             "latest_experiment": latest,
+            "stages": {
+                "claims": bool(claims_info.get("exists")),
+                "grouped": bool(groups_info.get("exists")),
+                "embedded": len(runs) > 0,
+                "clustered": len(experiments) > 0,
+                "n_runs": len(runs),
+                "n_experiments": len(experiments),
+                "claim_count": claims_info.get("claim_count"),
+                "group_count": groups_info.get("claim_count"),
+            },
         }
 
 
@@ -199,7 +274,7 @@ def get_corpus(name: str) -> CorpusPaths:
 
 
 def list_corpora() -> list[dict[str, Any]]:
-    root = claims_io.inputs_dir()
+    root = claims_io.corpora_dir()
     if not root.is_dir():
         return []
     out: list[dict[str, Any]] = []
@@ -215,7 +290,7 @@ def list_corpora() -> list[dict[str, Any]]:
 def create_corpus(name: str, *, notes: str | None = None) -> CorpusPaths:
     corpus = get_corpus(name)
     claims_io.ensure_data_dirs()
-    claims_io.experiments_dir().mkdir(parents=True, exist_ok=True)
+    claims_io.clustering_experiments_dir().mkdir(parents=True, exist_ok=True)
     if corpus.root.exists():
         raise FileExistsError(f"Corpus already exists: {corpus.root}")
     corpus.root.mkdir(parents=True)

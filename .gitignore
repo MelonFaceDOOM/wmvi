@@ -1,6 +1,7 @@
 .env
 .python-version
 plan.txt
+cert.pem
 
 
 logs/
@@ -33,3 +34,15 @@ db/migrations/*.sql text eol=lf
 
 data/
 
+
+# Local clustering / embedding scratch
+.cluster_opt/
+# Model / embedding blobs
+*.embed.zip
+# Prep experiment corpora + heavy run products (keep assessment.md / summary_*.md)
+nlp/experiments/posts_for_term_raw.json
+nlp/experiments/runs/*/posts_prepared.json
+nlp/experiments/runs/*/browse_coref_edits.html
+# script work dirs / local extract outputs
+.*_work/
+*_claims.json

@@ -12,7 +12,7 @@ from apps.claims.embedding.discovery_defaults import (
     DISCOVERY_RESPONSE_SCHEMA,
     TRIPLET_CATEGORY_PLACEHOLDER,
 )
-from apps.claims.extraction.core import openai_structured_completion
+from nlp.claim_extraction.clients import openai_structured_completion
 
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_TOP_K_NEIGHBORS = 10

@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict 0xnuj0XJ9Jbgcxl74foH2gYypAq4dA3JXGFtXyEekxgNS1HY7wNkfHcOLMAsuyY
+\restrict BxZHrjAzitKYSUpiKmfuf1ZqaGoSGNINHKUD5EkTafIE1ULfJZ0orPYBe3OFgeR
 
--- Dumped from database version 18.3
--- Dumped by pg_dump version 18.3
+-- Dumped from database version 17.10
+-- Dumped by pg_dump version 17.9 (Ubuntu 17.9-1.pgdg24.04+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -38,6 +38,13 @@ CREATE SCHEMA news;
 --
 
 CREATE SCHEMA podcasts;
+
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+-- *not* creating schema, since initdb creates it
 
 
 --
@@ -545,6 +552,17 @@ CREATE TABLE scrape.post_scrape (
 
 
 --
+-- Name: content_sync_state; Type: TABLE; Schema: sm; Owner: -
+--
+
+CREATE TABLE sm.content_sync_state (
+    id text NOT NULL,
+    last_exported_at timestamp with time zone,
+    last_imported_bundle_at timestamp with time zone
+);
+
+
+--
 -- Name: lang_label_state; Type: TABLE; Schema: sm; Owner: -
 --
 
@@ -552,6 +570,16 @@ CREATE TABLE sm.lang_label_state (
     id text DEFAULT 'global'::text NOT NULL,
     last_checked_post_id bigint DEFAULT 0 NOT NULL,
     last_run_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: podcast_transcript_import_state; Type: TABLE; Schema: sm; Owner: -
+--
+
+CREATE TABLE sm.podcast_transcript_import_state (
+    id text NOT NULL,
+    last_imported_at timestamp with time zone
 );
 
 
@@ -753,7 +781,9 @@ CREATE TABLE youtube.video (
     transcript_updated_at timestamp with time zone,
     tsv_en tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, COALESCE(transcript, ''::text))) STORED,
     transcription_started_at timestamp with time zone,
-    duration_seconds integer
+    duration_seconds integer,
+    transcription_failed_at timestamp with time zone,
+    transcription_failure_reason text
 );
 
 
@@ -1148,11 +1178,27 @@ ALTER TABLE ONLY scrape.job
 
 
 --
+-- Name: content_sync_state content_sync_state_pkey; Type: CONSTRAINT; Schema: sm; Owner: -
+--
+
+ALTER TABLE ONLY sm.content_sync_state
+    ADD CONSTRAINT content_sync_state_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: lang_label_state lang_label_state_pkey; Type: CONSTRAINT; Schema: sm; Owner: -
 --
 
 ALTER TABLE ONLY sm.lang_label_state
     ADD CONSTRAINT lang_label_state_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: podcast_transcript_import_state podcast_transcript_import_state_pkey; Type: CONSTRAINT; Schema: sm; Owner: -
+--
+
+ALTER TABLE ONLY sm.podcast_transcript_import_state
+    ADD CONSTRAINT podcast_transcript_import_state_pkey PRIMARY KEY (id);
 
 
 --
@@ -1983,5 +2029,5 @@ ALTER TABLE ONLY youtube.transcript_segments
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 0xnuj0XJ9Jbgcxl74foH2gYypAq4dA3JXGFtXyEekxgNS1HY7wNkfHcOLMAsuyY
+\unrestrict BxZHrjAzitKYSUpiKmfuf1ZqaGoSGNINHKUD5EkTafIE1ULfJZ0orPYBe3OFgeR
 

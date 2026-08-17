@@ -23,19 +23,51 @@ def cmd_embed(args: Namespace) -> int:
             groups_path = path_helpers.path_or_corpus(args.groups, corpus.groups)
             model_tag = path_helpers.resolve_model_tag(args, model_id=str(args.model))
             run_name = str(args.run_name) if args.run_name else corpus.run_name(model_tag)
+            run_dir = (
+                Path(args.run_name)
+                if args.run_name and Path(args.run_name).is_absolute()
+                else corpus.run_dir(model_tag)
+                if not args.run_name
+                else claims_io.run_paths(str(args.run_name)).run_dir
+            )
         else:
             if args.groups is None or args.run_name is None:
                 raise ValueError("Provide --groups and --run-name, or --corpus")
             groups_path = Path(args.groups)
             run_name = str(args.run_name)
+            run_dir = claims_io.run_paths(run_name).run_dir
 
         bundle = grouping.load_groups_json(groups_path)
         groups = list(bundle.groups)
+        filter_meta = None
+        from apps.claims import filtering as filt
+
+        resolved = None
+        if corpus is not None:
+            resolved = filt.resolve_args_filter(
+                args, corpus.root, groups_hash=bundle.source_hash
+            )
+        elif filt.clauses_from_args(args):
+            raise ValueError("--filter / --where-annotation require --corpus")
+        if resolved is not None:
+            from apps.claims.keys import claim_key as ck_fn
+
+            wanted = set(resolved.keys)
+            groups = [g for g in groups if ck_fn(g.claim_text) in wanted]
+            filter_meta = resolved.provenance()
+            save_as = getattr(args, "save_selection", None)
+            if save_as:
+                filt.maybe_save_selection(
+                    corpus.root,
+                    resolved,
+                    name=str(save_as),
+                    force=bool(getattr(args, "force_selection", False)),
+                )
+
         limit = getattr(args, "limit", None)
         if limit is not None and int(limit) > 0:
             groups = groups[: int(limit)]
 
-        run_dir = claims_io.runs_dir() / run_name
         if run_dir.exists() and any(run_dir.iterdir()) and not bool(getattr(args, "force", False)):
             raise FileExistsError(f"Run dir already exists: {run_dir} (pass --force to overwrite)")
 
@@ -59,6 +91,10 @@ def cmd_embed(args: Namespace) -> int:
                 doc_instruction=str(args.doc_instruction or ""),
                 query_instruction=str(args.query_instruction or ""),
                 normalize=not bool(args.no_normalize),
+                batch_size=int(getattr(args, "batch_size", 16) or 16),
+                max_seq_length=int(getattr(args, "max_seq_length", 512) or 512),
+                dtype=str(getattr(args, "dtype", "auto") or "auto"),
+                device=str(getattr(args, "device", "auto") or "auto"),
             ),
             groups=groups,
             source_hash=bundle.source_hash,
@@ -66,6 +102,7 @@ def cmd_embed(args: Namespace) -> int:
             source_claim_count=bundle.source_claim_count,
             run_dir=run_dir,
             on_progress=on_progress,
+            filter_meta=filter_meta,
         )
         if corpus is not None:
             notes_mod.append_note(

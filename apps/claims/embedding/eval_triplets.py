@@ -86,9 +86,11 @@ def score_anchor(
         from apps.claims.embedding.encode import encode_texts, load_sentence_transformer
 
         encoder = load_sentence_transformer(model_id)
-        instr = (doc_instruction or "").strip()
-        payloads = [f"{instr} {t}".strip() if instr else t for t in all_texts]
-        vecs = np.asarray(encode_texts(encoder, payloads, normalize_embeddings=normalize), dtype=np.float32)
+        prompt = (doc_instruction or "").strip() or None
+        vecs = np.asarray(
+            encode_texts(encoder, all_texts, normalize_embeddings=normalize, prompt=prompt),
+            dtype=np.float32,
+        )
     idx = {t: i for i, t in enumerate(all_texts)}
 
     def sim(a: str, b: str) -> float:
@@ -143,13 +145,23 @@ def run(
         and a.positives
         and a.negatives
     ]
-    encoder = load_sentence_transformer(config.model_id)
+    encoder = load_sentence_transformer(
+        config.model_id,
+        device=config.device,
+        dtype=config.dtype,
+        max_seq_length=config.max_seq_length,
+    )
+    prompt = (config.doc_instruction or "").strip() or None
 
     def embed_fn(texts: list[str]) -> np.ndarray:
-        instr = (config.doc_instruction or "").strip()
-        payloads = [f"{instr} {t}".strip() if instr else t for t in texts]
         return np.asarray(
-            encode_texts(encoder, payloads, normalize_embeddings=config.normalize),
+            encode_texts(
+                encoder,
+                texts,
+                batch_size=config.batch_size,
+                normalize_embeddings=config.normalize,
+                prompt=prompt,
+            ),
             dtype=np.float32,
         )
 

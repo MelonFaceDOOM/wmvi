@@ -1,4 +1,4 @@
-"""CLI: validate, prepare trim/coref."""
+"""CLI: validate nested claims.json."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from apps.claims.cli import paths as path_helpers
 
 
 def cmd_validate(args: Namespace) -> int:
-    from apps.claims.extraction import validate as validate_mod
+    from apps.claims import validate_nested as validate_mod
 
     try:
         if getattr(args, "corpus", None):
@@ -29,12 +29,15 @@ def cmd_validate(args: Namespace) -> int:
     claims_io.emit_json(payload)
     if getattr(args, "human", False):
         hist = summary.get("claim_count_hist") or {}
-        print(f"Total rows: {summary['total_rows']}")
-        print(f"Successful rows: {summary['success_rows']}")
-        print(f"Failed rows: {summary['failed_rows']}")
-        print(f"Malformed rows: {summary['malformed_rows']}")
+        print(f"Total posts: {summary['total_posts']}")
+        print(f"Total chunks: {summary['total_chunks']}")
+        print(f"Successful chunks: {summary['success_chunks']}")
+        print(f"Failed chunks: {summary['failed_chunks']}")
+        print(f"Unprocessed chunks: {summary['unprocessed_chunks']}")
+        print(f"Empty chunks: {summary['empty_chunks']}")
+        print(f"Malformed chunks: {summary['malformed_chunks']}")
         print(f"Total claims: {summary['total_claims']}")
-        print("Posts by claim count:")
+        print("Chunks by claim count:")
         for key in ("0", "1", "2", "3", ">3"):
             print(f"  {key} claims: {hist.get(key, 0)}")
         top = summary.get("top_errors") or []
@@ -43,59 +46,3 @@ def cmd_validate(args: Namespace) -> int:
             for row in top:
                 print(f"  {row['count']:>6}  {row['error']}")
     return 0
-
-
-def cmd_prepare_trim(args: Namespace) -> int:
-    from apps.claims.prepare import trim as trim_mod
-
-    try:
-        posts, out = _resolve_prepare_paths(
-            args,
-            default_suffix="posts_trimmed.json",
-        )
-        summary = trim_mod.run(posts_path=posts, out_path=out)
-    except Exception as exc:  # noqa: BLE001
-        claims_io.emit_json({"error": str(exc)})
-        return 1
-    claims_io.emit_json(summary)
-    return 0
-
-
-def cmd_prepare_coref(args: Namespace) -> int:
-    from apps.claims.prepare import coref as coref_mod
-
-    try:
-        posts, out = _resolve_prepare_paths(
-            args,
-            default_suffix="posts_coref.json",
-        )
-        batch_size = getattr(args, "batch_size", None)
-        summary = coref_mod.run(
-            posts_path=posts,
-            out_path=out,
-            batch_size=batch_size,
-        )
-    except Exception as exc:  # noqa: BLE001
-        claims_io.emit_json({"error": str(exc)})
-        return 1
-    claims_io.emit_json(summary)
-    return 0
-
-
-def _resolve_prepare_paths(
-    args: Namespace,
-    *,
-    default_suffix: str,
-) -> tuple[Path, Path]:
-    if getattr(args, "corpus", None):
-        corpus = path_helpers.require_corpus(args)
-        posts = path_helpers.path_or_corpus(getattr(args, "posts", None), corpus.posts)
-        if getattr(args, "force", False) and getattr(args, "out", None) is None:
-            out = corpus.posts
-        else:
-            default_out = corpus.root / default_suffix
-            out = path_helpers.path_or_corpus(getattr(args, "out", None), default_out)
-        return posts, out
-    if args.posts is None or args.out is None:
-        raise ValueError("Provide --posts and --out, or --corpus")
-    return Path(args.posts), Path(args.out)

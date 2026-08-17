@@ -1,8 +1,7 @@
-"""Registered embedder models under data/models/<tag>/."""
+"""Registered embedder models under data/models/registered/<tag>/."""
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 from datetime import datetime, timezone
@@ -13,29 +12,40 @@ from apps.claims import corpus as corpus_mod
 from apps.claims import io as claims_io
 
 META_FILE = "model.json"
+# Typed model dirs that must not be listed as registered tags
+_RESERVED_MODEL_DIRS = frozenset({"registered", "labelers", "embedders"})
 
 
 def validate_tag(tag: str) -> str:
-    return corpus_mod.validate_model_tag(tag)
+    tag = corpus_mod.validate_model_tag(tag)
+    if tag in _RESERVED_MODEL_DIRS:
+        raise ValueError(f"Model tag {tag!r} is reserved")
+    return tag
 
 
 def model_dir(tag: str) -> Path:
-    return claims_io.models_dir() / validate_tag(tag)
+    return claims_io.registered_models_dir() / validate_tag(tag)
 
 
 def list_models() -> list[dict[str, Any]]:
-    root = claims_io.models_dir()
+    root = claims_io.registered_models_dir()
     if not root.is_dir():
         return []
     out: list[dict[str, Any]] = []
     for p in sorted(root.iterdir()):
-        if not p.is_dir() or p.name.startswith("."):
+        if not p.is_dir() or p.name.startswith(".") or p.suffix == ".json":
             continue
         meta_path = p / META_FILE
         meta: dict[str, Any] = {}
         if meta_path.is_file():
             try:
                 meta = claims_io.read_json(meta_path)
+            except Exception:  # noqa: BLE001
+                meta = {}
+        sidecar = root / f"{p.name}.json"
+        if not meta and sidecar.is_file():
+            try:
+                meta = claims_io.read_json(sidecar)
             except Exception:  # noqa: BLE001
                 meta = {}
         out.append(
@@ -77,13 +87,13 @@ def register_model(
     mode: str = "symlink",
     force: bool = False,
 ) -> dict[str, Any]:
-    """Register a local model directory under data/models/<tag>/."""
+    """Register a local model directory under data/models/registered/<tag>/."""
     src = Path(path).expanduser().resolve()
     if not src.exists():
         raise FileNotFoundError(f"Model path not found: {src}")
     tag = validate_tag(tag)
     dest = model_dir(tag)
-    claims_io.models_dir().mkdir(parents=True, exist_ok=True)
+    claims_io.registered_models_dir().mkdir(parents=True, exist_ok=True)
     if dest.exists() or dest.is_symlink():
         if not force:
             raise FileExistsError(f"Model tag already registered: {dest} (pass --force)")
@@ -110,11 +120,8 @@ def register_model(
         "mode": mode,
         "registered_at": datetime.now(timezone.utc).isoformat(),
     }
-    # Write meta next to the link when possible; if dest is a symlink to a dir,
-    # write meta inside dest (source tree) — prefer a sidecar outside:
-    sidecar = claims_io.models_dir() / f"{tag}.json"
+    sidecar = claims_io.registered_models_dir() / f"{tag}.json"
     claims_io.write_json(sidecar, meta)
-    # Also try writing inside if dest is a real directory we own
     if dest.is_dir() and not dest.is_symlink():
         claims_io.write_json(dest / META_FILE, meta)
     return {"tag": tag, "path": str(dest.resolve()), **meta}

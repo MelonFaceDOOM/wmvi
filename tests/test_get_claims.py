@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from apps.claim_extractor.extraction_core import parse_claims_with_scores_output
-from apps.claim_extractor.model_common import SCORE_FIELD_NAMES
+from nlp.claim_extraction.schema import parse_claims_with_scores_output
+from nlp.claim_extraction.scores import SCORE_FIELD_NAMES
 
 
 def _valid_claim() -> dict:

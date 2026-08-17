@@ -32,7 +32,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from apps.claims.extraction.extract import run as extract_run
+from nlp.claim_extraction.batch import run_on_posts as extract_run
 from nlp.claim_extraction.defaults import (
     DEFAULT_BATCH_COUNT,
     DEFAULT_MAX_CLAIMS,

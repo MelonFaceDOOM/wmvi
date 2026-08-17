@@ -8,11 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator
 
+from apps.claims.keys import claim_key, make_row_id, normalize_claim_key
 from apps.claims.types import ClaimGroup, ClaimSource, ClaimsBundle
-
-
-def normalize_claim_key(text: str) -> str:
-    return " ".join(text.split()).casefold()
 
 
 def compute_source_hash(path: Path) -> str:
@@ -23,32 +20,14 @@ def compute_source_hash(path: Path) -> str:
     return h.hexdigest()
 
 
-def _stable_task_id(row: dict[str, Any]) -> str:
-    tid = row.get("task_id") or row.get("id") or row.get("post_id")
-    if tid is not None and str(tid).strip():
-        return str(tid)
-    text = str(row.get("text") or row.get("body") or "")[:80]
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+def iter_success_claim_records(
+    posts: list[dict[str, Any]],
+) -> Iterator[tuple[str, int, dict[str, Any], dict[str, Any]]]:
+    """Yield (task_id, claim_index, post_row, claim_dict) for nested usable chunks."""
+    from apps.claims.claims_data import iter_success_claim_records as _iter
 
-
-def iter_success_claim_records(posts: list[dict[str, Any]]) -> Iterator[tuple[str, int, dict[str, Any], dict[str, Any]]]:
-    """Yield (task_id, claim_index, post_row, claim_dict) for successful extractions."""
-    for row in posts:
-        if not isinstance(row, dict):
-            continue
-        if row.get("claim_extraction_status") != "success":
-            continue
-        out = row.get("claim_extraction_output")
-        if not isinstance(out, dict):
-            continue
-        claims = out.get("claims")
-        if not isinstance(claims, list) or not claims:
-            continue
-        tid = _stable_task_id(row)
-        for i, c in enumerate(claims):
-            if not isinstance(c, dict):
-                continue
-            yield tid, i, row, c
+    for rec in _iter(posts):
+        yield rec.task_id, rec.claim_index, rec.post_row, rec.claim
 
 
 def collapse_claims(
@@ -72,7 +51,7 @@ def collapse_claims(
             ClaimSource(
                 task_id=task_id,
                 claim_index=claim_index,
-                row_id=f"{task_id}:{claim_index}",
+                row_id=make_row_id(task_id, claim_index),
             )
         )
 
@@ -112,7 +91,7 @@ def group_from_posts_payload(
 
 
 def run(claims_path: Path) -> ClaimsBundle:
-    """Load posts-with-claims JSON and return a ClaimsBundle."""
+    """Load nested posts→chunks→claims JSON and return a ClaimsBundle."""
     payload = json.loads(claims_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("JSON root must be an object with a `posts` array.")
@@ -132,6 +111,7 @@ def bundle_to_dict(bundle: ClaimsBundle) -> dict[str, Any]:
         "groups": [
             {
                 "group_id": g.group_id,
+                "claim_key": claim_key(g.claim_text),
                 "claim_text": g.claim_text,
                 "count": g.count,
                 "sources": [

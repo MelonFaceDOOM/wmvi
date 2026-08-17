@@ -22,6 +22,15 @@ Apply (transactional)::
 
     python -m scripts.migrate_vaccine_terms --prod apply
     python -m scripts.migrate_vaccine_terms --prod apply --yes
+
+
+Status: updated terms to remove a lot of junk, mostly "injection/jab" variants.
+I kept instances of these terms that showed they were tied to lots of data
+i.e. through export-delete-contexts.
+The term list is quite good now, but the next major improvement would be to
+review members of the low_prio_vaccine subgroup and dig into what data they are tied to
+and maybe do some online searching to see if we can find more information about them.
+then prob delete a bunch of them
 """
 
 from __future__ import annotations

@@ -52,6 +52,10 @@ class EmbedConfig:
     doc_instruction: str = ""
     query_instruction: str = ""
     normalize: bool = True
+    batch_size: int = 16
+    max_seq_length: int = 512
+    dtype: str = "auto"
+    device: str = "auto"
 
 
 @dataclass

@@ -1,4 +1,4 @@
-# PyTorch (shared by claim_extractor learned stack + transcription).
+# PyTorch (claims labeler/embedder stack + transcription).
 #
 # Default PyPI torch wheels are CPU-only on Windows/Linux. The extra index below
 # supplies CUDA 12.4 builds on those platforms; macOS keeps the PyPI CPU/MPS wheel.

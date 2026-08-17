@@ -1,5 +1,0 @@
-{
-  "_note": "Batch pred_* merge via run_label_models was removed. Use apps/claim_extractor/labeler_lab Streamlit app for Ridge heads.",
-  "profiles": {},
-  "variants": {}
-}

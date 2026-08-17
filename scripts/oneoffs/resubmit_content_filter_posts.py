@@ -8,14 +8,14 @@ import random
 from pathlib import Path
 from typing import Any
 
-from apps.claim_extractor.api_requester import (
+from nlp.claim_extraction.api_requester import (
     ConcurrentApiRequester,
     RequestStatus,
     RequestTask,
     RetryPolicy,
 )
-from apps.claim_extractor.extraction_core import format_input_text
-from apps.claim_extractor.get_claims import (
+from nlp.claim_extraction.text import format_input_text
+from nlp.claim_extraction.batch import (
     DEFAULT_MAX_CLAIMS,
     _build_client,
     _stable_task_id,

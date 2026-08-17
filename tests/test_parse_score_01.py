@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from apps.claim_extractor.model_common import clamp_score_01, parse_score_01
+from nlp.claim_extraction.scores import clamp_score_01, parse_score_01
 
 
 @pytest.mark.parametrize(

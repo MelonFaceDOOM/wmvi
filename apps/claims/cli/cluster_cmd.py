@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from apps.claims import io as claims_io
+from apps.claims import selections as sel_mod
 from apps.claims.cli import paths as path_helpers
 from apps.claims.clustering import cluster as clustering
 from apps.claims.clustering import hierarchy as cluster_hierarchy
@@ -22,7 +23,7 @@ from apps.claims.clustering.score import HierarchyGuards, HierarchyWeights, Obje
 from apps.claims.types import EmbedConfig
 
 INSPECT_MODES = ("largest", "loosest", "tightest", "mixed", "noise", "query")
-_DEFAULT_QUERIES = claims_io.labels_dir() / "cluster_eval_queries.json"
+_DEFAULT_QUERIES = claims_io.fixtures_dir() / "cluster_eval_queries.json"
 
 
 def _resolve_run_dir(args: Namespace) -> Path:
@@ -33,6 +34,71 @@ def _resolve_run_dir(args: Namespace) -> Path:
         tag = path_helpers.resolve_model_tag(args)
         return corpus.run_dir(tag)
     raise ValueError("Provide --run-dir, or --corpus with --model-tag/--model")
+
+
+def _load_run_with_selection(args: Namespace) -> tuple[Any, dict[str, Any], Path, str | None]:
+    """Load vectors+index, optionally subset by annotation filters and/or --selection.
+
+    ``--filter`` / ``--where-annotation`` clauses are AND-ed. A named
+    ``--selection`` is also AND-ed with those keys when both are set.
+    Filter provenance is attached to the returned index under ``filter``.
+    """
+    from apps.claims import filtering as filt
+
+    run_dir = _resolve_run_dir(args)
+    vectors, index = claims_io.load_run_arrays(run_dir)
+
+    wanted: set[str] | None = None
+    filter_meta: dict | None = None
+    label_bits: list[str] = []
+
+    clauses = filt.clauses_from_args(args)
+    if clauses:
+        if not getattr(args, "corpus", None):
+            raise ValueError("--filter / --where-annotation require --corpus")
+        corpus = path_helpers.require_corpus(args)
+        resolved = filt.resolve_filter_clauses(
+            corpus.root,
+            clauses,
+            groups_hash=str(index.get("source_hash") or None),
+        )
+        wanted = set(resolved.keys)
+        filter_meta = resolved.provenance()
+        label_bits.append(f"filter:{resolved.annotation_name}")
+        save_as = getattr(args, "save_selection", None)
+        if save_as:
+            filt.maybe_save_selection(
+                corpus.root,
+                resolved,
+                name=str(save_as),
+                force=bool(getattr(args, "force_selection", False)),
+            )
+
+    sel_name = getattr(args, "selection", None)
+    if sel_name:
+        if not getattr(args, "corpus", None):
+            raise ValueError("--selection requires --corpus (to locate selections/)")
+        corpus = path_helpers.require_corpus(args)
+        selection = sel_mod.read_selection(corpus.root, str(sel_name))
+        sel_keys = set(selection.keys)
+        wanted = sel_keys if wanted is None else (wanted & sel_keys)
+        filter_meta = {
+            **(filter_meta or {}),
+            "selection": selection.name,
+            "selection_count": len(selection.keys),
+        }
+        label_bits.append(f"selection:{selection.name}")
+
+    if wanted is None:
+        return vectors, index, run_dir, None
+
+    sub_vectors, sub_index, _rows = filt.subset_vectors_by_keys(
+        vectors,
+        index,
+        sorted(wanted),
+        filter_meta=filter_meta,
+    )
+    return sub_vectors, sub_index, run_dir, "+".join(label_bits)
 
 
 def _resolve_out_dir(args: Namespace, *, default_exp: str | None = None) -> Path | None:
@@ -51,6 +117,10 @@ def _config_from_index(index: dict[str, Any], *, model_override: str | None = No
         doc_instruction=str(index.get("doc_instruction") or ""),
         query_instruction=str(index.get("query_instruction") or ""),
         normalize=bool(index.get("normalize", True)),
+        batch_size=int(index.get("batch_size") or 16),
+        max_seq_length=int(index.get("max_seq_length") or 512),
+        dtype=str(index.get("dtype") or "auto"),
+        device=str(index.get("device") or "auto"),
     )
 
 
@@ -64,7 +134,10 @@ def _parse_params_json(raw: str | None) -> dict[str, Any]:
 
 
 def _model_cache_key(config: EmbedConfig) -> str:
-    raw = f"{config.model_id}|{config.query_instruction}|{int(config.normalize)}"
+    raw = (
+        f"{config.model_id}|{config.doc_instruction}|{config.query_instruction}|"
+        f"{int(config.normalize)}|{config.max_seq_length}|{config.dtype}"
+    )
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
@@ -94,7 +167,11 @@ def load_or_build_query_cache(
         vec = query_eval.embed_query(
             config.model_id,
             str(row["query"]),
+            doc_instruction=config.doc_instruction,
             query_instruction=config.query_instruction,
+            device=config.device,
+            dtype=config.dtype,
+            max_seq_length=config.max_seq_length,
         )
         ids.append(qid)
         rows.append(vec)
@@ -124,7 +201,11 @@ def run_eval_with_cached_queries(
             qvec = query_eval.embed_query(
                 config.model_id,
                 str(row["query"]),
+                doc_instruction=config.doc_instruction,
                 query_instruction=config.query_instruction,
+                device=config.device,
+                dtype=config.dtype,
+                max_seq_length=config.max_seq_length,
             )
         results.append(
             query_eval.eval_query(
@@ -217,12 +298,13 @@ def cmd_cluster(args: Namespace) -> int:
         if algorithm not in clustering.CLUSTER_ALGORITHMS:
             raise ValueError(f"Unknown algorithm {algorithm!r}")
         params = _parse_params_json(args.params_json)
-        run_dir = _resolve_run_dir(args)
         stamp = hashlib.sha1(
             json.dumps({"a": algorithm, "p": params, "s": int(args.seed)}, sort_keys=True).encode()
         ).hexdigest()[:10]
-        out_dir = _resolve_out_dir(args, default_exp=f"cluster_{stamp}")
-        vectors, index = claims_io.load_run_arrays(run_dir)
+        sel_name = getattr(args, "selection", None)
+        default_exp = f"cluster_{sel_name}_{stamp}" if sel_name else f"cluster_{stamp}"
+        out_dir = _resolve_out_dir(args, default_exp=default_exp)
+        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
         config = _config_from_index(index)
         queries_path = Path(args.queries) if args.queries else _DEFAULT_QUERIES
         queries = query_eval.load_eval_queries(queries_path)
@@ -241,6 +323,9 @@ def cmd_cluster(args: Namespace) -> int:
         )
         payload["run_dir"] = str(run_dir)
         payload["model_id"] = config.model_id
+        if selection_name:
+            payload["selection"] = selection_name
+            payload["n_selected"] = int(vectors.shape[0])
         if out_dir is not None:
             out_dir.mkdir(parents=True, exist_ok=True)
             result_path = out_dir / f"result_{stamp}.json"
@@ -294,7 +379,6 @@ def cmd_hierarchy(args: Namespace) -> int:
         for name, algo in (("leaf", leaf_algorithm), ("narrative", narrative_algorithm)):
             if algo not in clustering.CLUSTER_ALGORITHMS:
                 raise ValueError(f"Unknown {name} algorithm {algo!r}")
-        run_dir = _resolve_run_dir(args)
         seed = int(args.seed)
         stamp = hashlib.sha1(
             json.dumps(
@@ -309,11 +393,18 @@ def cmd_hierarchy(args: Namespace) -> int:
                 sort_keys=True,
             ).encode()
         ).hexdigest()[:10]
+        sel_name = getattr(args, "selection", None)
         default_exp = (
-            f"hierarchy_{preset_name}_{stamp}" if preset_name else f"hierarchy_{stamp}"
+            f"hierarchy_{sel_name}_{preset_name}_{stamp}"
+            if sel_name and preset_name
+            else (
+                f"hierarchy_{sel_name}_{stamp}"
+                if sel_name
+                else (f"hierarchy_{preset_name}_{stamp}" if preset_name else f"hierarchy_{stamp}")
+            )
         )
         out_dir = _resolve_out_dir(args, default_exp=default_exp)
-        vectors, index = claims_io.load_run_arrays(run_dir)
+        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
         claim_texts = claims_io.claim_texts_from_index(index)
         config = _config_from_index(index)
         queries_path = Path(args.queries) if args.queries else _DEFAULT_QUERIES
@@ -379,6 +470,9 @@ def cmd_hierarchy(args: Namespace) -> int:
             "flags": score["flags"],
             "narratives": narratives,
         }
+        if selection_name:
+            payload["selection"] = selection_name
+            payload["n_selected"] = int(vectors.shape[0])
         if out_dir is not None:
             out_dir.mkdir(parents=True, exist_ok=True)
             result_path = out_dir / f"hierarchy_{stamp}.json"
@@ -523,13 +617,15 @@ def cmd_inspect(args: Namespace) -> int:
         if mode not in INSPECT_MODES:
             raise ValueError(f"Unknown mode {mode!r}")
         labels_path = Path(args.labels)
-        run_dir = _resolve_run_dir(args)
         out_dir = _resolve_out_dir(args, default_exp="inspect")
-        vectors, index = claims_io.load_run_arrays(run_dir)
+        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
         claim_texts = claims_io.claim_texts_from_index(index)
         labels = np.asarray(np.load(labels_path), dtype=int)
         if labels.shape[0] != vectors.shape[0]:
-            raise ValueError("labels length != vectors length")
+            raise ValueError(
+                f"labels length ({labels.shape[0]}) != vectors length ({vectors.shape[0]})"
+                + (f" for selection {selection_name!r}" if selection_name else "")
+            )
         parent_labels = None
         if args.parent_labels is not None:
             parent_labels = np.asarray(np.load(Path(args.parent_labels)), dtype=int)
@@ -617,11 +713,10 @@ def cmd_sweep(args: Namespace) -> int:
         configs_raw = json.loads(Path(args.configs).read_text(encoding="utf-8"))
         if not isinstance(configs_raw, list) or not configs_raw:
             raise ValueError("--configs must be a non-empty JSON array")
-        run_dir = _resolve_run_dir(args)
         out_dir = _resolve_out_dir(args, default_exp="sweep")
         if out_dir is None:
             raise ValueError("Provide --out-dir, or --corpus with --model-tag")
-        vectors, index = claims_io.load_run_arrays(run_dir)
+        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
         config = _config_from_index(index)
         queries_path = Path(args.queries) if args.queries else _DEFAULT_QUERIES
         queries = query_eval.load_eval_queries(queries_path)
@@ -647,6 +742,8 @@ def cmd_sweep(args: Namespace) -> int:
                     query_vectors=query_vectors,
                 )
                 payload["config_index"] = i
+                if selection_name:
+                    payload["selection"] = selection_name
                 fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
                 rows.append(payload)
                 if best is None or float(payload["objective"]) > float(best["objective"]):
@@ -655,7 +752,14 @@ def cmd_sweep(args: Namespace) -> int:
         claims_io.emit_json({"error": str(exc)})
         return 1
     claims_io.emit_json(
-        {"ok": True, "n_configs": len(rows), "sweep_path": str(sweep_path), "best": best}
+        {
+            "ok": True,
+            "n_configs": len(rows),
+            "sweep_path": str(sweep_path),
+            "best": best,
+            "selection": selection_name,
+            "run_dir": str(run_dir),
+        }
     )
     return 0
 

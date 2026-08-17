@@ -1,18 +1,15 @@
-"""Tests for get_claims claims-only mode."""
+"""Tests for claims-only extraction schema/parsing."""
 
 from __future__ import annotations
 
 import json
 
-from apps.claim_extractor.get_claims import (
-    CLAIMS_ONLY_JSON_SCHEMA,
-    _parse_and_validate_output_claims_only,
-)
+from nlp.claim_extraction.schema import CLAIMS_ONLY_JSON_SCHEMA, parse_claims_only_output
 
 
 def test_parse_claims_only_output() -> None:
     raw = json.dumps({"claims": [{"claim": "Vaccines reduce disease."}]})
-    out = _parse_and_validate_output_claims_only(raw)
+    out = parse_claims_only_output(raw)
     assert out["claims"][0]["claim"] == "Vaccines reduce disease."
 
 

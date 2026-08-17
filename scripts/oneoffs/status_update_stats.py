@@ -7,7 +7,6 @@ Run from repo root:
 from __future__ import annotations
 
 import json
-import sqlite3
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -17,7 +16,7 @@ CLAIMS_JSON = REPO_ROOT / "data" / "posts_with_claims_full.json"
 TERM_JSON = REPO_ROOT / "data" / "posts_for_term.json"
 TERM_RAW = REPO_ROOT / "data" / "posts_for_term_raw.json"
 TERM_TRIMMED = REPO_ROOT / "data" / "posts_for_term_trimmed.json"
-LAB_DB = REPO_ROOT / "apps" / "claim_extractor" / "labeler_lab" / "data" / "lab.sqlite"
+CLAIMS_LABELERS = REPO_ROOT / "apps" / "claims" / "data" / "training" / "labelers"
 
 
 def _parse_ts(val: object) -> datetime | None:
@@ -115,28 +114,32 @@ def _summarize_claims(path: Path) -> None:
         print(f"  created_at_ts range: {min(created).date()} to {max(created).date()}")
 
 
-def _summarize_label_db(path: Path) -> None:
-    print(f"\n=== Labeler lab ({path.name}) ===")
-    if not path.is_file():
-        print("  (file not found)")
+def _summarize_claims_labelers(root: Path) -> None:
+    print(f"\n=== Claims labeler training ({root.relative_to(REPO_ROOT)}) ===")
+    if not root.is_dir():
+        print("  (dir not found)")
         return
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    heads = conn.execute(
-        "SELECT id, name, score_field_name FROM ridge_heads ORDER BY id"
-    ).fetchall()
-    print(f"  ridge heads: {len(heads)}")
-    for h in heads:
-        n_train = conn.execute(
-            "SELECT COUNT(*) FROM labels WHERE head_id=? AND split='train'",
-            (h["id"],),
-        ).fetchone()[0]
-        n_eval = conn.execute(
-            "SELECT COUNT(*) FROM labels WHERE head_id=? AND split='eval'",
-            (h["id"],),
-        ).fetchone()[0]
-        print(f"    {h['name']}: train={n_train}, eval={n_eval}")
-    conn.close()
+    intents = sorted(p for p in root.iterdir() if p.is_dir())
+    if not intents:
+        print("  (no intents)")
+        return
+    for intent_dir in intents:
+        labels_path = intent_dir / "labels.jsonl"
+        n = 0
+        by_corpus: Counter[str] = Counter()
+        if labels_path.is_file():
+            for line in labels_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                n += 1
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                by_corpus[str(row.get("corpus") or "?")] += 1
+        print(f"  {intent_dir.name}: {n} labels")
+        for corpus, c in by_corpus.most_common():
+            print(f"    {corpus}: {c}")
 
 
 def main() -> None:
@@ -150,7 +153,7 @@ def main() -> None:
     ):
         _summarize_posts_file(path, label)
     _summarize_claims(CLAIMS_JSON)
-    _summarize_label_db(LAB_DB)
+    _summarize_claims_labelers(CLAIMS_LABELERS)
 
 
 if __name__ == "__main__":

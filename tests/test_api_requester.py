@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from apps.claim_extractor.api_requester import (
+from nlp.claim_extraction.api_requester import (
     ConcurrentApiRequester,
     RequestStatus,
     RequestTask,
     RetryPolicy,
     ThrottlePolicy,
 )
-from apps.claim_extractor.dummy_api_client import (
+from nlp.claim_extraction.dummy_api_client import (
     DummyApiClient,
     DummyBehavior,
     DummyRateLimits,
