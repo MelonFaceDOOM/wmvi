@@ -244,6 +244,7 @@ def render_meta_template(template: str, values: dict[str, str]) -> str:
 
 def seed_default_meta_prompts(conn) -> None:
     """Insert default meta-prompts if missing (idempotent)."""
+    dirty = False
     for name, spec in META_PROMPT_SPECS.items():
         row = conn.execute("SELECT 1 FROM meta_prompts WHERE name = ?", (name,)).fetchone()
         if row is None:
@@ -251,23 +252,22 @@ def seed_default_meta_prompts(conn) -> None:
                 "INSERT INTO meta_prompts (name, template) VALUES (?, ?)",
                 (name, spec["template"].strip()),
             )
+            dirty = True
     obj = conn.execute("SELECT 1 FROM meta_prompts WHERE name = 'objective'").fetchone()
     if obj is None:
         conn.execute(
             "INSERT INTO meta_prompts (name, template) VALUES ('objective', ?)",
             (DEFAULT_OBJECTIVE.strip(),),
         )
-    _repair_meta_prompt_templates(conn)
-    conn.commit()
+        dirty = True
+    if _repair_meta_prompt_templates(conn):
+        dirty = True
+    if dirty:
+        conn.commit()
 
-def _repair_meta_prompt_templates(conn) -> None:
-    """Reset any stored meta-prompt whose template has stray ``{placeholder}`` tokens.
-
-    Legacy templates embedded examples like ``{{var}}`` which the renderer parses as
-    a required ``{var}`` substitution, causing "Missing template value" at run time.
-    Each meta-prompt's full set of valid placeholders equals its ``required`` set, so
-    any extra token is invalid and the template is restored to the current default.
-    """
+def _repair_meta_prompt_templates(conn) -> bool:
+    """Reset stored meta-prompts with stray ``{placeholder}`` tokens. Returns True if wrote."""
+    dirty = False
     for name, spec in META_PROMPT_SPECS.items():
         row = conn.execute("SELECT template FROM meta_prompts WHERE name = ?", (name,)).fetchone()
         if row is None:
@@ -279,3 +279,5 @@ def _repair_meta_prompt_templates(conn) -> None:
                 "UPDATE meta_prompts SET template = ? WHERE name = ?",
                 (str(spec["template"]).strip(), name),
             )
+            dirty = True
+    return dirty

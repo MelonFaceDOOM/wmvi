@@ -22,8 +22,11 @@ python -m apps.prompt_refinement import-sample --help
 
 | Variable | Role |
 |----------|------|
-| `AZURE_OPENAI_KEY` | Required for connectivity check, extract runs, and optimize |
-| `AZURE_OPENAI_ENDPOINT` | Required Azure OpenAI endpoint URL |
+| Flip in code | `LLM_PROVIDER` in `apps/prompt_refinement/llm.py` (`"openai"` or `"azure"`) |
+| `PERSONAL_OPENAI_API_KEY` | Required when `LLM_PROVIDER = "openai"` |
+| `PERSONAL_OPENAI_BASE_URL` | Optional custom OpenAI-compatible base URL |
+| `AZURE_OPENAI_KEY` | Required when `LLM_PROVIDER = "azure"` |
+| `AZURE_OPENAI_ENDPOINT` | Required Azure Foundry endpoint when azure |
 | `AZURE_OPENAI_API_VERSION` | Optional (default `2024-08-01-preview`) |
 | `CLAIMS_TARGET_RPM` | Throttle (default 90) |
 | `CLAIMS_429_COOLDOWN_S` | Rate-limit cooldown seconds (default 20) |
@@ -43,10 +46,12 @@ Do **not** name samples `*_claims.json` (also ignored by a separate rule). Prefe
 
 | Role | Path |
 |------|------|
-| Current (“old”) | `nlp/claim_extraction/prompts/extract_system.txt` + `extract_user.txt` |
-| Next (“new”) | `nlp/claim_extraction/prompts/candidates/next_system.txt` + `next_user.txt` |
+| Current (canonical) | `nlp/claim_extraction/prompts/extract_system.txt` + `extract_user.txt` (alignment scores) |
+| Next (lab candidate) | `nlp/claim_extraction/prompts/candidates/next_system.txt` + `next_user.txt` |
 
 Same `{{text_input}}` / `{{max_claims}}` contract. Profiles → **Load current…** / **Load next…** converts to lab `{var}` placeholders.
+
+The extract JSON schema is chosen from the prompt text: if `claim_vaccine_alignment_score` appears, the model must emit that field; otherwise claims-only.
 
 ## Eval loop (30 chunks, 2× current vs 2× next)
 
@@ -109,4 +114,6 @@ In the UI:
 1. Create profiles `current` and `next` (or Duplicate).
 2. **Load current from nlp prompts** / **Load next from candidates/**.
 3. Run each profile with run label **`1`**, then again with **`2`** (four snapshots).
+   JSON schema follows the prompt text: **current** is claims-only; **next** requires
+   `claim_vaccine_alignment_score` (0 / 0.25 / 0.5 / 0.75 / 1).
 4. Browse → multi-select all four snapshots → judge side-by-side.

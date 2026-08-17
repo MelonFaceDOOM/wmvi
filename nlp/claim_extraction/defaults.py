@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-MODEL_NAME = "gpt-5.4-mini"
+MODEL_NAME = "gpt-5.6-luna"
 
 # Placeholders the user prompt template must contain (checked at load time).
 REQUIRED_USER_PLACEHOLDERS: tuple[str, ...] = ("{{max_claims}}", "{{text_input}}")

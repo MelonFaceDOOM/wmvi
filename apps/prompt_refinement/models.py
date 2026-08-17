@@ -5,7 +5,7 @@ from __future__ import annotations
 DEFAULT_MODEL = "gpt-5.4-mini"
 
 SEED_MODELS: tuple[str, ...] = (
-    "gpt-5.5-mini",
+    "gpt-5.6-luna",
     "gpt-5.5",
     "gpt-5.4-mini",
     "gpt-5.4",

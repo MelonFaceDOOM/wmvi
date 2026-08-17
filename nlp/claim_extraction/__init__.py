@@ -39,8 +39,10 @@ from nlp.claim_extraction.prompts import (
     render_user,
 )
 from nlp.claim_extraction.schema import (
+    CLAIMS_ALIGNMENT_JSON_SCHEMA,
     CLAIMS_JSON_SCHEMA,
     CLAIMS_ONLY_JSON_SCHEMA,
+    parse_claims_alignment_output,
     parse_claims_only_output,
     parse_claims_with_scores_output,
 )
@@ -48,6 +50,7 @@ from nlp.claim_extraction.text import format_input_text, stable_task_id
 
 __all__ = [
     "AzureConfig",
+    "CLAIMS_ALIGNMENT_JSON_SCHEMA",
     "CLAIMS_JSON_SCHEMA",
     "CLAIMS_ONLY_JSON_SCHEMA",
     "ConcurrentApiRequester",
@@ -74,6 +77,7 @@ __all__ = [
     "load_system_template",
     "load_user_template",
     "openai_structured_completion",
+    "parse_claims_alignment_output",
     "parse_claims_only_output",
     "parse_claims_with_scores_output",
     "render_system",

@@ -25,6 +25,24 @@ load_dotenv()
 _PING_MAX_COMPLETION_TOKENS = 256
 
 
+def _env(name: str, default: str | None = None) -> str | None:
+    """Read an env var, stripping whitespace and CR from CRLF ``.env`` files."""
+    raw = os.getenv(name, default)
+    if raw is None:
+        return None
+    value = raw.strip()
+    return value or None
+
+
+def _connection_detail(exc: BaseException) -> str:
+    detail = str(exc).strip() or type(exc).__name__
+    cause = exc.__cause__
+    if cause is not None:
+        cause_s = str(cause).strip() or type(cause).__name__
+        return f"{detail} ({type(cause).__name__}: {cause_s})"
+    return detail
+
+
 def _ping_chat_completion(client: Any, *, model: str) -> None:
     """Issue a tiny chat completion to verify a deployment responds."""
     from openai._exceptions import APIStatusError
@@ -69,8 +87,8 @@ class OpenAIConfig:
 
 def load_azure_config() -> AzureConfig:
     missing: list[str] = []
-    key = os.getenv("AZURE_OPENAI_KEY")
-    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    key = _env("AZURE_OPENAI_KEY")
+    endpoint = _env("AZURE_OPENAI_ENDPOINT")
     if not key:
         missing.append("AZURE_OPENAI_KEY")
     if not endpoint:
@@ -82,7 +100,7 @@ def load_azure_config() -> AzureConfig:
     return AzureConfig(
         key=key,
         endpoint=endpoint,
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview"),
+        api_version=_env("AZURE_OPENAI_API_VERSION") or "2024-08-01-preview",
     )
 
 
@@ -106,13 +124,14 @@ def check_azure_connectivity(model: str) -> tuple[bool, str]:
         )
         _ping_chat_completion(client, model=model)
         return True, f"Connected to {cfg.endpoint} as {model}"
-    except APIConnectionError:
-        return (
-            False,
-            "Cannot reach Azure OpenAI from this machine. Check network, DNS, firewall, or VPN.",
-        )
     except APITimeoutError:
         return False, "Connection to Azure OpenAI timed out. Check network or AZURE_OPENAI_ENDPOINT."
+    except APIConnectionError as exc:
+        return (
+            False,
+            "Cannot reach Azure OpenAI from this machine. "
+            f"{_connection_detail(exc)}",
+        )
     except APIStatusError as exc:
         status = getattr(exc, "status_code", None)
         if status == 401:
@@ -129,11 +148,10 @@ def check_azure_connectivity(model: str) -> tuple[bool, str]:
 
 
 def load_openai_config() -> OpenAIConfig:
-    key = os.getenv("PERSONAL_OPENAI_API_KEY")
+    key = _env("PERSONAL_OPENAI_API_KEY")
     if not key:
         raise RuntimeError("Missing PERSONAL_OPENAI_API_KEY in environment.")
-    base_url = os.getenv("PERSONAL_OPENAI_BASE_URL") or None
-    return OpenAIConfig(key=key, base_url=base_url)
+    return OpenAIConfig(key=key, base_url=_env("PERSONAL_OPENAI_BASE_URL"))
 
 
 def check_openai_connectivity(model: str) -> tuple[bool, str]:
@@ -154,13 +172,14 @@ def check_openai_connectivity(model: str) -> tuple[bool, str]:
         _verify_openai_model(client, model=model)
         endpoint = cfg.base_url or "https://api.openai.com/v1"
         return True, f"Connected to OpenAI ({endpoint}) as {model}"
-    except APIConnectionError:
-        return (
-            False,
-            "Cannot reach OpenAI from this machine. Check network, DNS, firewall, or VPN.",
-        )
     except APITimeoutError:
         return False, "Connection to OpenAI timed out. Check network or PERSONAL_OPENAI_BASE_URL."
+    except APIConnectionError as exc:
+        return (
+            False,
+            "Cannot reach OpenAI from this machine. "
+            f"{_connection_detail(exc)}",
+        )
     except APIStatusError as exc:
         status = getattr(exc, "status_code", None)
         if status == 401:
@@ -185,11 +204,13 @@ def build_azure_claims_client(
     api_key: str | None = None,
     azure_endpoint: str | None = None,
     api_version: str | None = None,
+    response_schema: dict[str, Any] | None = None,
+    output_parser: Callable[[str], dict[str, Any]] | None = None,
 ) -> Any:
     from nlp.claim_extraction.api_requester import AzureClaimsClient
 
     if api_key is not None and azure_endpoint is not None:
-        version = api_version or os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
+        version = api_version or _env("AZURE_OPENAI_API_VERSION") or "2024-08-01-preview"
         key = api_key
         endpoint = azure_endpoint
     elif api_key is not None or azure_endpoint is not None or api_version is not None:
@@ -202,8 +223,12 @@ def build_azure_claims_client(
         key = cfg.key
         endpoint = cfg.endpoint
         version = cfg.api_version
-    schema = CLAIMS_ONLY_JSON_SCHEMA if claims_only else CLAIMS_JSON_SCHEMA
-    parser = parse_claims_only_output if claims_only else parse_claims_with_scores_output
+    schema = response_schema or (
+        CLAIMS_ONLY_JSON_SCHEMA if claims_only else CLAIMS_JSON_SCHEMA
+    )
+    parser = output_parser or (
+        parse_claims_only_output if claims_only else parse_claims_with_scores_output
+    )
     return AzureClaimsClient(
         api_key=key,
         azure_endpoint=endpoint,
@@ -224,6 +249,8 @@ def build_openai_claims_client(
     claims_only: bool = True,
     api_key: str | None = None,
     base_url: str | None = None,
+    response_schema: dict[str, Any] | None = None,
+    output_parser: Callable[[str], dict[str, Any]] | None = None,
 ) -> Any:
     from nlp.claim_extraction.api_requester import OpenAIClaimsClient
 
@@ -234,8 +261,12 @@ def build_openai_claims_client(
         cfg = load_openai_config()
         key = cfg.key
         url = base_url if base_url is not None else cfg.base_url
-    schema = CLAIMS_ONLY_JSON_SCHEMA if claims_only else CLAIMS_JSON_SCHEMA
-    parser = parse_claims_only_output if claims_only else parse_claims_with_scores_output
+    schema = response_schema or (
+        CLAIMS_ONLY_JSON_SCHEMA if claims_only else CLAIMS_JSON_SCHEMA
+    )
+    parser = output_parser or (
+        parse_claims_only_output if claims_only else parse_claims_with_scores_output
+    )
     return OpenAIClaimsClient(
         api_key=key,
         base_url=url,

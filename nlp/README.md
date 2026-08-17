@@ -25,7 +25,7 @@ from nlp.claim_extraction.prep import prepare_and_explode
 from nlp.claim_extraction.nest import nest_posts_chunks_claims
 ```
 
-Batch posts-JSON extract I/O is `nlp.claim_extraction.batch` (also used by `scripts.get_posts_extract_upload`). Prep helpers live under `nlp.claim_extraction.prep` / `nlp.trim` / `nlp.coref`. `apps.claims` is post-extract only (group → embed → annotate/select → cluster).
+Batch posts-JSON extract I/O is `nlp.claim_extraction.batch` (also used by `scripts.get_posts_extract_upload`). Default fetch→extract path uses Azure deployment `gpt-5.6-luna` and stores `claim_vaccine_alignment_score` on each claim. Prep helpers live under `nlp.claim_extraction.prep` / `nlp.trim` / `nlp.coref`. `apps.claims` is post-extract only (group → embed → annotate/select → cluster).
 
 End-to-end fetch → punct → trim → extract → upload:
 

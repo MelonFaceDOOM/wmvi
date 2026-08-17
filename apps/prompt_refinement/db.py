@@ -15,10 +15,19 @@ BASELINE_PROFILE_NAME = "Baseline"
 def default_db_path() -> Path:
     return Path(__file__).resolve().parent / "data" / "refinement.sqlite"
 
+_WAL_READY: set[str] = set()
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    resolved = str(db_path.resolve())
+    conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=30000")
+    if resolved not in _WAL_READY:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        _WAL_READY.add(resolved)
     return conn
 
 def init_schema(conn: sqlite3.Connection) -> None:
@@ -159,10 +168,9 @@ def _migrate_profile_extractions_run_label(conn: sqlite3.Connection) -> None:
 
 
 def init_lab(conn: sqlite3.Connection) -> None:
-    """Schema + baseline profile, extraction sync, default meta-prompts."""
+    """Schema + baseline profile + default meta-prompts (no per-open extraction sync)."""
     init_schema(conn)
     ensure_baseline_profile(conn)
-    sync_baseline_extractions(conn)
     from apps.prompt_refinement.meta_defaults import seed_default_meta_prompts
 
     seed_default_meta_prompts(conn)
@@ -417,6 +425,7 @@ def upsert_profile_extraction(
     error: str | None = None,
     model: str | None = None,
     run_label: str = "1",
+    commit: bool = True,
 ) -> None:
     label = str(run_label or "1").strip() or "1"
     out_text = json.dumps(output_json, ensure_ascii=False) if output_json is not None else None
@@ -435,7 +444,8 @@ def upsert_profile_extraction(
         """,
         (profile_id, task_id, label, out_text, error, status, model),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
 
 
 def list_run_labels_for_profile(conn: sqlite3.Connection, profile_id: int) -> list[str]:
@@ -692,8 +702,10 @@ def sync_baseline_extractions(conn: sqlite3.Connection) -> int:
             error=None,
             model=DEFAULT_MODEL,
             run_label="1",
+            commit=False,
         )
         synced += 1
+    conn.commit()
     return synced
 
 # --- Reference claims ---

@@ -103,3 +103,37 @@ def test_nest_maps_claims_to_chunks(tmp_path: Path):
     out = tmp_path / "nested.json"
     write_nested_json(out, nested)
     assert out.is_file()
+
+
+def test_nest_keeps_alignment_score():
+    prepared = [
+        {
+            "post_id": 1,
+            "platform": "reddit_submission",
+            "text": "Measles is serious.",
+            "sentence_boundary_chunks": ["Measles is serious."],
+        }
+    ]
+    extract_rows = [
+        {
+            "source_post_id": 1,
+            "sentence_boundary_chunk_index": 0,
+            "task_id": "1:0",
+            "claim_extraction_disposition": "success",
+            "claim_extraction_output": {
+                "claims": [
+                    {
+                        "claim": "Measles can cause severe disease.",
+                        "claim_vaccine_alignment_score": 0.75,
+                        "ignored": "drop me",
+                    }
+                ]
+            },
+        }
+    ]
+    nested = nest_posts_chunks_claims(prepared, extract_rows, terms=["measles"])
+    claim = nested["posts"][0]["chunks"][0]["claims"][0]
+    assert claim == {
+        "claim": "Measles can cause severe disease.",
+        "claim_vaccine_alignment_score": 0.75,
+    }

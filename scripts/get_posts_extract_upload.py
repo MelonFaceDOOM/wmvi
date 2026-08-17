@@ -152,7 +152,7 @@ def run_smoke(
         extract_run(
             posts_path=chunks_path,
             out_path=extract_path,
-            claims_only=True,
+            alignment=True,
             batch_count=1,
             max_workers=1,
             max_claims=max_claims,
@@ -169,7 +169,7 @@ def run_smoke(
             since=_iso(since),
             until=_iso(until),
             model=MODEL_NAME,
-            extra_meta={"use_prod": use_prod, "mode": "smoke"},
+            extra_meta={"use_prod": use_prod, "mode": "smoke", "claims_extraction_mode": "alignment"},
         )
         # Prefer the single extracted chunk for a readable smoke printout.
         sample_chunk = None
@@ -266,7 +266,7 @@ def run_pipeline(
         extract_run(
             posts_path=chunks_path,
             out_path=extract_path,
-            claims_only=True,
+            alignment=True,
             batch_count=batch_count,
             max_workers=max_workers,
             max_claims=max_claims,
@@ -282,7 +282,7 @@ def run_pipeline(
             since=_iso(since),
             until=_iso(until),
             model=MODEL_NAME,
-            extra_meta={"use_prod": use_prod},
+            extra_meta={"use_prod": use_prod, "claims_extraction_mode": "alignment"},
         )
         write_nested_json(out_path, nested)
 

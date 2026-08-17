@@ -19,11 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from nlp.claim_extraction.clients import (
-    check_azure_connectivity as check_llm_connectivity,
-    load_azure_config as load_llm_config,
-)
-from apps.prompt_refinement import db, extract_runner, optimizer, posts_data, prompt_vars
+from apps.prompt_refinement import db, extract_runner, llm, optimizer, posts_data, prompt_vars
 from apps.prompt_refinement.meta_defaults import META_PROMPT_SPECS, validate_meta_prompt
 from apps.prompt_refinement.models import DEFAULT_MODEL, SEED_MODELS
 
@@ -71,12 +67,29 @@ def _preview_text_area(title: str, text: str, *, key: str) -> None:
     )
 
 def _render_claim_list(claims: list | None, *, key_prefix: str) -> None:
-    texts = posts_data.claim_texts(claims if isinstance(claims, list) else None)
-    if not texts:
+    items = claims if isinstance(claims, list) else None
+    if not items:
         st.caption("(no claims)")
         return
-    for i, t in enumerate(texts):
-        st.markdown(f"{i + 1}. {t}")
+    shown = 0
+    for i, c in enumerate(items):
+        if isinstance(c, dict):
+            text = str(c.get("claim") or "").strip()
+            if not text:
+                continue
+            score = c.get("claim_vaccine_alignment_score")
+            if isinstance(score, (int, float)):
+                st.markdown(f"{i + 1}. `{float(score):g}` — {text}")
+            else:
+                st.markdown(f"{i + 1}. {text}")
+            shown += 1
+        else:
+            text = str(c or "").strip()
+            if text:
+                st.markdown(f"{i + 1}. {text}")
+                shown += 1
+    if shown == 0:
+        st.caption("(no claims)")
 
 @st.cache_data(show_spinner=True)
 def _load_posts(path_str: str) -> tuple[list, str | None]:
@@ -106,7 +119,10 @@ def _load_posts(path_str: str) -> tuple[list, str | None]:
 
 def _open_db(path: Path):
     conn = db.connect(path)
-    db.init_lab(conn)
+    flag = f"_lab_inited::{path.resolve()}"
+    if not st.session_state.get(flag):
+        db.init_lab(conn)
+        st.session_state[flag] = True
     return conn
 
 def _lab_db_path() -> Path:
@@ -310,6 +326,9 @@ def _render_profiles_tab_content(conn) -> None:
         if fail:
             _show_run_failures(flash_run.get("failures") or [], title="Extraction errors")
             st.info("Open the Browse tab to see per-post extraction errors.")
+    flash_load = st.session_state.pop("flash_prof_load", None)
+    if flash_load:
+        st.success(str(flash_load))
 
     with st.expander("Variable bank", expanded=False):
         for k in prompt_vars.list_var_keys():
@@ -379,44 +398,48 @@ def _render_profiles_tab_content(conn) -> None:
     model = custom_model.strip() or model_sel
     max_claims = st.number_input("Max claims", min_value=1, max_value=20, value=profile.max_claims, key=f"prof_mc_{profile_id}")
 
+    def _apply_loaded_prompts(system_l: str, user_l: str, *, flash: str) -> None:
+        db.update_profile(
+            conn,
+            profile_id,
+            name=name,
+            system_prompt=system_l,
+            user_prompt=user_l,
+            model=model,
+            max_claims=int(max_claims),
+        )
+        # Widget keys keep prior text unless we overwrite session_state.
+        st.session_state[f"prof_sys_{profile_id}"] = system_l
+        st.session_state[f"prof_user_{profile_id}"] = user_l
+        st.session_state["flash_prof_load"] = flash
+        _frag_rerun()
+
     prompts_root = REPO_ROOT / "nlp" / "claim_extraction" / "prompts"
     load_c1, load_c2, load_c3 = st.columns(3)
     with load_c1:
         if st.button("Load current from nlp prompts", key=f"load_cur_{profile_id}"):
-            system_l, user_l = db.load_prompts_from_files(
-                system_path=prompts_root / "extract_system.txt",
-                user_path=prompts_root / "extract_user.txt",
-            )
-            db.update_profile(
-                conn,
-                profile_id,
-                name=name,
-                system_prompt=system_l,
-                user_prompt=user_l,
-                model=model,
-                max_claims=int(max_claims),
-            )
-            st.success("Loaded current extract_*.txt")
-            _frag_rerun()
+            try:
+                system_l, user_l = db.load_prompts_from_files(
+                    system_path=prompts_root / "extract_system.txt",
+                    user_path=prompts_root / "extract_user.txt",
+                )
+            except OSError as exc:
+                st.error(f"Could not load current prompts: {exc}")
+            else:
+                _apply_loaded_prompts(system_l, user_l, flash="Loaded current extract_*.txt into this profile.")
     with load_c2:
         if st.button("Load next from candidates/", key=f"load_next_{profile_id}"):
-            system_l, user_l = db.load_prompts_from_files(
-                system_path=prompts_root / "candidates" / "next_system.txt",
-                user_path=prompts_root / "candidates" / "next_user.txt",
-            )
-            db.update_profile(
-                conn,
-                profile_id,
-                name=name,
-                system_prompt=system_l,
-                user_prompt=user_l,
-                model=model,
-                max_claims=int(max_claims),
-            )
-            st.success("Loaded candidates/next_*.txt")
-            _frag_rerun()
+            try:
+                system_l, user_l = db.load_prompts_from_files(
+                    system_path=prompts_root / "candidates" / "next_system.txt",
+                    user_path=prompts_root / "candidates" / "next_user.txt",
+                )
+            except OSError as exc:
+                st.error(f"Could not load candidate prompts: {exc}")
+            else:
+                _apply_loaded_prompts(system_l, user_l, flash="Loaded candidates/next_*.txt into this profile.")
     with load_c3:
-        st.caption("Placeholders `{{…}}` → `{…}` on load.")
+        st.caption("Overwrites the boxes below. `{{…}}` → `{…}` on load.")
 
     profile = db.get_profile(conn, profile_id) or profile
     system_prompt = st.text_area(
@@ -472,12 +495,19 @@ def _render_profiles_tab_content(conn) -> None:
         help="Stores this extract under a separate label (e.g. 1 and 2). "
         "Reusing a label overwrites that label only.",
     )
+    wants_alignment = llm.prompts_request_alignment(system_prompt, user_prompt)
+    st.caption(
+        "JSON schema: claims + `claim_vaccine_alignment_score` (0 / 0.25 / 0.5 / 0.75 / 1)."
+        if wants_alignment
+        else "JSON schema: claims only (no alignment score)."
+    )
 
     test_col, run_col = st.columns([1, 1])
     with test_col:
-        if st.button("Test Azure connection", key=f"prof_test_azure_{profile_id}"):
-            with st.spinner("Testing Azure OpenAI connection…"):
-                ok, message = check_llm_connectivity(model)
+        if st.button("Test OpenAI", key=f"prof_test_llm_{profile_id}"):
+            conn.commit()
+            with st.spinner(f"Testing {llm.provider_label()} connection…"):
+                ok, message = llm.check_connectivity(model)
             if ok:
                 st.success(message)
             else:
@@ -492,18 +522,33 @@ def _render_profiles_tab_content(conn) -> None:
             return
         label = (run_label or "").strip() or suggested
         try:
-            load_llm_config()
+            llm.load_config()
         except RuntimeError as exc:
-            st.error(f"Azure OpenAI not configured: {exc}")
+            st.error(f"{llm.provider_label()} not configured: {exc}")
             return
 
+        db.update_profile(
+            conn,
+            profile_id,
+            name=name,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model,
+            max_claims=int(max_claims),
+        )
         profile = db.get_profile(conn, profile_id)
         if profile is None:
             st.error("Profile not found.")
             return
+        conn.commit()
+        schema_note = (
+            "alignment scores"
+            if llm.prompts_request_alignment(profile.system_prompt, profile.user_prompt)
+            else "claims only"
+        )
         with st.status(
             f"Running profile **{profile.name}** label=**{label}** "
-            f"on {len(problem_posts)} post(s)…",
+            f"({schema_note}) on {len(problem_posts)} post(s)…",
             expanded=True,
         ) as status:
             progress = st.progress(0.0)
@@ -800,7 +845,7 @@ def _render_optimize_tab_content(conn) -> None:
         ref_model = st.text_input("Expensive model for Reference", value=ref_prof.model, key="opt_ref_model")
         if st.button("Generate Reference from profile", key="opt_gen_ref"):
             try:
-                load_llm_config()
+                llm.load_config()
                 with st.status("Generating Reference…", expanded=True) as status:
                     prog = st.progress(0.0)
 
@@ -854,7 +899,7 @@ def _render_optimize_tab_content(conn) -> None:
 
     if st.button("Run optimization", key="opt_run", type="primary"):
         try:
-            load_llm_config()
+            llm.load_config()
             cfg = optimizer.OptimizationConfig(
                 expensive_model=expensive_model.strip() or input_prof.model,
                 cheap_model=cheap_model.strip() or input_prof.model,

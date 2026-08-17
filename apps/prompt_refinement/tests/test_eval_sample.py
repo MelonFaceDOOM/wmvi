@@ -10,6 +10,13 @@ import pytest
 from apps.claims.keys import claim_key
 from apps.prompt_refinement import db
 from apps.prompt_refinement import eval_sample as es
+from apps.prompt_refinement import llm as prompt_llm
+
+
+def test_llm_provider_default_is_openai() -> None:
+    assert prompt_llm.LLM_PROVIDER == "openai"
+    assert prompt_llm.is_azure() is False
+    assert prompt_llm.provider_label() == "OpenAI"
 
 
 def _nested_fixture() -> dict:
@@ -65,6 +72,38 @@ def test_canonical_to_lab_placeholders() -> None:
     assert system == "sys {max_claims}"
     assert user == "user {text_input} {max_claims}"
     assert "{{" not in system + user
+
+
+def test_current_prompts_request_alignment() -> None:
+    root = Path(__file__).resolve().parents[3]
+    system = (root / "nlp/claim_extraction/prompts/extract_system.txt").read_text(
+        encoding="utf-8"
+    )
+    user = (root / "nlp/claim_extraction/prompts/extract_user.txt").read_text(
+        encoding="utf-8"
+    )
+    system, user = es.canonical_to_lab_placeholders(system, user)
+    assert prompt_llm.prompts_request_alignment(system, user) is True
+    assert "claim_vaccine_alignment_score" in system
+    assert "claim_vaccine_alignment_score" in user
+
+
+def test_next_prompts_have_alignment_and_placeholders() -> None:
+    root = Path(__file__).resolve().parents[3]
+    system = (root / "nlp/claim_extraction/prompts/candidates/next_system.txt").read_text(
+        encoding="utf-8"
+    )
+    user = (root / "nlp/claim_extraction/prompts/candidates/next_user.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "claim_vaccine_alignment_score" in system
+    assert "claim_vaccine_alignment_score" in user
+    assert "{{text_input}}" in user
+    assert "{{max_claims}}" in user
+    system_lab, user_lab = es.canonical_to_lab_placeholders(system, user)
+    assert "{text_input}" in user_lab
+    assert "{{text_input}}" not in user_lab
+    assert prompt_llm.prompts_request_alignment(system_lab, user_lab) is True
 
 
 def test_flatten_and_write_sample_roundtrip(
@@ -188,3 +227,57 @@ def test_load_prompts_from_files(tmp_path: Path) -> None:
     system, user = db.load_prompts_from_files(system_path=sys_p, user_path=usr_p)
     assert system == "System {max_claims}"
     assert user == "User {text_input} max={max_claims}"
+
+
+def test_extract_runner_schema_follows_prompt_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.prompt_refinement import extract_runner
+
+    captured: list[bool] = []
+
+    def fake_build_claims_client(**kwargs: object) -> object:
+        captured.append(bool(kwargs["alignment"]))
+        return object()
+
+    class FakeRequester:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        def run(self, tasks: object) -> list:
+            return []
+
+    monkeypatch.setattr(extract_runner.llm, "build_claims_client", fake_build_claims_client)
+    monkeypatch.setattr(extract_runner, "ConcurrentApiRequester", FakeRequester)
+
+    conn = db.connect(tmp_path / "lab.sqlite")
+    db.init_lab(conn)
+    posts = [
+        {
+            "task_id": "t1",
+            "post_row": {"task_id": "t1", "text": "hello", "platform": "reddit_submission"},
+        }
+    ]
+    pid_old = db.create_profile(
+        conn,
+        name="current",
+        system_prompt="extract claims",
+        user_prompt="{text_input}",
+        model="dummy",
+        max_claims=8,
+    )
+    pid_new = db.create_profile(
+        conn,
+        name="next",
+        system_prompt="include claim_vaccine_alignment_score",
+        user_prompt="{text_input}",
+        model="dummy",
+        max_claims=8,
+    )
+    old = db.get_profile(conn, pid_old)
+    new = db.get_profile(conn, pid_new)
+    assert old is not None and new is not None
+    extract_runner.run_profile_on_posts(conn, old, posts, run_label="1")
+    extract_runner.run_profile_on_posts(conn, new, posts, run_label="1")
+    assert captured == [False, True]
+    conn.close()

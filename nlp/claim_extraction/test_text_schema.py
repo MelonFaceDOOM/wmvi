@@ -6,7 +6,12 @@ import json
 
 import pytest
 
-from nlp.claim_extraction.schema import parse_claims_only_output, parse_claims_with_scores_output
+from nlp.claim_extraction.schema import (
+    parse_claims_alignment_output,
+    parse_claims_only_output,
+    parse_claims_with_scores_output,
+)
+from nlp.claim_extraction.scores import snap_alignment_score
 from nlp.claim_extraction.text import format_input_text, stable_task_id
 
 
@@ -39,3 +44,30 @@ def test_parse_claims_with_scores_requires_scores() -> None:
     raw = json.dumps({"claims": [{"claim": "x"}]})
     with pytest.raises(ValueError):
         parse_claims_with_scores_output(raw)
+
+
+def test_snap_alignment_score() -> None:
+    assert snap_alignment_score(0.0) == 0.0
+    assert snap_alignment_score(0.51) == 0.5
+    assert snap_alignment_score(0.7) == 0.75
+    assert snap_alignment_score(1) == 1.0
+
+
+def test_parse_claims_alignment_snaps_and_requires_score() -> None:
+    raw = json.dumps(
+        {"claims": [{"claim": "MMR vaccination does not cause autism.", "claim_vaccine_alignment_score": 0.9}]}
+    )
+    out = parse_claims_alignment_output(raw)
+    assert out["claims"][0]["claim_vaccine_alignment_score"] == 1.0
+    with pytest.raises(ValueError):
+        parse_claims_alignment_output(json.dumps({"claims": [{"claim": "x"}]}))
+
+
+def test_load_openai_config_strips_crlf(monkeypatch: pytest.MonkeyPatch) -> None:
+    from nlp.claim_extraction.clients import load_openai_config
+
+    monkeypatch.setenv("PERSONAL_OPENAI_API_KEY", "sk-test-key\r")
+    monkeypatch.setenv("PERSONAL_OPENAI_BASE_URL", "https://api.openai.com/v1\r")
+    cfg = load_openai_config()
+    assert cfg.key == "sk-test-key"
+    assert cfg.base_url == "https://api.openai.com/v1"

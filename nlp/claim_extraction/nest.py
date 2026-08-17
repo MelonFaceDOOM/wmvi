@@ -19,8 +19,13 @@ def _claims_from_row(row: dict[str, Any]) -> list[dict[str, Any]]:
         return []
     cleaned: list[dict[str, Any]] = []
     for c in claims:
-        if isinstance(c, dict) and isinstance(c.get("claim"), str):
-            cleaned.append({"claim": c["claim"]})
+        if not isinstance(c, dict) or not isinstance(c.get("claim"), str):
+            continue
+        item: dict[str, Any] = {"claim": c["claim"]}
+        score = c.get("claim_vaccine_alignment_score")
+        if isinstance(score, (int, float)):
+            item["claim_vaccine_alignment_score"] = float(score)
+        cleaned.append(item)
     return cleaned
 
 

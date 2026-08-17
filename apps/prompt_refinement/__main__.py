@@ -29,7 +29,8 @@ def _run_streamlit(extra: list[str]) -> int:
         "streamlit",
         "run",
         str(app_file),
-        "--server.runOnSave=true",
+        "--server.runOnSave=false",
+        "--server.fileWatcherType=none",
     ]
     if extra:
         cmd += ["--"] + extra

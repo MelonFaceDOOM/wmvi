@@ -1,4 +1,8 @@
-"""Run claims-only extraction for a prompt profile on problem posts."""
+"""Run extraction for a prompt profile on problem posts.
+
+JSON schema is claims-only unless the profile prompts mention
+``claim_vaccine_alignment_score``.
+"""
 
 from __future__ import annotations
 
@@ -14,8 +18,7 @@ from nlp.claim_extraction.api_requester import (
     ThrottlePolicy,
     default_is_retryable_exception,
 )
-from nlp.claim_extraction.clients import build_azure_claims_client as build_claims_client
-from apps.prompt_refinement import db, prompt_vars
+from apps.prompt_refinement import db, llm, prompt_vars
 from apps.prompt_refinement.db import PromptProfile
 
 DEFAULT_TARGET_RPM = 90
@@ -47,6 +50,7 @@ def run_profile_on_posts(
     run_model = model or profile.model
     max_claims = profile.max_claims
     label = str(run_label or "1").strip() or "1"
+    alignment = llm.prompts_request_alignment(profile.system_prompt, profile.user_prompt)
 
     def system_builder(payload: dict[str, Any]) -> str:
         return str(payload["system_prompt"])
@@ -54,11 +58,11 @@ def run_profile_on_posts(
     def user_builder(payload: dict[str, Any]) -> str:
         return str(payload["user_prompt"])
 
-    client = build_claims_client(
+    client = llm.build_claims_client(
         model=run_model,
-        claims_only=True,
         system_prompt_builder=system_builder,
         user_prompt_builder=user_builder,
+        alignment=alignment,
     )
     throttle = ThrottlePolicy(
         target_requests_per_minute=max(1, int(os.getenv("CLAIMS_TARGET_RPM", str(DEFAULT_TARGET_RPM)))),

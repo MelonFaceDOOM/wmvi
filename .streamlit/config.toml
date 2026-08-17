@@ -1,0 +1,5 @@
+# Prompt Lab is launched from repo root; Streamlit watches CWD recursively.
+# SQLite WAL/shm under apps/prompt_refinement/data/ would retrigger reruns.
+[server]
+runOnSave = false
+fileWatcherType = "none"

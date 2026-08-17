@@ -31,6 +31,14 @@ from nlp.claim_extraction.defaults import (
     MODEL_NAME,
 )
 from nlp.claim_extraction.prompts import load_system_template, load_user_template, render_system, render_user
+from nlp.claim_extraction.schema import (
+    CLAIMS_ALIGNMENT_JSON_SCHEMA,
+    CLAIMS_JSON_SCHEMA,
+    CLAIMS_ONLY_JSON_SCHEMA,
+    parse_claims_alignment_output,
+    parse_claims_only_output,
+    parse_claims_with_scores_output,
+)
 from nlp.claim_extraction.text import format_input_text
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -81,36 +89,60 @@ class PostsJsonStreamWriter:
         self.tmp_path.replace(self.final_path)
 
 
-def _build_client(*, claims_only: bool = False) -> AzureClaimsClient:
+def _build_client(*, claims_only: bool = False, alignment: bool = False) -> AzureClaimsClient:
     cfg = load_azure_config()
+    if alignment:
+        schema = CLAIMS_ALIGNMENT_JSON_SCHEMA
+        parser = parse_claims_alignment_output
+    elif claims_only:
+        schema = CLAIMS_ONLY_JSON_SCHEMA
+        parser = parse_claims_only_output
+    else:
+        schema = CLAIMS_JSON_SCHEMA
+        parser = parse_claims_with_scores_output
     return build_azure_claims_client(
         model=MODEL_NAME,
         api_key=cfg.key,
         azure_endpoint=cfg.endpoint,
         api_version=cfg.api_version,
-        claims_only=claims_only,
+        claims_only=claims_only and not alignment,
+        response_schema=schema,
+        output_parser=parser,
         system_prompt_builder=lambda payload: _build_system_prompt(
             max_claims=int(payload["max_claims"]),
             claims_only=bool(payload.get("claims_only")),
+            alignment=bool(payload.get("alignment")),
         ),
         user_prompt_builder=lambda payload: _build_user_prompt(
             str(payload["input_text"]),
             max_claims=int(payload["max_claims"]),
             claims_only=bool(payload.get("claims_only")),
+            alignment=bool(payload.get("alignment")),
         ),
     )
 
 
-def _build_system_prompt(*, max_claims: int, claims_only: bool = False) -> str:
-    if claims_only:
+def _build_system_prompt(
+    *,
+    max_claims: int,
+    claims_only: bool = False,
+    alignment: bool = False,
+) -> str:
+    if claims_only or alignment:
         return render_system(max_claims=max_claims)
     return SYSTEM_PROMPT.replace("{{max_claims}}", str(max_claims)).replace(
         "[[max_claims]]", str(max_claims)
     )
 
 
-def _build_user_prompt(input_text: str, *, max_claims: int, claims_only: bool = False) -> str:
-    if claims_only:
+def _build_user_prompt(
+    input_text: str,
+    *,
+    max_claims: int,
+    claims_only: bool = False,
+    alignment: bool = False,
+) -> str:
+    if claims_only or alignment:
         return render_user(input_text, max_claims=max_claims)
     return (
         USER_PROMPT.replace("{{max_claims}}", str(max_claims))
@@ -260,7 +292,10 @@ def run(
     max_tasks: int,
     n_posts: int,
     claims_only: bool = False,
+    alignment: bool = False,
 ) -> None:
+    if claims_only and alignment:
+        raise ValueError("Use only one of claims_only or alignment.")
     payload, rows = _load_payload(input_file)
     existing_ids, existing_rows = _load_existing_output_rows(out_file)
     print(
@@ -298,7 +333,9 @@ def run(
         flush=True,
     )
     meta = {k: v for k, v in payload.items() if k != "posts"}
-    if claims_only:
+    if alignment:
+        meta["claims_extraction_mode"] = "alignment"
+    elif claims_only:
         meta["claims_extraction_mode"] = "claims_only"
     writer = PostsJsonStreamWriter(out_file, meta=meta)
 
@@ -312,7 +349,7 @@ def run(
         flush=True,
     )
 
-    client = _build_client(claims_only=claims_only)
+    client = _build_client(claims_only=claims_only, alignment=alignment)
     throttle = ThrottlePolicy(
         target_requests_per_minute=max(1, int(os.getenv("CLAIMS_TARGET_RPM", str(DEFAULT_TARGET_RPM)))),
         global_429_cooldown_s=max(0.0, float(os.getenv("CLAIMS_429_COOLDOWN_S", str(DEFAULT_429_COOLDOWN_S)))),
@@ -336,6 +373,7 @@ def run(
                     "input_text": t["input_text"],
                     "max_claims": max_claims,
                     "claims_only": claims_only,
+                    "alignment": alignment,
                 },
             )
             for t in batch
@@ -359,6 +397,7 @@ def run_on_posts(
     out_path: Path,
     n_posts: int = 0,
     claims_only: bool = False,
+    alignment: bool = False,
     batch_count: int = DEFAULT_BATCH_COUNT,
     max_workers: int = DEFAULT_MAX_WORKERS,
     max_claims: int = DEFAULT_MAX_CLAIMS,
@@ -375,6 +414,7 @@ def run_on_posts(
         max_tasks=0,
         n_posts=n_posts,
         claims_only=claims_only,
+        alignment=alignment,
     )
 
 
@@ -401,6 +441,11 @@ if __name__ == "__main__":
         help="Extract claim text only (no LLM scores). Run score_claims post-pass for Ridge pred_* fields.",
     )
     mode.add_argument(
+        "--alignment",
+        action="store_true",
+        help="Extract claims plus discrete claim_vaccine_alignment_score (canonical extract_*.txt).",
+    )
+    mode.add_argument(
         "--with-scores",
         action="store_true",
         help="Extract claims plus all five score fields (default).",
@@ -416,4 +461,5 @@ if __name__ == "__main__":
         max_tasks=max(0, int(args.max_tasks)),
         n_posts=max(0, int(args.n_posts)),
         claims_only=bool(args.claims_only),
+        alignment=bool(args.alignment),
     )

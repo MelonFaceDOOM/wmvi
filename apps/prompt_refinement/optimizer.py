@@ -15,8 +15,7 @@ from nlp.claim_extraction.api_requester import (
     ThrottlePolicy,
     default_is_retryable_exception,
 )
-from nlp.claim_extraction.clients import azure_structured_completion
-from apps.prompt_refinement import db, extract_runner, metrics, posts_data
+from apps.prompt_refinement import db, extract_runner, llm, metrics, posts_data
 from apps.prompt_refinement.db import PromptProfile
 from apps.prompt_refinement.meta_defaults import (
     DIAGNOSE_POST_SCHEMA,
@@ -82,7 +81,7 @@ class _StructuredJudgeClient:
                 "candidate_claims": json.dumps(payload["candidate_claims"], ensure_ascii=False, indent=2),
             },
         )
-        out = azure_structured_completion(
+        out = llm.structured_completion(
             model=self._model,
             system="You are an expert evaluator for vaccine claim extraction quality.",
             user=user,
@@ -213,7 +212,7 @@ def _summarize_problems(conn, *, judge_model: str, issue_notes: list[dict[str, A
             "current_system_prompt": profile.system_prompt,
         },
     )
-    return azure_structured_completion(
+    return llm.structured_completion(
         model=judge_model,
         system="You analyze patterns in claim extraction errors.",
         user=user,
@@ -242,7 +241,7 @@ def _propose_prompt(
             "constraints": constraints,
         },
     )
-    return azure_structured_completion(
+    return llm.structured_completion(
         model=judge_model,
         system="You are an expert prompt engineer for structured claim extraction.",
         user=user,
@@ -269,7 +268,7 @@ def _evaluate_iteration(
             "diff_examples": json.dumps(diff_examples, ensure_ascii=False, indent=2),
         },
     )
-    return azure_structured_completion(
+    return llm.structured_completion(
         model=judge_model,
         system="You evaluate whether a prompt change improved claim extraction.",
         user=user,

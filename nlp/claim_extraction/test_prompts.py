@@ -18,6 +18,7 @@ def test_load_user_template_has_required_placeholders():
     text = load_user_template()
     assert "{{max_claims}}" in text
     assert "{{text_input}}" in text
+    assert "claim_vaccine_alignment_score" in text
 
 
 def test_load_system_template_ok():

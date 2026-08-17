@@ -13,6 +13,13 @@ SCORE_FIELD_NAMES: tuple[str, ...] = (
     "attribution_common_knowledge_score",
 )
 
+ALIGNMENT_BUCKETS: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
+
+
+def snap_alignment_score(v: float) -> float:
+    """Nearest discrete alignment bucket in ``ALIGNMENT_BUCKETS``."""
+    return min(ALIGNMENT_BUCKETS, key=lambda x: abs(x - float(v)))
+
 
 def clamp_score_01(x: float) -> float:
     if math.isnan(x) or math.isinf(x):
