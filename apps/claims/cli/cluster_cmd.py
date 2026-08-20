@@ -160,22 +160,19 @@ def load_or_build_query_cache(
         vectors = np.asarray(data["vectors"], dtype=np.float32)
         return {str(qid): vectors[i] for i, qid in enumerate(ids)}
 
-    ids: list[str] = []
-    rows: list[np.ndarray] = []
-    for row in queries:
-        qid = str(row.get("id") or row.get("query") or len(ids))
-        vec = query_eval.embed_query(
-            config.model_id,
-            str(row["query"]),
-            doc_instruction=config.doc_instruction,
-            query_instruction=config.query_instruction,
-            device=config.device,
-            dtype=config.dtype,
-            max_seq_length=config.max_seq_length,
-        )
-        ids.append(qid)
-        rows.append(vec)
-    stacked = np.stack(rows, axis=0).astype(np.float32, copy=False)
+    if not queries:
+        return {}
+    ids = [str(row.get("id") or row.get("query") or i) for i, row in enumerate(queries)]
+    texts = [str(row["query"]) for row in queries]
+    stacked = query_eval.embed_queries(
+        config.model_id,
+        texts,
+        doc_instruction=config.doc_instruction,
+        query_instruction=config.query_instruction,
+        device=config.device,
+        dtype=config.dtype,
+        max_seq_length=config.max_seq_length,
+    ).astype(np.float32, copy=False)
     np.savez_compressed(
         cache_path,
         ids=np.asarray(ids),
@@ -194,19 +191,27 @@ def run_eval_with_cached_queries(
     query_vectors: dict[str, np.ndarray],
 ) -> query_eval.EvalSuiteResult:
     results: list[query_eval.QueryEvalResult] = []
+    missing = [
+        row
+        for row in queries
+        if str(row.get("id") or row.get("query") or "") not in query_vectors
+    ]
+    if missing:
+        filled = query_eval.embed_queries(
+            config.model_id,
+            [str(row["query"]) for row in missing],
+            doc_instruction=config.doc_instruction,
+            query_instruction=config.query_instruction,
+            device=config.device,
+            dtype=config.dtype,
+            max_seq_length=config.max_seq_length,
+        )
+        for row, vec in zip(missing, filled, strict=True):
+            qid = str(row.get("id") or row.get("query") or "")
+            query_vectors[qid] = vec
     for row in queries:
         qid = str(row.get("id") or row.get("query") or "")
-        qvec = query_vectors.get(qid)
-        if qvec is None:
-            qvec = query_eval.embed_query(
-                config.model_id,
-                str(row["query"]),
-                doc_instruction=config.doc_instruction,
-                query_instruction=config.query_instruction,
-                device=config.device,
-                dtype=config.dtype,
-                max_seq_length=config.max_seq_length,
-            )
+        qvec = query_vectors[qid]
         results.append(
             query_eval.eval_query(
                 vectors,

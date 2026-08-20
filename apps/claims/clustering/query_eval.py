@@ -43,10 +43,58 @@ def load_eval_queries(path: Path | None = None) -> list[dict[str, Any]]:
     return data
 
 
+def _query_prompt(
+    *,
+    prompt: str = "",
+    query_instruction: str = "",
+    doc_instruction: str = "",
+) -> str | None:
+    return (prompt or doc_instruction or query_instruction or "").strip() or None
+
+
+def embed_queries(
+    model_id: str,
+    texts: list[str],
+    *,
+    encoder: Any | None = None,
+    prompt: str = "",
+    query_instruction: str = "",
+    doc_instruction: str = "",
+    device: str | None = None,
+    dtype: str | None = "auto",
+    max_seq_length: int | None = None,
+) -> np.ndarray:
+    """Embed query texts. Loads the encoder at most once (batch encode)."""
+    from apps.claims.embedding.encode import (
+        DEFAULT_MAX_SEQ_LENGTH,
+        encode_texts,
+        load_sentence_transformer,
+    )
+
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+    model = encoder
+    if model is None:
+        model = load_sentence_transformer(
+            model_id,
+            device=device,
+            dtype=dtype,
+            max_seq_length=max_seq_length if max_seq_length is not None else DEFAULT_MAX_SEQ_LENGTH,
+        )
+    p = _query_prompt(
+        prompt=prompt,
+        query_instruction=query_instruction,
+        doc_instruction=doc_instruction,
+    )
+    vec = encode_texts(model, list(texts), normalize_embeddings=True, prompt=p)
+    return np.asarray(vec, dtype=np.float32)
+
+
 def embed_query(
     model_id: str,
     text: str,
     *,
+    encoder: Any | None = None,
     prompt: str = "",
     query_instruction: str = "",
     doc_instruction: str = "",
@@ -60,21 +108,17 @@ def embed_query(
     ``prompt`` (or ``doc_instruction``). ``query_instruction`` is kept for
     back-compat and is used only when prompt/doc_instruction are empty.
     """
-    from apps.claims.embedding.encode import (
-        DEFAULT_MAX_SEQ_LENGTH,
-        encode_texts,
-        load_sentence_transformer,
-    )
-
-    encoder = load_sentence_transformer(
+    return embed_queries(
         model_id,
+        [text],
+        encoder=encoder,
+        prompt=prompt,
+        query_instruction=query_instruction,
+        doc_instruction=doc_instruction,
         device=device,
         dtype=dtype,
-        max_seq_length=max_seq_length if max_seq_length is not None else DEFAULT_MAX_SEQ_LENGTH,
-    )
-    p = (prompt or doc_instruction or query_instruction or "").strip() or None
-    vec = encode_texts(encoder, [text], normalize_embeddings=True, prompt=p)
-    return np.asarray(vec, dtype=np.float32)[0]
+        max_seq_length=max_seq_length,
+    )[0]
 
 
 def _label_entropy(labels: np.ndarray) -> float:
@@ -156,8 +200,18 @@ def run_eval_suite(
     queries_path: Path | None = None,
 ) -> EvalSuiteResult:
     qrows = queries if queries is not None else load_eval_queries(queries_path)
+    texts = [str(row["query"]) for row in qrows]
+    qvecs = embed_queries(
+        config.model_id,
+        texts,
+        doc_instruction=config.doc_instruction,
+        query_instruction=config.query_instruction,
+        device=config.device,
+        dtype=config.dtype,
+        max_seq_length=config.max_seq_length,
+    ) if texts else np.zeros((0, 0), dtype=np.float32)
     results: list[QueryEvalResult] = []
-    for row in qrows:
+    for i, row in enumerate(qrows):
         results.append(
             eval_query(
                 vectors,
@@ -166,6 +220,7 @@ def run_eval_suite(
                 top_k=int(row.get("top_k", 20)),
                 labels=labels,
                 query_id=str(row.get("id", "")),
+                query_vector=qvecs[i],
             )
         )
     shares = [r.dominant_cluster_share for r in results if r.dominant_cluster_share is not None]
