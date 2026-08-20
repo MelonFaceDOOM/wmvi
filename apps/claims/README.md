@@ -210,6 +210,8 @@ python -m apps.claims embedder eval --intent belief_sim --model belief_sim@activ
 Requires CUDA torch + `pip install -r apps/claims/requirements-embed.txt`.
 Do **not** overwrite an existing `bge-large` run — use a new tag.
 
+On **Windows + CUDA**, `sentence_transformers` imports torch before sklearn/pyarrow and can native-crash (empty run dir, no traceback). `embed` / `hierarchy` / LoRA train preload sklearn first; if a one-off script still dies, `import sklearn` before torch.
+
 Use the **same** `--doc-instruction` for embed, gold-label neighbors (via the run), and LoRA train.
 
 ```bash

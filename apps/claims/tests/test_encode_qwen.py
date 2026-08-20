@@ -55,6 +55,21 @@ def test_resolve_load_kwargs_warns_large_on_cpu(monkeypatch: pytest.MonkeyPatch)
     assert opts["warn_cpu_large"] is True
 
 
+def test_preload_sklearn_noop_non_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(encode_mod.sys, "platform", "linux")
+    encode_mod._preload_sklearn_on_windows()
+
+
+def test_preload_sklearn_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    import types
+
+    fake = types.ModuleType("sklearn")
+    monkeypatch.setattr(encode_mod.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "sklearn", fake)
+    encode_mod._preload_sklearn_on_windows()
+
+
 def test_looks_large_model() -> None:
     assert encode_mod._looks_large_model("Qwen/Qwen3-Embedding-8B")
     assert encode_mod._looks_large_model("org/model-7b-instruct")

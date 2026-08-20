@@ -35,6 +35,8 @@ feedparser==6.0.12
 
 # --- Data / utilities ---
 numpy==2.2.6
+# pandas pulls pyarrow. On Windows, torch-then-pyarrow can AV; claims encode
+# preloads sklearn (which imports pyarrow) before SentenceTransformer/torch.
 pandas==2.2.2
 python-dateutil==2.9.0.post0
 pytz==2025.2

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import warnings
 from typing import Any
 
@@ -20,6 +21,20 @@ _LARGE_MODEL_RE = re.compile(r"(?i)(?:^|[-_/])(?:[4-9]|[1-9]\d+)[Bb](?:$|[-_/])"
 
 def _looks_large_model(model_id: str) -> bool:
     return bool(_LARGE_MODEL_RE.search(model_id or ""))
+
+
+def _preload_sklearn_on_windows() -> None:
+    """Load sklearn (and thus pyarrow) before torch / SentenceTransformer.
+
+    On Windows, ``import torch`` then ``import sklearn`` can access-violate
+    inside pyarrow's native module. sklearn-first is safe. No-op elsewhere.
+    """
+    if sys.platform != "win32":
+        return
+    import sklearn  # noqa: F401
+
+
+_preload_sklearn_on_windows()
 
 
 def _torch_dtype(name: str | None) -> Any | None:
@@ -117,6 +132,7 @@ def load_sentence_transformer(
     max_seq_length: int | None = DEFAULT_MAX_SEQ_LENGTH,
     model_kwargs: dict[str, Any] | None = None,
 ) -> Any:
+    _preload_sklearn_on_windows()
     from sentence_transformers import SentenceTransformer
 
     mid = model_id or DEFAULT_ENCODER_MODEL_ID

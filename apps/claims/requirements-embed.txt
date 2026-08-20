@@ -7,5 +7,7 @@
 # peft required for `embedder train --lora` / `train-compare --lora` on 8B.
 
 transformers>=4.51.0,<5
+# sentence-transformers → sklearn → pandas → pyarrow. Windows AV if torch
+# loads first; apps/claims/embedding/encode.py preloads sklearn on win32.
 sentence-transformers>=3.4.0
 peft>=0.13.0

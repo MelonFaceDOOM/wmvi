@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
-import torch.nn as nn
+
+from apps.claims.embedding.encode import _preload_sklearn_on_windows
+
+_preload_sklearn_on_windows()
+import torch.nn as nn  # noqa: E402  — sklearn before torch on Windows (see encode.py)
 
 from apps.claims import io as claims_io
 from apps.claims.embedding import eval_triplets as eval_mod
