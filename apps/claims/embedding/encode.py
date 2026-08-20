@@ -133,6 +133,12 @@ def load_sentence_transformer(
     model_kwargs: dict[str, Any] | None = None,
 ) -> Any:
     _preload_sklearn_on_windows()
+    try:
+        from storage.nitwitch_upload import apply_python_ssl_cacert_env
+
+        apply_python_ssl_cacert_env()
+    except Exception:  # noqa: BLE001
+        pass
     from sentence_transformers import SentenceTransformer
 
     mid = model_id or DEFAULT_ENCODER_MODEL_ID

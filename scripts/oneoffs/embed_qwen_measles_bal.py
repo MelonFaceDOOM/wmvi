@@ -113,6 +113,22 @@ def run_embed(
     log.info("embed cmd: %s", subprocess.list2cmdline(cmd))
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    try:
+        from storage.nitwitch_upload import apply_python_ssl_cacert_env, resolve_cacert_path
+
+        apply_python_ssl_cacert_env()
+        cacert = resolve_cacert_path()
+        if cacert is not None:
+            for key in ("REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE"):
+                env.setdefault(key, str(cacert))
+            log.info("huggingface SSL CA: %s", cacert)
+        else:
+            log.warning(
+                "no cert.pem / NITWITCH_UPLOAD_CACERT; HuggingFace may fail TLS "
+                "on this PC the same way nitwitch uploads used to"
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("could not apply SSL CA bundle: %s", exc)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     stdout_chunks: list[str] = []
 

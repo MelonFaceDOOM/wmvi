@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from storage.nitwitch_upload import load_upload_config, resolve_cacert_path, upload_file
+from storage.nitwitch_upload import (
+    apply_python_ssl_cacert_env,
+    load_upload_config,
+    resolve_cacert_path,
+    upload_file,
+)
 
 
 def test_load_upload_config_missing(monkeypatch: pytest.MonkeyPatch):
@@ -47,6 +53,36 @@ def test_resolve_cacert_explicit_missing(tmp_path: Path, monkeypatch: pytest.Mon
     with patch("storage.nitwitch_upload.REPO_ROOT", tmp_path):
         with pytest.raises(FileNotFoundError, match="NITWITCH_UPLOAD_CACERT"):
             resolve_cacert_path()
+
+
+def test_apply_python_ssl_cacert_env_sets_unset_vars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    cert = tmp_path / "cert.pem"
+    cert.write_text("-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n")
+    monkeypatch.delenv("NITWITCH_UPLOAD_CACERT", raising=False)
+    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("CURL_CA_BUNDLE", raising=False)
+    with patch("storage.nitwitch_upload.REPO_ROOT", tmp_path):
+        assert apply_python_ssl_cacert_env() == cert.resolve()
+    assert Path(os.environ["REQUESTS_CA_BUNDLE"]) == cert.resolve()
+    assert Path(os.environ["SSL_CERT_FILE"]) == cert.resolve()
+
+
+def test_apply_python_ssl_cacert_env_does_not_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    cert = tmp_path / "cert.pem"
+    cert.write_text("-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n")
+    monkeypatch.delenv("NITWITCH_UPLOAD_CACERT", raising=False)
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/already/set.pem")
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("CURL_CA_BUNDLE", raising=False)
+    with patch("storage.nitwitch_upload.REPO_ROOT", tmp_path):
+        apply_python_ssl_cacert_env()
+    assert os.environ["REQUESTS_CA_BUNDLE"] == "/already/set.pem"
+    assert Path(os.environ["SSL_CERT_FILE"]) == cert.resolve()
 
 
 def test_upload_file_put_with_cacert(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

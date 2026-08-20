@@ -39,6 +39,8 @@ log = logging.getLogger(__name__)
 _HTTP_TIMEOUT_S = 300
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACERT_NAME = "cert.pem"
+# HuggingFace Hub / sentence-transformers use these instead of verify=.
+_PYTHON_SSL_CA_ENV_VARS = ("REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE")
 
 
 def _normalize_base(url: str) -> str:
@@ -72,6 +74,23 @@ def resolve_cacert_path(raw: str | None = None) -> Path | None:
     if default.is_file():
         return default.resolve()
     return None
+
+
+def apply_python_ssl_cacert_env() -> Path | None:
+    """Point requests/OpenSSL at the same corp CA used for nitwitch uploads.
+
+    HuggingFace Hub does not read ``NITWITCH_UPLOAD_CACERT``; it uses
+    ``REQUESTS_CA_BUNDLE`` / ``SSL_CERT_FILE``. Already-set vars are left alone.
+    """
+    path = resolve_cacert_path()
+    if path is None:
+        return None
+    value = str(path)
+    for key in _PYTHON_SSL_CA_ENV_VARS:
+        if not (os.environ.get(key) or "").strip():
+            os.environ[key] = value
+    log.info("python SSL CA bundle: %s", value)
+    return path
 
 
 def load_upload_config() -> tuple[str, str, str, Path | bool]:

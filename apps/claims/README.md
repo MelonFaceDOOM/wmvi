@@ -212,6 +212,8 @@ Do **not** overwrite an existing `bge-large` run — use a new tag.
 
 On **Windows + CUDA**, `sentence_transformers` imports torch before sklearn/pyarrow and can native-crash (empty run dir, no traceback). `embed` / `hierarchy` / LoRA train preload sklearn first; if a one-off script still dies, `import sklearn` before torch.
 
+Corp TLS inspection (`CERTIFICATE_VERIFY_FAILED` / self-signed chain on huggingface.co) is the same issue as nitwitch uploads: Python uses `certifi`, not the Windows trust store. `embed` applies repo-root `cert.pem` / `NITWITCH_UPLOAD_CACERT` to `REQUESTS_CA_BUNDLE` and `SSL_CERT_FILE`.
+
 Use the **same** `--doc-instruction` for embed, gold-label neighbors (via the run), and LoRA train.
 
 ```bash
