@@ -153,6 +153,25 @@ python -m apps.claims cluster --corpus $CORPUS --model-tag $TAG \
   --algorithm kmeans --params-json '{"n_clusters":25}' --save-labels
 ```
 
+### Browse a cluster / hierarchy output
+
+Read-only Streamlit UI: narratives → leaves (size, tightness) → member claims → source post-chunks.
+
+Point `--from` at any single experiment directory (or the `hierarchy_*.json` / `result_*.json` / labels `.npy`). The browser reapplies the `--selection` recorded on the cluster JSON. Live `--filter` runs cannot be reconstructed from the JSON name alone — re-pass the same `--filter` / `--selection`.
+
+```bash
+python -m apps.claims cluster-browse --from \
+  apps/claims/data/experiments/clustering/measles_bal/bge-large/hierarchy_standalone_ok_default_2fa8fd715c
+
+# Same flags as cluster/inspect when the JSON has no named selection:
+python -m apps.claims cluster-browse --from path/to/cluster_dir \
+  --corpus measles_bal --selection standalone_ok
+python -m apps.claims cluster-browse --from path/to/cluster_dir \
+  --corpus resp --filter 'stance:high=0.33'
+```
+
+Requires `streamlit` (`pip install streamlit`).
+
 ### Neighbors / embedder training (needs a run)
 
 ```bash
@@ -237,7 +256,7 @@ python -m apps.claims neighbors --corpus measles --model-tag bge-large \
 | `annotations` / `select` / `selections` | Sidecars and named key sets |
 | `browse` | Generic claim sampling (filters OK; not for probe labeling) |
 | `neighbors` | Nearest neighbors (needs run) |
-| `cluster` / `sweep` / `hierarchy` / `inspect` | Clustering |
+| `cluster` / `sweep` / `hierarchy` / `inspect` / `cluster-browse` | Clustering |
 | `embedder` | Similarity intent / gold / sample / triplets / freeze / train-compare / eval |
 | `runs` / `prep-queries` / `doctor` / `ls-artifacts` | Runs + sanity checks |
 

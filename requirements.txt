@@ -100,5 +100,5 @@ six==1.17.0
 
 # --- Claims / learned stack (optional; torch + Streamlit extras) ---
 # Labelers: python -m apps.claims labeler …
-# Prompt UI: pip install streamlit (see apps/prompt_refinement)
+# Prompt UI / cluster browser: pip install streamlit (see apps/prompt_refinement, cluster-browse)
 # PyTorch CUDA wheels: requirements-torch.txt

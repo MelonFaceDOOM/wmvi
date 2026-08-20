@@ -265,6 +265,37 @@ def build_parser() -> argparse.ArgumentParser:
     insp_p.add_argument("--queries", type=Path, default=None)
     insp_p.set_defaults(func="inspect")
 
+    # --- cluster-browse ---
+    cb_p = sub.add_parser(
+        "cluster-browse",
+        help="Open a Streamlit browser for one cluster/hierarchy output",
+    )
+    _add_corpus_args(cb_p, with_model_tag=True)
+    cb_p.add_argument(
+        "--from",
+        dest="from_path",
+        type=Path,
+        default=None,
+        help="Experiment directory, hierarchy_*.json / result_*.json, or labels .npy",
+    )
+    cb_p.add_argument("--run-dir", type=Path, default=None)
+    cb_p.add_argument("--labels", type=Path, default=None, help="Override labels npy (flat or leaf)")
+    cb_p.add_argument(
+        "--parent-labels",
+        type=Path,
+        default=None,
+        help="Narrative labels npy (hierarchy); inferred from --from when omitted",
+    )
+    cb_p.add_argument(
+        "--claims",
+        type=Path,
+        default=None,
+        help="Override nested claims.json (default: corpora/<corpus>/claims.json)",
+    )
+    add_filter_args(cb_p)
+    cb_p.add_argument("--port", type=int, default=None, help="Streamlit server port")
+    cb_p.set_defaults(func="cluster-browse")
+
     # --- neighbors ---
     nn_p = sub.add_parser(
         "neighbors",
@@ -543,6 +574,10 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.cluster_cmd import cmd_inspect
 
         return cmd_inspect(args)
+    if args.func == "cluster-browse":
+        from apps.claims.cli.cluster_browse_cmd import cmd_cluster_browse
+
+        return cmd_cluster_browse(args)
     if args.func == "neighbors":
         from apps.claims.cli.neighbors_cmd import cmd_neighbors
 
