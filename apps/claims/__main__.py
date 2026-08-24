@@ -296,6 +296,10 @@ def build_parser() -> argparse.ArgumentParser:
     cb_p.add_argument("--port", type=int, default=None, help="Streamlit server port")
     cb_p.set_defaults(func="cluster-browse")
 
+    from apps.claims.cli.demo_cmd import add_demo_parser
+
+    add_demo_parser(sub)
+
     # --- neighbors ---
     nn_p = sub.add_parser(
         "neighbors",
@@ -578,6 +582,10 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.cluster_browse_cmd import cmd_cluster_browse
 
         return cmd_cluster_browse(args)
+    if args.func == "demo":
+        from apps.claims.cli.demo_cmd import cmd_demo
+
+        return cmd_demo(args)
     if args.func == "neighbors":
         from apps.claims.cli.neighbors_cmd import cmd_neighbors
 

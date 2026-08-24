@@ -18,6 +18,7 @@ from apps.claims.clustering import hierarchy as cluster_hierarchy
 from apps.claims.clustering import metrics as cluster_metrics
 from apps.claims.clustering import query_eval
 from apps.claims.clustering import score as cluster_score
+from apps.claims.clustering.browse import portable_run_dir_str
 from apps.claims.clustering.metrics import _cluster_medoid, _per_cluster_mean_intra_cosine
 from apps.claims.clustering.score import HierarchyGuards, HierarchyWeights, ObjectiveGuards, ObjectiveWeights
 from apps.claims.types import EmbedConfig
@@ -326,7 +327,7 @@ def cmd_cluster(args: Namespace) -> int:
             queries=queries,
             query_vectors=query_vectors,
         )
-        payload["run_dir"] = str(run_dir)
+        payload["run_dir"] = portable_run_dir_str(run_dir)
         payload["model_id"] = config.model_id
         if selection_name:
             payload["selection"] = selection_name
@@ -454,7 +455,7 @@ def cmd_hierarchy(args: Namespace) -> int:
             seed=seed,
         )
         payload: dict[str, Any] = {
-            "run_dir": str(run_dir),
+            "run_dir": portable_run_dir_str(run_dir),
             "model_id": config.model_id,
             "leaf_algorithm": leaf_algorithm,
             "leaf_params": leaf_params,
@@ -668,7 +669,7 @@ def cmd_inspect(args: Namespace) -> int:
             "mode": mode,
             "selected_cluster_ids": selected,
             "clusters": clusters,
-            "run_dir": str(run_dir),
+            "run_dir": portable_run_dir_str(run_dir),
             "labels_path": str(labels_path),
         }
         if out_dir is not None:
@@ -763,7 +764,7 @@ def cmd_sweep(args: Namespace) -> int:
             "sweep_path": str(sweep_path),
             "best": best,
             "selection": selection_name,
-            "run_dir": str(run_dir),
+            "run_dir": portable_run_dir_str(run_dir),
         }
     )
     return 0

@@ -90,3 +90,73 @@ def test_parent_id_for_cluster():
     )
     assert parent is not None
     assert int(parent) >= 0
+
+
+def test_agglomerative_distance_threshold_on_blobs():
+    from apps.claims.clustering import cluster as clustering
+
+    rng = np.random.default_rng(0)
+    blobs = []
+    for offset in ((0.0, 0.0, 0.0, 0.0), (6.0, 0.0, 0.0, 0.0), (0.0, 6.0, 0.0, 0.0)):
+        noise = rng.normal(0, 0.02, size=(8, 4)).astype(np.float32)
+        blobs.append(noise + np.asarray(offset, dtype=np.float32))
+    vectors = np.vstack(blobs)
+
+    one = clustering.run_clustering(
+        vectors,
+        algorithm="agglomerative",
+        params={"reduce": "none", "distance_threshold": 100.0},
+        seed=0,
+    )
+    assert one.n_clusters == 1
+
+    three = clustering.run_clustering(
+        vectors,
+        algorithm="agglomerative",
+        params={"reduce": "none", "distance_threshold": 1.0},
+        seed=0,
+    )
+    assert three.n_clusters == 3
+
+    many = clustering.run_clustering(
+        vectors,
+        algorithm="agglomerative",
+        params={"reduce": "none", "n_clusters": 3},
+        seed=0,
+    )
+    assert many.n_clusters == 3
+
+
+def test_orphan_leaves_below_narrative_cosine():
+    rng = np.random.default_rng(1)
+    a = rng.normal(0, 0.02, size=(8, 4)).astype(np.float32) + np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    b = rng.normal(0, 0.02, size=(8, 4)).astype(np.float32) + np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
+    vectors = np.vstack([a, b])
+    vectors = vectors / (np.linalg.norm(vectors, axis=1, keepdims=True) + 1e-9)
+
+    forced = build_hierarchy(
+        vectors,
+        leaf_algorithm="kmeans",
+        leaf_params={"n_clusters": 2, "reduce": "none"},
+        narrative_algorithm="agglomerative",
+        narrative_params={"n_clusters": 1, "reduce": "none"},
+        seed=0,
+    )
+    assert forced.n_narratives == 1
+    assert int((forced.narrative_labels == -1).sum()) == 0
+
+    orphaned = build_hierarchy(
+        vectors,
+        leaf_algorithm="kmeans",
+        leaf_params={"n_clusters": 2, "reduce": "none"},
+        narrative_algorithm="agglomerative",
+        narrative_params={
+            "n_clusters": 1,
+            "reduce": "none",
+            "min_leaf_narrative_cosine": 0.5,
+        },
+        seed=0,
+    )
+    assert -1 in orphaned.leaf_to_narrative.values()
+    assert int((orphaned.narrative_labels == -1).sum()) >= 8
+    assert orphaned.n_narratives == 1

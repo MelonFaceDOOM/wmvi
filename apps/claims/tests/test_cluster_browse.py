@@ -90,6 +90,32 @@ def test_parse_selection_label():
 def test_infer_corpus_from_run_dir():
     p = Path("/tmp/apps/claims/data/runs/measles_bal/bge-large")
     assert cluster_browse.infer_corpus_from_run_dir(p) == ("measles_bal", "bge-large")
+    win = r"C:\projects\wmvi\apps\claims\data\runs\measles2\qwen3-emb-8b"
+    assert cluster_browse.infer_corpus_from_run_dir(win) == ("measles2", "qwen3-emb-8b")
+    assert cluster_browse.portable_run_dir_str(win) == "runs/measles2/qwen3-emb-8b"
+    assert cluster_browse.infer_corpus_from_run_dir("runs/measles2/qwen3-emb-8b") == (
+        "measles2",
+        "qwen3-emb-8b",
+    )
+
+
+def test_resolve_run_dir_from_windows_path(isolated_data: Path):
+    corpus_mod.create_corpus("measles2")
+    corp = corpus_mod.get_corpus("measles2")
+    texts = ["one claim", "two claim"]
+    sources = [[{"task_id": f"t{i}:0", "claim_index": 0, "row_id": f"t{i}:0:0"}] for i in range(2)]
+    _write_run(corp.run_dir("qwen3-emb-8b"), texts, sources)
+    exp = corp.experiment_dir("qwen3-emb-8b", "hierarchy_default_x")
+    exp.mkdir(parents=True)
+    np.save(exp / "leaf_labels_x.npy", np.asarray([0, 1], dtype=int))
+    np.save(exp / "narrative_labels_x.npy", np.asarray([0, 0], dtype=int))
+    claims_io.write_json(
+        exp / "hierarchy_x.json",
+        {"run_dir": r"C:\projects\wmvi\apps\claims\data\runs\measles2\qwen3-emb-8b"},
+    )
+    bundle = cluster_browse.load_browse_bundle(exp)
+    assert bundle.corpus == "measles2"
+    assert bundle.labels.shape == (2,)
 
 
 def test_hierarchy_browse_with_selection(isolated_data: Path):

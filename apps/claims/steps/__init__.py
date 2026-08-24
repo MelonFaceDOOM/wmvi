@@ -8,6 +8,7 @@ from typing import Any
 from apps.claims import annotations as ann_mod
 from apps.claims import io as claims_io
 from apps.claims import selections as sel_mod
+from apps.claims.clustering.browse import portable_run_dir_str
 from apps.claims.grouping import group as grouping
 from apps.claims.pipeline import Ctx, groups_source_hash
 from apps.claims.types import EmbedConfig
@@ -192,7 +193,7 @@ def step_cluster(
             "coverage_pct": metrics.get("coverage_pct"),
             "mean_intra_cosine": metrics.get("mean_intra_cosine"),
         }
-    payload["run_dir"] = str(run_dir)
+    payload["run_dir"] = portable_run_dir_str(run_dir)
     if selection_name:
         payload["selection"] = selection_name
         payload["n_selected"] = int(vectors.shape[0])

@@ -20,7 +20,7 @@ from apps.claims import io as claims_io
 from apps.claims import selections as sel_mod
 from apps.claims.claims_data import context_row_for_chunk, load_posts_from_claims_json, stable_task_id
 
-_RUNS_TAIL = re.compile(r"[/\\]runs[/\\]([^/\\]+)[/\\]([^/\\]+)$")
+_RUNS_TAIL = re.compile(r"(?:^|/)runs/([^/]+)/([^/]+)/?$")
 
 POST_META_KEYS = (
     "platform",
@@ -110,15 +110,30 @@ def parse_selection_label(raw: str | None) -> SelectionHint:
     return SelectionHint(raw=text, selection=selection, filter_annotations=tuple(filters))
 
 
+def _normalize_run_dir_str(run_dir: Path | str) -> str:
+    return str(run_dir).strip().replace("\\", "/").rstrip("/")
+
+
 def infer_corpus_from_run_dir(run_dir: Path | str | None) -> tuple[str | None, str | None]:
-    """Return ``(corpus, model_tag)`` from ``.../runs/<corpus>/<tag>``."""
+    """Return ``(corpus, model_tag)`` from ``.../runs/<corpus>/<tag>``.
+
+    Accepts POSIX or Windows paths. Does not ``resolve()`` first, so a GPU
+    ``C:\\…\\runs\\measles2\\qwen3-emb-8b`` still parses on another machine.
+    """
     if run_dir is None:
         return None, None
-    p = Path(run_dir).resolve()
-    m = _RUNS_TAIL.search(str(p))
+    m = _RUNS_TAIL.search(_normalize_run_dir_str(run_dir))
     if not m:
         return None, None
     return m.group(1), m.group(2)
+
+
+def portable_run_dir_str(run_dir: Path | str) -> str:
+    """Stable JSON value: ``runs/<corpus>/<tag>`` when the path matches layout."""
+    slug, tag = infer_corpus_from_run_dir(run_dir)
+    if slug and tag:
+        return f"runs/{slug}/{tag}"
+    return _normalize_run_dir_str(run_dir)
 
 
 def _pick_stamp_file(paths: list[Path], stamp: str | None) -> Path | None:
@@ -272,16 +287,31 @@ def resolve_run_dir(
 ) -> Path:
     if run_dir is not None:
         return Path(run_dir)
-    if output.run_dir is not None and Path(output.run_dir).is_dir():
-        return Path(output.run_dir)
+
+    stored = output.run_dir
+    inferred_slug, inferred_tag = infer_corpus_from_run_dir(stored)
+
+    if stored is not None:
+        raw = _normalize_run_dir_str(stored)
+        candidates = [Path(str(stored)), Path(raw)]
+        if not Path(raw).is_absolute():
+            candidates.append(claims_io.data_root() / raw)
+        marker = "apps/claims/data/"
+        if marker in raw:
+            candidates.append(claims_io.data_root() / raw.split(marker, 1)[1])
+        for cand in candidates:
+            try:
+                if cand.is_dir():
+                    return cand
+            except OSError:
+                continue
+
+    slug = corpus or inferred_slug
+    tag = model_tag or inferred_tag
+    if slug and tag:
+        return corpus_mod.get_corpus(slug).run_dir(tag)
     if corpus:
-        tag = model_tag
-        if not tag:
-            _, inferred = infer_corpus_from_run_dir(output.run_dir)
-            tag = inferred
-        if not tag:
-            raise ValueError("Provide --model-tag (or a cluster JSON with run_dir) to locate the embed run")
-        return corpus_mod.get_corpus(corpus).run_dir(tag)
+        raise ValueError("Provide --model-tag (or a cluster JSON with run_dir) to locate the embed run")
     raise ValueError("Could not resolve embed run: pass --run-dir or --corpus/--model-tag")
 
 

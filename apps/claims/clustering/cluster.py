@@ -3,7 +3,8 @@
 Algorithms:
 - ``kmeans``: MiniBatchKMeans / KMeans. Param: ``n_clusters``.
 - ``dbscan``: density-based on cosine distance. Params: ``eps``, ``min_samples``.
-- ``agglomerative``: Ward linkage; guarded to small sets (O(n^2) memory).
+- ``agglomerative``: Ward linkage; ``n_clusters`` or ``distance_threshold`` (not both).
+  Guarded to small sets (O(n^2) memory).
 - ``hdbscan``: variable-density clusters via sklearn HDBSCAN (optional PCA/UMAP prep).
 - ``knn_louvain``: kNN graph + Louvain communities (optional PCA/UMAP prep).
 """
@@ -175,8 +176,16 @@ def run_clustering(vectors: np.ndarray, *, algorithm: str, params: dict[str, Any
             )
         from sklearn.cluster import AgglomerativeClustering
 
-        k = max(1, min(int(params.get("n_clusters", 12)), n))
-        labels = AgglomerativeClustering(n_clusters=k).fit_predict(work)
+        thresh = params.get("distance_threshold")
+        if thresh is not None:
+            labels = AgglomerativeClustering(
+                n_clusters=None,
+                distance_threshold=float(thresh),
+                linkage="ward",
+            ).fit_predict(work)
+        else:
+            k = max(1, min(int(params.get("n_clusters", 12)), n))
+            labels = AgglomerativeClustering(n_clusters=k).fit_predict(work)
         return _summarize(labels, prep_meta=prep_meta)
 
     if algorithm == "hdbscan":
