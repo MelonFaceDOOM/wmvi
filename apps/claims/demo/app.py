@@ -6,6 +6,7 @@ import argparse
 import os
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -13,6 +14,123 @@ from apps.claims.demo import ANTI_CUTOFF
 from apps.claims.demo import db as demo_db
 from apps.claims.demo import platforms as plat
 from apps.claims.demo.db import DemoFilters, TRENDING_DAYS
+
+_PLATFORM_COLORS = {
+    "Reddit": "#FF4500",
+    "YouTube comment": "#FF0000",
+    "YouTube video": "#CC0000",
+    "Telegram": "#2AABEE",
+    "Podcast": "#7C3AED",
+    "Twitter / X": "#1D9BF0",
+    "News": "#64748B",
+}
+
+
+def _iso_week_monday(week: str) -> pd.Timestamp:
+    raw = str(week or "")
+    try:
+        year_s, week_s = raw.split("-W", 1)
+        return pd.Timestamp.fromisocalendar(int(year_s), int(week_s), 1)
+    except (ValueError, TypeError):
+        return pd.NaT
+
+
+def _monday_to_week(ts: pd.Timestamp) -> str:
+    iso = ts.isocalendar()
+    return f"{int(iso.year)}-W{int(iso.week):02d}"
+
+
+def _fill_weeks(df: pd.DataFrame, *, stacked: bool) -> pd.DataFrame:
+    """Put a 0 on every ISO week so lines/areas do not jump across gaps."""
+    start = df["date"].min()
+    end = df["date"].max()
+    weeks = pd.date_range(start, end, freq="7D")
+    if stacked and "platform" in df.columns:
+        platforms = (
+            df.groupby("platform", sort=False)["n"].sum().sort_values(ascending=False).index.tolist()
+        )
+        idx = pd.MultiIndex.from_product([weeks, platforms], names=["date", "platform"])
+        out = (
+            df.groupby(["date", "platform"], as_index=False)["n"]
+            .sum()
+            .set_index(["date", "platform"])
+            .reindex(idx, fill_value=0)
+            .reset_index()
+        )
+    else:
+        out = (
+            df.groupby("date", as_index=False)["n"]
+            .sum()
+            .set_index("date")
+            .reindex(weeks, fill_value=0)
+            .rename_axis("date")
+            .reset_index()
+        )
+    out["week"] = out["date"].map(_monday_to_week)
+    return out
+
+
+def _x_time() -> alt.X:
+    return alt.X(
+        "date:T",
+        title=None,
+        axis=alt.Axis(format="%b %Y", labelAngle=0, tickCount=8, labelPadding=6),
+    )
+
+
+def _y_count() -> alt.Y:
+    return alt.Y("n:Q", title="Occurrences", axis=alt.Axis(format="~s", tickMinStep=1))
+
+
+def _chart_weekly(rows: list[dict], *, stacked: bool) -> None:
+    if not rows:
+        st.caption("No weekly counts in this filter.")
+        return
+    df = pd.DataFrame(rows)
+    df["date"] = df["week"].map(_iso_week_monday)
+    df = df.dropna(subset=["date"])
+    if df.empty:
+        st.caption("No weekly counts in this filter.")
+        return
+    df = _fill_weeks(df, stacked=stacked)
+    tooltip = [
+        alt.Tooltip("week:N", title="Week"),
+        alt.Tooltip("n:Q", title="Occurrences", format=","),
+    ]
+    if stacked and "platform" in df.columns:
+        labels = [
+            str(p)
+            for p in df.groupby("platform", sort=False)["n"].sum().sort_values(ascending=False).index
+        ]
+        colors = [_PLATFORM_COLORS.get(p, "#64748B") for p in labels]
+        tooltip.insert(1, alt.Tooltip("platform:N", title="Platform"))
+        chart = (
+            alt.Chart(df)
+            .mark_area(opacity=0.85, interpolate="linear", line=True)
+            .encode(
+                x=_x_time(),
+                y=alt.Y(
+                    "n:Q",
+                    title="Occurrences",
+                    stack="zero",
+                    axis=alt.Axis(format="~s", tickMinStep=1),
+                ),
+                color=alt.Color(
+                    "platform:N",
+                    title=None,
+                    scale=alt.Scale(domain=labels, range=colors),
+                    legend=alt.Legend(orient="bottom", columns=3, title=None),
+                ),
+                tooltip=tooltip,
+            )
+        )
+    else:
+        chart = (
+            alt.Chart(df)
+            .mark_line(interpolate="linear", strokeWidth=2)
+            .encode(x=_x_time(), y=_y_count(), tooltip=tooltip)
+        )
+    st.altair_chart(chart.properties(height=280), width="stretch")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -24,17 +142,6 @@ def _parse_args() -> argparse.Namespace:
         if env:
             args.bundle = Path(env)
     return args
-
-
-def _chart_weekly(rows: list[dict], *, stacked: bool) -> None:
-    if not rows:
-        st.caption("No weekly counts in this filter.")
-        return
-    df = pd.DataFrame(rows)
-    if stacked and "platform" in df.columns:
-        st.area_chart(df, x="week", y="n", color="platform")
-    else:
-        st.line_chart(df, x="week", y="n")
 
 
 def _set_page(**kwargs: str | int) -> None:
@@ -61,12 +168,6 @@ def _init_sidebar_state(groups: list[str]) -> None:
         st.session_state.demo_sort = sort if sort in ("trending", "volume") else "trending"
 
 
-def _set_platform_group(gid: str) -> None:
-    st.session_state.demo_plats = [gid]
-    st.query_params["plats"] = gid
-    st.rerun()
-
-
 def _card_caption(row: dict, filters: DemoFilters, extra: str = "") -> str:
     bits: list[str] = []
     n_occ = int(row.get("n_occ") or 0)
@@ -83,10 +184,8 @@ def _platform_bar(
     conn,
     filters: DemoFilters,
     *,
-    key_prefix: str,
     narrative_id: int | None = None,
     leaf_id: int | None = None,
-    clickable: bool = True,
 ) -> None:
     bar_filters = DemoFilters(anti=filters.anti, platforms=(), sort=filters.sort)
     grouped = demo_db.platform_counts(
@@ -94,15 +193,33 @@ def _platform_bar(
     )
     if not grouped:
         return
-    df = pd.DataFrame({"n": [r["n"] for r in grouped]}, index=[r["label"] for r in grouped])
-    st.bar_chart(df)
-    if not clickable:
-        return
-    cols = st.columns(max(len(grouped), 1))
-    for col, row in zip(cols, grouped):
-        with col:
-            if st.button(row["label"], key=f"{key_prefix}_{row['platform']}"):
-                _set_platform_group(str(row["platform"]))
+    df = pd.DataFrame({"platform": [r["label"] for r in grouped], "n": [r["n"] for r in grouped]})
+    labels = list(df["platform"])
+    colors = [_PLATFORM_COLORS.get(p, "#64748B") for p in labels]
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            y=alt.Y(
+                "platform:N",
+                sort="-x",
+                title=None,
+                axis=alt.Axis(labelAngle=0, labelLimit=160, labelPadding=8),
+            ),
+            x=alt.X("n:Q", title="Occurrences", axis=alt.Axis(format="~s", tickMinStep=1)),
+            color=alt.Color(
+                "platform:N",
+                scale=alt.Scale(domain=labels, range=colors),
+                legend=None,
+            ),
+            tooltip=[
+                alt.Tooltip("platform:N", title="Platform"),
+                alt.Tooltip("n:Q", title="Occurrences", format=","),
+            ],
+        )
+        .properties(height=max(140, 36 * len(df)))
+    )
+    st.altair_chart(chart, width="stretch")
 
 
 def _weekly(conn, filters: DemoFilters, selected_groups: list[str], **scope) -> None:
@@ -183,7 +300,7 @@ def _home(conn, filters: DemoFilters, selected_groups: list[str]) -> None:
         st.caption(f"{ts_min} → {ts_max}  ·  {meta.get('corpus', '')}")
 
     st.subheader("Platforms")
-    _platform_bar(conn, filters, key_prefix="chip_home")
+    _platform_bar(conn, filters)
 
     st.subheader("Narratives")
     if filters.sort == "trending" and ts_max:
@@ -265,9 +382,7 @@ def _leaf_page(conn, filters: DemoFilters, selected_groups: list[str]) -> None:
     _weekly(conn, filters, selected_groups, leaf_id=lid)
 
     st.subheader("Platforms")
-    _platform_bar(
-        conn, filters, key_prefix=f"chip_leaf_{lid}", leaf_id=lid, clickable=False
-    )
+    _platform_bar(conn, filters, leaf_id=lid)
 
     st.subheader("Member claims")
     claims = demo_db.member_claims(conn, lid, filters)
