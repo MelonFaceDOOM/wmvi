@@ -24,13 +24,16 @@ sudo apt install ffmpeg
 sudo apt install firefox-esr   # only required for YouTube cookie export via xrdp
 ```
 
-**Node.js 20.x** (required for yt-dlp JS challenges / YouTube):
+**Deno ≥ 2.3.0** (required for yt-dlp YouTube JS challenges; Node 20 is not supported):
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node --version   # expect v20.x or newer
+curl -fsSL https://deno.land/install.sh | sh
+export PATH="$HOME/.deno/bin:$PATH"
+deno --version   # first line like: deno 2.3.0 ...
+sudo ln -sf "$HOME/.deno/bin/deno" /usr/local/bin/deno   # systemd PATH does not include ~/.deno
 ```
+
+Optional: set `YT_DENO_BIN=/path/to/deno` in `.env` instead of the symlink.
 
 Optional: [gpu-remote-desktop.md](gpu-remote-desktop.md) for xrdp + XFCE if the GPU box is headless.
 
@@ -41,6 +44,7 @@ Copy/configure `.env` at repo root. On gpu-pc, typical entries:
 - `SERVICE_ENV=dev` (or `prod` if this box writes to prod — uncommon)
 - `DEV_PGHOST`, `DEV_PGPORT`, `DEV_PGDATABASE`, `DEV_PGUSER`, `DEV_PGPASSWORD`
 - `YT_PROXY_URL` — optional Proxidize HTTP proxy for YouTube yt-dlp only ([youtube.md](youtube.md))
+- `YT_DENO_BIN` — optional path to Deno if systemd cannot see `~/.deno/bin/deno`
 
 Use SSH tunnel vars if Postgres is reached via tunnel (`USE_SSH_TUNNEL`, `SSH_HOST`, etc.) — checklist `db` group validates these.
 

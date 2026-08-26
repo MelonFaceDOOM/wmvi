@@ -1,9 +1,12 @@
-import subprocess
-from pathlib import Path
 import os
+import pwd
+import re
 import shutil
+import subprocess
 import sys
 import logging
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 from storage.yt_proxy import yt_dlp_proxy_args
@@ -12,6 +15,12 @@ from .yt_download_errors import DownloadFailed, DownloadFailureInfo, classify_yt
 load_dotenv()
 
 log = logging.getLogger(__name__)
+
+# Deno is the yt-dlp EJS default; Node must be >= 22 (v20 is reported unsupported).
+DENO_MIN_VERSION = (2, 3, 0)
+# tv_downgraded is in YouTube's default client set and fails logged-in cookies
+# with "The page needs to be reloaded". web_embedded is an extra client.
+YT_EXTRACTOR_ARGS = "youtube:player_client=default,web_embedded,-tv_downgraded"
 
 
 def resolve_yt_dlp_bin() -> str:
@@ -57,9 +66,65 @@ def load_firefox_user_agent() -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-YT_DLP_BIN = resolve_yt_dlp_bin()
+def parse_deno_version(version_stdout: str) -> tuple[int, int, int] | None:
+    m = re.search(r"deno\s+(\d+)\.(\d+)\.(\d+)", version_stdout, re.I)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
+
+
+def resolve_deno_bin() -> str:
+    """Locate deno for yt-dlp --js-runtimes (PATH, ~/.deno, repo owner, YT_DENO_BIN)."""
+    candidates: list[Path] = []
+    override = os.environ.get("YT_DENO_BIN", "").strip()
+    if override:
+        candidates.append(Path(override))
+    which = shutil.which("deno")
+    if which:
+        candidates.append(Path(which))
+    candidates.append(Path.home() / ".deno" / "bin" / "deno")
+    try:
+        owner = pwd.getpwuid(get_project_root().stat().st_uid)
+        candidates.append(Path(owner.pw_dir) / ".deno" / "bin" / "deno")
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path)
+
+    raise RuntimeError(
+        "deno not found (need >= 2.3.0). Install from https://deno.land, "
+        "symlink to /usr/local/bin/deno for systemd, or set YT_DENO_BIN in .env"
+    )
+
+
+def js_runtime_arg() -> str:
+    return f"deno:{resolve_deno_bin()}"
+
+
+def yt_dlp_youtube_args(*, cookies: Path, user_agent: str) -> list[str]:
+    """Shared yt-dlp flags for YouTube (cookies, UA, Deno EJS, player clients, proxy)."""
+    return [
+        "--no-playlist",
+        "--js-runtimes",
+        js_runtime_arg(),
+        "--cookies",
+        str(cookies),
+        "--add-headers",
+        f"User-Agent:{user_agent}",
+        "--extractor-args",
+        YT_EXTRACTOR_ARGS,
+        *yt_dlp_proxy_args(),
+    ]
+
+
 YT_COOKIES_PATH = get_youtube_cookies_path()
-FIREFOX_UA = load_firefox_user_agent()
 
 
 def _log_download_failure(url: str, info: DownloadFailureInfo) -> None:
@@ -80,26 +145,24 @@ def download_yt_audio(url: str, audio_path: str) -> None:
 
     cookies_exists = YT_COOKIES_PATH.exists()
     cookies_size = YT_COOKIES_PATH.stat().st_size if cookies_exists else 0
-    node_bin = shutil.which("node")
+    yt_dlp_bin = resolve_yt_dlp_bin()
+    deno_bin = resolve_deno_bin()
+    ua = load_firefox_user_agent()
 
     log.debug(
-        "yt-dlp setup: bin=%s node=%s cookies=%s cookies_exists=%s cookies_size=%s ua_len=%s url=%s",
-        YT_DLP_BIN,
-        node_bin,
+        "yt-dlp setup: bin=%s deno=%s cookies=%s cookies_exists=%s cookies_size=%s ua_len=%s url=%s",
+        yt_dlp_bin,
+        deno_bin,
         YT_COOKIES_PATH,
         cookies_exists,
         cookies_size,
-        len(FIREFOX_UA),
+        len(ua),
         url,
     )
 
     cmd = [
-        YT_DLP_BIN,
-        "--no-playlist",
-        "--js-runtimes", "node",
-        "--cookies", str(YT_COOKIES_PATH),
-        "--add-headers", f"User-Agent:{FIREFOX_UA}",
-        *yt_dlp_proxy_args(),
+        yt_dlp_bin,
+        *yt_dlp_youtube_args(cookies=YT_COOKIES_PATH, user_agent=ua),
         "-f", "bestaudio/best",
         "--extract-audio",
         "--audio-format", "mp3",

@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import importlib
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -266,25 +265,36 @@ def check_yt_dlp_bin(_ctx: CheckContext) -> Result:
     return _ok(f"yt-dlp at {bin_path}")
 
 
-def check_node(_ctx: CheckContext) -> Result:
-    node = shutil.which("node")
-    if not node:
-        return _fail("node not found in PATH")
+def check_deno(_ctx: CheckContext) -> Result:
+    from services.youtube.transcriber.download_yt_audio import (
+        DENO_MIN_VERSION,
+        parse_deno_version,
+        resolve_deno_bin,
+    )
+
+    try:
+        deno = resolve_deno_bin()
+    except RuntimeError as e:
+        return _fail(str(e))
     try:
         out = subprocess.run(
-            [node, "--version"],
+            [deno, "--version"],
             check=True,
             capture_output=True,
             text=True,
             timeout=10,
         )
-        version = out.stdout.strip()
+        version_text = (out.stdout or out.stderr or "").strip()
     except Exception as e:
-        return _fail(f"node --version failed: {e}")
-    m = re.match(r"v(\d+)", version)
-    if m and int(m.group(1)) < 20:
-        return _warn(f"{version} at {node} (recommend v20+)")
-    return _ok(f"{version} at {node}")
+        return _fail(f"deno --version failed: {e}")
+    parsed = parse_deno_version(version_text)
+    first_line = version_text.splitlines()[0] if version_text else "unknown"
+    if parsed is None:
+        return _warn(f"{first_line} at {deno} (could not parse version; need >= 2.3.0)")
+    if parsed < DENO_MIN_VERSION:
+        need = ".".join(str(p) for p in DENO_MIN_VERSION)
+        return _fail(f"{first_line} at {deno} (need Deno >= {need})")
+    return _ok(f"{first_line} at {deno}")
 
 
 def check_youtube_auth_files(_ctx: CheckContext) -> Result:
@@ -333,26 +343,23 @@ def check_yt_dlp_smoke(_ctx: CheckContext) -> Result:
     if not cookies.is_file() or not agent.is_file():
         return _fail("run check 12 (youtube_auth_files) first; missing private/ files")
 
-    from storage.yt_proxy import yt_dlp_proxy_args
-
     try:
         yt_dlp = _resolve_yt_dlp_bin()
     except RuntimeError as e:
         return _fail(str(e))
 
     ua = agent.read_text(encoding="utf-8").strip()
+    from services.youtube.transcriber.download_yt_audio import yt_dlp_youtube_args
+
     with tempfile.TemporaryDirectory() as tmp:
         out_base = Path(tmp) / "yt_checklist_test"
+        try:
+            youtube_args = yt_dlp_youtube_args(cookies=cookies, user_agent=ua)
+        except RuntimeError as e:
+            return _fail(str(e))
         cmd = [
             yt_dlp,
-            "--no-playlist",
-            "--js-runtimes",
-            "node",
-            "--cookies",
-            str(cookies),
-            "--add-headers",
-            f"User-Agent:{ua}",
-            *yt_dlp_proxy_args(),
+            *youtube_args,
             "-f",
             "bestaudio/best",
             "--extract-audio",
@@ -441,7 +448,7 @@ CHECKS: list[Check] = [
     Check(8, "db_prod", "db", False, check_db_prod),
     Check(9, "ssh_tunnel", "db", False, check_ssh_tunnel),
     Check(10, "yt_dlp_bin", "youtube", False, check_yt_dlp_bin),
-    Check(11, "node", "youtube", False, check_node),
+    Check(11, "deno", "youtube", False, check_deno),
     Check(12, "youtube_auth_files", "youtube", False, check_youtube_auth_files),
     Check(13, "yt_proxy", "youtube", False, check_yt_proxy),
     Check(14, "yt_dlp_smoke", "youtube", True, check_yt_dlp_smoke),

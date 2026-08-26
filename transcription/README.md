@@ -28,7 +28,7 @@ Podcast transcription does **not** need Firefox, cookies, or xrdp.
 
 | Doc | Scope |
 |-----|--------|
-| [setup.md](setup.md) | Shared GPU env: venv, ffmpeg, node, checklist |
+| [setup.md](setup.md) | Shared GPU env: venv, ffmpeg, Deno, checklist |
 | [gpu-remote-desktop.md](gpu-remote-desktop.md) | xrdp install and connect |
 | [youtube.md](youtube.md) | YouTube cookies, proxy, yt-dlp troubleshooting |
 | [services/youtube/transcriber/README.md](../services/youtube/transcriber/README.md) | Run / install YouTube transcriber |
@@ -42,7 +42,7 @@ Podcast transcription does **not** need Firefox, cookies, or xrdp.
 |-------|--------|
 | `core` | `.env`, Python, ffmpeg, imports, CUDA, optional Whisper smoke |
 | `db` | DEV/PROD Postgres, SSH tunnel |
-| `youtube` | yt-dlp, node, cookie files, proxy probe, download smoke |
+| `youtube` | yt-dlp, Deno, cookie files, proxy probe, download smoke |
 | `podcast` | Download one episode URL from DB |
 
 ```bash

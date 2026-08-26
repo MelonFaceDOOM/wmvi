@@ -27,6 +27,6 @@ See [services/readme.md](../../readme.md).
 
 ## Setup and troubleshooting
 
-Cookies, proxy, xrdp, and failure triage: **[transcription/youtube.md](../../../transcription/youtube.md)**
+Cookies, proxy, Deno, xrdp, and failure triage: **[transcription/youtube.md](../../../transcription/youtube.md)**
 
 GPU env and checklist: [transcription/README.md](../../../transcription/README.md)

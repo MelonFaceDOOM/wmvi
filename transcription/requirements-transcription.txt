@@ -3,7 +3,7 @@
 
 faster-whisper==1.2.1
 ctranslate2==4.6.3
-yt-dlp[default]  # includes yt-dlp-ejs (YouTube JS challenges); needs system node
+yt-dlp[default]  # includes yt-dlp-ejs (YouTube JS challenges); needs Deno >= 2.3.0
 # Audio handling
 ffmpeg-python
 soundfile
