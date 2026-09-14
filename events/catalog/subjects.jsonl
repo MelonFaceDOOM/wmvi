@@ -1,0 +1,1 @@
+{"slug": "measles", "name": "Measles", "kind": "disease", "description": "Events directly concerning measles infection, outbreaks, exposure, prevention, or response.", "is_active": true, "terms": {"measles": "canonical", "measles vaccine": "discovery", "mmr vaccine": "discovery", "mmr autism": "discovery"}}

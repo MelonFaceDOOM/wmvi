@@ -39,7 +39,7 @@ models/{labelers,embedders}/<intent>/<version>/ # immutable artifacts + active.j
 models/registered/<tag>/                        # short embedder tags
 
 runs/<corpus>/<tag>/                            # vectors.npy, index.json, metrics.json
-experiments/clustering/...                      # cluster / hierarchy outputs
+experiments/clustering/...                      # cluster outputs
 experiments/model_eval/...                      # candidate eval (not promoted annotations)
 fixtures/                                       # eval queries, discovery logs
 ```
@@ -51,7 +51,7 @@ fixtures/                                       # eval queries, discovery logs
 | `labeler sample` / train / apply | `groups.json` (no embed run); sample requires gold gate |
 | `browse` | `groups.json` (generic sampling; not for labeling probes) |
 | `neighbors` / triplet discovery | embed run |
-| `cluster` / `hierarchy` | embed run (+ optional `--filter`) |
+| `cluster` | embed run (+ optional `--filter`) |
 
 ```
 claims.json → group → groups.json
@@ -64,7 +64,7 @@ claims.json → group → groups.json
 
 ## Typical workflows
 
-### New corpus → group → embed → hierarchy
+### New corpus → group → embed → cluster
 
 ```bash
 python -m apps.claims doctor --skip-model
@@ -75,8 +75,17 @@ python -m apps.claims validate --corpus measles --human
 python -m apps.claims group --corpus measles
 
 python -m apps.claims embed --corpus measles --model bge-large --model-tag bge-large
-python -m apps.claims hierarchy --corpus measles --model-tag bge-large \
-  --preset default --save-labels
+python -m apps.claims cluster --corpus measles --model-tag bge-large \
+  --algorithm kmeans --n-clusters-frac 0.02 --save-labels
+python -m apps.claims cluster-split --from \
+  apps/claims/data/experiments/clustering/measles/bge-large/cluster_<stamp>
+python -m apps.claims cluster-merge --from \
+  apps/claims/data/experiments/clustering/measles/bge-large/cluster_<stamp>_split \
+  --estimate-only
+python -m apps.claims cluster-merge --from \
+  apps/claims/data/experiments/clustering/measles/bge-large/cluster_<stamp>_split
+python -m apps.claims cluster-browse --from \
+  apps/claims/data/experiments/clustering/measles/bge-large/cluster_<stamp>_split_merge
 ```
 
 ### Reddit-balanced derived corpus
@@ -153,15 +162,35 @@ python -m apps.claims cluster --corpus $CORPUS --model-tag $TAG \
   --algorithm kmeans --params-json '{"n_clusters":25}' --save-labels
 ```
 
-### Browse a cluster / hierarchy output
+### Browse a cluster output
 
-Read-only Streamlit UI: narratives → leaves (size, tightness) → member claims → source post-chunks.
+Read-only Streamlit UI: a sortable table of leaves (n grouped texts, mean intra cosine, nearest-leaf medoid cosine, 2-means split gain, mean extract alignment) → member claims (sorted by cosine to medoid, painted by 2-means child A/B) → source post-chunks. **Neighbors** is leaf–leaf (other medoids), not claim-level kNN.
 
-Point `--from` at any single experiment directory (or the `hierarchy_*.json` / `result_*.json` / labels `.npy`). The browser reapplies the `--selection` recorded on the cluster JSON. Live `--filter` runs cannot be reconstructed from the JSON name alone — re-pass the same `--filter` / `--selection`.
+**Max mean align** filters leaves by extract `claim_vaccine_alignment_score` (0 = anti-vaccine framing, 1 = pro). Set to `0.33` for anti-leaning leaves. Mixed leaves sit near 0.5.
+
+Point `--from` at a `cluster --save-labels` experiment directory (or the `result_*.json` / `labels_*.npy`). The browser reapplies the `--selection` recorded on the cluster JSON. Live `--filter` runs cannot be reconstructed from the JSON name alone — re-pass the same `--filter` / `--selection`.
+
+Start at **k ≈ 2% of grouped claims** (`--n-clusters-frac 0.02`). Then **split** mixed leaves with recursive 2-means, **estimate** LLM merge cost, **merge** same-proposition terminals (personal OpenAI), and browse the merge dir.
 
 ```bash
+python -m apps.claims cluster --corpus measles2 --model-tag qwen3-emb-8b \
+  --algorithm kmeans --n-clusters-frac 0.02 --save-labels
+
+python -m apps.claims cluster-split --from \
+  apps/claims/data/experiments/clustering/measles2/qwen3-emb-8b/cluster_<stamp> \
+  --min-gain 0 --min-child-n 2
+
+python -m apps.claims cluster-merge --from \
+  apps/claims/data/experiments/clustering/measles2/qwen3-emb-8b/cluster_<stamp>_split \
+  --nn-threshold 0.8 --neighbor-k 15 --model gpt-5.6-luna --estimate-only
+
+# Needs PERSONAL_OPENAI_API_KEY (not Azure). JSONL log resumes if interrupted.
+python -m apps.claims cluster-merge --from \
+  apps/claims/data/experiments/clustering/measles2/qwen3-emb-8b/cluster_<stamp>_split \
+  --nn-threshold 0.8 --neighbor-k 15 --model gpt-5.6-luna
+
 python -m apps.claims cluster-browse --from \
-  apps/claims/data/experiments/clustering/measles_bal/bge-large/hierarchy_standalone_ok_default_2fa8fd715c
+  apps/claims/data/experiments/clustering/measles2/qwen3-emb-8b/cluster_<stamp>_split_merge
 
 # Same flags as cluster/inspect when the JSON has no named selection:
 python -m apps.claims cluster-browse --from path/to/cluster_dir \
@@ -170,7 +199,9 @@ python -m apps.claims cluster-browse --from path/to/cluster_dir \
   --corpus resp --filter 'stance:high=0.33'
 ```
 
-Requires `streamlit` (`pip install streamlit`).
+Requires `streamlit` (`pip install streamlit`). Split/merge write sibling dirs so the original k-means output stays intact. There is no merge button in the browser.
+
+`cluster-merge` groups by **same proposition** (atomic but complete). It does not merge distinct outcomes, mechanisms, vaccines, diseases, populations, or policy claims, and it does not use epi_value.
 
 ### Neighbors / embedder training (needs a run)
 
@@ -210,7 +241,7 @@ python -m apps.claims embedder eval --intent belief_sim --model belief_sim@activ
 Requires CUDA torch + `pip install -r apps/claims/requirements-embed.txt`.
 Do **not** overwrite an existing `bge-large` run — use a new tag.
 
-On **Windows + CUDA**, `sentence_transformers` imports torch before sklearn/pyarrow and can native-crash (empty run dir, no traceback). `embed` / `hierarchy` / LoRA train preload sklearn first; if a one-off script still dies, `import sklearn` before torch.
+On **Windows + CUDA**, `sentence_transformers` imports torch before sklearn/pyarrow and can native-crash (empty run dir, no traceback). `embed` / LoRA train preload sklearn first; if a one-off script still dies, `import sklearn` before torch.
 
 Corp TLS inspection (`CERTIFICATE_VERIFY_FAILED` / self-signed chain on huggingface.co) is the same issue as nitwitch uploads: Python uses `certifi`, not the Windows trust store. `embed` applies repo-root `cert.pem` / `NITWITCH_UPLOAD_CACERT` to `REQUESTS_CA_BUNDLE` and `SSL_CERT_FILE`.
 
@@ -260,7 +291,7 @@ python -m apps.claims neighbors --corpus measles --model-tag bge-large \
 | `annotations` / `select` / `selections` | Sidecars and named key sets |
 | `browse` | Generic claim sampling (filters OK; not for probe labeling) |
 | `neighbors` | Nearest neighbors (needs run) |
-| `cluster` / `sweep` / `hierarchy` / `inspect` / `cluster-browse` | Clustering |
+| `cluster` / `cluster-split` / `cluster-merge` / `sweep` / `inspect` / `cluster-browse` | Clustering |
 | `embedder` | Similarity intent / gold / sample / triplets / freeze / train-compare / eval |
 | `runs` / `prep-queries` / `doctor` / `ls-artifacts` | Runs + sanity checks |
 

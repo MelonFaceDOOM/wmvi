@@ -6,6 +6,7 @@ Collect social-media posts about vaccines, normalize them, and track term-level 
 - Platform-specific tables store raw ingested content (sm.*, podcasts.*, news.*).
 - All posts are unified through a single registry table (sm.post_registry).
 - Views provide common surfaces for search and processing (e.g. full-text search).
+- Ingest, registry triggers, transcription workers, and `posts_all` consumers: [docs/data-flow.md](docs/data-flow.md).
 
 ## Scripts
 

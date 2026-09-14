@@ -11,7 +11,7 @@ def _add_corpus(p: argparse.ArgumentParser) -> None:
 
 
 def add_filter_args(p: argparse.ArgumentParser) -> None:
-    """Annotation filter args shared by embed/cluster/hierarchy/sweep/inspect/browse/neighbors/labeler."""
+    """Annotation filter args shared by embed/cluster/sweep/inspect/browse/neighbors/labeler."""
     p.add_argument(
         "--filter",
         action="append",

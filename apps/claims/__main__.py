@@ -220,33 +220,18 @@ def build_parser() -> argparse.ArgumentParser:
     add_filter_args(cluster_p)
     cluster_p.add_argument("--algorithm", type=str, required=True)
     cluster_p.add_argument("--params-json", type=str, default="{}")
+    cluster_p.add_argument(
+        "--n-clusters-frac",
+        dest="n_clusters_frac",
+        type=float,
+        default=None,
+        help="Set n_clusters = max(2, round(frac * n)); overrides params-json n_clusters",
+    )
     cluster_p.add_argument("--seed", type=int, default=0)
     cluster_p.add_argument("--out-dir", type=Path, default=None)
     cluster_p.add_argument("--save-labels", action="store_true")
     cluster_p.add_argument("--queries", type=Path, default=None)
     cluster_p.set_defaults(func="cluster")
-
-    # --- hierarchy ---
-    hier_p = sub.add_parser("hierarchy", help="Two-level leaf->narrative clustering")
-    _add_corpus_args(hier_p, with_model_tag=True)
-    hier_p.add_argument(
-        "--preset",
-        type=str,
-        default=None,
-        help="Named config (default=kmeans-800→agglo-25). Overrides leaf/narrative defaults.",
-    )
-    hier_p.add_argument("--run-dir", type=Path, default=None)
-    add_filter_args(hier_p)
-    hier_p.add_argument("--leaf-algorithm", type=str, default=None)
-    hier_p.add_argument("--leaf-params-json", type=str, default=None)
-    hier_p.add_argument("--narrative-algorithm", type=str, default=None)
-    hier_p.add_argument("--narrative-params-json", type=str, default=None)
-    hier_p.add_argument("--seed", type=int, default=0)
-    hier_p.add_argument("--out-dir", type=Path, default=None)
-    hier_p.add_argument("--save-labels", action="store_true")
-    hier_p.add_argument("--queries", type=Path, default=None)
-    hier_p.add_argument("--n-samples-per-leaf", type=int, default=3)
-    hier_p.set_defaults(func="hierarchy")
 
     # --- inspect ---
     insp_p = sub.add_parser("inspect", help="Sample claim texts from clusters")
@@ -254,7 +239,6 @@ def build_parser() -> argparse.ArgumentParser:
     insp_p.add_argument("--run-dir", type=Path, default=None)
     add_filter_args(insp_p)
     insp_p.add_argument("--labels", type=Path, required=True)
-    insp_p.add_argument("--parent-labels", type=Path, default=None)
     insp_p.add_argument("--mode", type=str, default="mixed")
     insp_p.add_argument("--n-clusters", type=int, default=8)
     insp_p.add_argument("--n-per-cluster", type=int, default=5)
@@ -268,7 +252,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- cluster-browse ---
     cb_p = sub.add_parser(
         "cluster-browse",
-        help="Open a Streamlit browser for one cluster/hierarchy output",
+        help="Open a Streamlit browser for one cluster output",
     )
     _add_corpus_args(cb_p, with_model_tag=True)
     cb_p.add_argument(
@@ -276,16 +260,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="from_path",
         type=Path,
         default=None,
-        help="Experiment directory, hierarchy_*.json / result_*.json, or labels .npy",
+        help="Experiment directory, result_*.json, or labels_*.npy",
     )
     cb_p.add_argument("--run-dir", type=Path, default=None)
-    cb_p.add_argument("--labels", type=Path, default=None, help="Override labels npy (flat or leaf)")
-    cb_p.add_argument(
-        "--parent-labels",
-        type=Path,
-        default=None,
-        help="Narrative labels npy (hierarchy); inferred from --from when omitted",
-    )
+    cb_p.add_argument("--labels", type=Path, default=None, help="Override labels npy")
     cb_p.add_argument(
         "--claims",
         type=Path,
@@ -296,9 +274,63 @@ def build_parser() -> argparse.ArgumentParser:
     cb_p.add_argument("--port", type=int, default=None, help="Streamlit server port")
     cb_p.set_defaults(func="cluster-browse")
 
-    from apps.claims.cli.demo_cmd import add_demo_parser
+    # --- cluster-split ---
+    from apps.claims.clustering.browse import DEFAULT_MIN_SPLIT_GAIN as _MIN_GAIN
+    from apps.claims.clustering.merge_prompts import (
+        DEFAULT_MERGE_MODEL as _MERGE_MODEL,
+        DEFAULT_NEIGHBOR_K as _NEIGHBOR_K,
+        DEFAULT_NN_THRESHOLD as _NN_THRESH,
+    )
 
-    add_demo_parser(sub)
+    cs_p = sub.add_parser(
+        "cluster-split",
+        help="Recursive 2-means on every leaf; write sibling terminal labels",
+    )
+    _add_corpus_args(cs_p, with_model_tag=True)
+    cs_p.add_argument(
+        "--from",
+        dest="from_path",
+        type=Path,
+        required=True,
+        help="Experiment directory, result_*.json, or labels_*.npy",
+    )
+    cs_p.add_argument("--run-dir", type=Path, default=None)
+    cs_p.add_argument("--labels", type=Path, default=None)
+    cs_p.add_argument("--claims", type=Path, default=None)
+    add_filter_args(cs_p)
+    cs_p.add_argument("--out-dir", type=Path, default=None, help="Default: <from>_split sibling")
+    cs_p.add_argument("--min-gain", type=float, default=_MIN_GAIN)
+    cs_p.add_argument("--min-child-n", dest="min_child_n", type=int, default=2)
+    cs_p.add_argument("--seed", type=int, default=0)
+    cs_p.set_defaults(func="cluster-split")
+
+    cm_p = sub.add_parser(
+        "cluster-merge",
+        help="Greedy LLM merge of split terminals (personal OpenAI)",
+    )
+    _add_corpus_args(cm_p, with_model_tag=True)
+    cm_p.add_argument(
+        "--from",
+        dest="from_path",
+        type=Path,
+        required=True,
+        help="Split experiment directory (or result_*.json / labels_*.npy)",
+    )
+    cm_p.add_argument("--run-dir", type=Path, default=None)
+    cm_p.add_argument("--labels", type=Path, default=None)
+    cm_p.add_argument("--claims", type=Path, default=None)
+    add_filter_args(cm_p)
+    cm_p.add_argument("--out-dir", type=Path, default=None, help="Default: <from>_merge sibling")
+    cm_p.add_argument("--nn-threshold", dest="nn_threshold", type=float, default=_NN_THRESH)
+    cm_p.add_argument("--neighbor-k", dest="neighbor_k", type=int, default=_NEIGHBOR_K)
+    cm_p.add_argument("--model", type=str, default=_MERGE_MODEL, help="Personal OpenAI model")
+    cm_p.add_argument("--log", type=Path, default=None, help="JSONL log (default: <out-dir>/merge_log.jsonl)")
+    cm_p.add_argument(
+        "--estimate-only",
+        action="store_true",
+        help="Print prompt-count bounds and exit (no LLM)",
+    )
+    cm_p.set_defaults(func="cluster-merge")
 
     # --- neighbors ---
     nn_p = sub.add_parser(
@@ -570,10 +602,6 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.cluster_cmd import cmd_cluster
 
         return cmd_cluster(args)
-    if args.func == "hierarchy":
-        from apps.claims.cli.cluster_cmd import cmd_hierarchy
-
-        return cmd_hierarchy(args)
     if args.func == "inspect":
         from apps.claims.cli.cluster_cmd import cmd_inspect
 
@@ -582,10 +610,14 @@ def main(argv: list[str] | None = None) -> int:
         from apps.claims.cli.cluster_browse_cmd import cmd_cluster_browse
 
         return cmd_cluster_browse(args)
-    if args.func == "demo":
-        from apps.claims.cli.demo_cmd import cmd_demo
+    if args.func == "cluster-split":
+        from apps.claims.cli.cluster_refine_cmd import cmd_cluster_split
 
-        return cmd_demo(args)
+        return cmd_cluster_split(args)
+    if args.func == "cluster-merge":
+        from apps.claims.cli.cluster_refine_cmd import cmd_cluster_merge
+
+        return cmd_cluster_merge(args)
     if args.func == "neighbors":
         from apps.claims.cli.neighbors_cmd import cmd_neighbors
 

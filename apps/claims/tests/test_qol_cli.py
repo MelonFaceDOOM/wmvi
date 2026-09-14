@@ -11,7 +11,6 @@ from apps.claims import corpus as corpus_mod
 from apps.claims import io as claims_io
 from apps.claims import models as models_mod
 from apps.claims.__main__ import main
-from apps.claims.clustering.presets import get_hierarchy_preset
 
 
 @pytest.fixture()
@@ -58,13 +57,6 @@ def test_runs_list_filter(isolated_data: Path):
     other.mkdir(parents=True)
     assert main(["runs", "list", "--corpus", "covid"]) == 0
     # smoke only — output on stdout
-
-
-def test_hierarchy_preset_default():
-    p = get_hierarchy_preset("default")
-    assert p["leaf_algorithm"] == "kmeans"
-    assert p["leaf_params"]["n_clusters"] == 800
-    assert p["narrative_params"]["n_clusters"] == 25
 
 
 def test_embed_refuses_overwrite(isolated_data: Path, tmp_path: Path):

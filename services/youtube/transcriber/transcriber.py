@@ -9,7 +9,7 @@ import tempfile
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, time as dt_time
+from datetime import date, datetime, timedelta, time as dt_time
 from typing import Any, Callable
 
 from dotenv import load_dotenv
@@ -322,7 +322,7 @@ def _handle_signal(signum, frame):
 # DB helpers
 # ---------------------------------------------------------------------
 
-_CLAIMABLE_WHERE = """
+_BASE_CLAIMABLE_WHERE = """
     transcript IS NULL
     AND transcription_failed_at IS NULL
     AND (
@@ -334,26 +334,61 @@ _CLAIMABLE_WHERE = """
 """
 
 
-def count_claimable_videos(cur) -> int:
+def _claimable_where(
+    terms: list[str] | None = None,
+    after: date | None = None,
+) -> tuple[str, tuple]:
+    """Build the WHERE clause and params for claimable-video queries."""
+    clauses = _BASE_CLAIMABLE_WHERE
+    params: list[Any] = [MAX_VID_LENGTH]
+
+    if after is not None:
+        clauses += "\n    AND created_at_ts >= %s"
+        params.append(after.isoformat())
+
+    if terms:
+        ilike_parts = []
+        for term in terms:
+            pattern = f"%{term}%"
+            ilike_parts.append("(title ILIKE %s OR description ILIKE %s)")
+            params.extend([pattern, pattern])
+        clauses += "\n    AND (" + " OR ".join(ilike_parts) + ")"
+
+    return clauses, tuple(params)
+
+
+def count_claimable_videos(
+    cur,
+    *,
+    terms: list[str] | None = None,
+    after: date | None = None,
+) -> int:
+    where, params = _claimable_where(terms, after)
     cur.execute(
         f"""
         SELECT COUNT(*)
         FROM youtube.video
-        WHERE {_CLAIMABLE_WHERE}
+        WHERE {where}
         """,
-        (MAX_VID_LENGTH,),
+        params,
     )
     row = cur.fetchone()
     return int(row[0]) if row else 0
 
 
-def claim_next_video(cur) -> ClaimedVideo | None:
+def claim_next_video(
+    cur,
+    *,
+    terms: list[str] | None = None,
+    after: date | None = None,
+) -> ClaimedVideo | None:
+    where, params = _claimable_where(terms, after)
     cur.execute(
         f"""
         WITH next_video AS (
             SELECT video_id, url
             FROM youtube.video
-            WHERE {_CLAIMABLE_WHERE}
+            WHERE {where}
             ORDER BY created_at_ts
             LIMIT 1
             FOR UPDATE SKIP LOCKED
@@ -364,7 +399,7 @@ def claim_next_video(cur) -> ClaimedVideo | None:
         WHERE y.video_id = n.video_id
         RETURNING y.video_id, y.url;
         """,
-        (MAX_VID_LENGTH,),
+        params,
     )
     row = cur.fetchone()
     if not row:
@@ -453,6 +488,8 @@ def _download_failure_info(exc: DownloadFailed) -> DownloadFailureInfo:
 def claim_and_download_one(
         budget: SessionBudget,
         *,
+        terms: list[str] | None = None,
+        after: date | None = None,
         cursor_factory=getcursor,
         claim_next_video_fn=claim_next_video,
         download_audio_fn=download_yt_audio,
@@ -468,7 +505,7 @@ def claim_and_download_one(
     sleep_until_fn(slot_time)
 
     with cursor_factory(commit=True) as cur:
-        claimed = claim_next_video_fn(cur)
+        claimed = claim_next_video_fn(cur, terms=terms, after=after)
 
     if claimed is None:
         logging.info("audio_loader: no claimable video found")
@@ -566,13 +603,15 @@ def audio_loader_worker(
     budget: SessionBudget,
     stats: SessionStats,
     *,
+    terms: list[str] | None = None,
+    after: date | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> None:
     logging.info("audio_loader: started")
     consecutive_systemic_failures = 0
 
     while True:
-        step = claim_and_download_one(budget)
+        step = claim_and_download_one(budget, terms=terms, after=after)
 
         if step.action == "stop":
             logging.info("audio_loader: session quota/deadline reached, or no videos left")
@@ -694,15 +733,29 @@ def _log_session_summary(stats: SessionStats) -> None:
     )
 
 
-def run_one_session(budget: SessionBudget) -> None:
+def run_one_session(
+    budget: SessionBudget,
+    *,
+    terms: list[str] | None = None,
+    after: date | None = None,
+) -> None:
     stats = SessionStats()
     audio_q = queue.Queue(maxsize=AUDIO_QUEUE_SIZE)
     save_q = queue.Queue(maxsize=SAVE_QUEUE_SIZE)
 
+    loader_kwargs: dict[str, Any] = {}
+    if terms is not None:
+        loader_kwargs["terms"] = terms
+    if after is not None:
+        loader_kwargs["after"] = after
+
+    def _loader():
+        audio_loader_worker(audio_q, budget, stats, **loader_kwargs)
+
     threads = [
         threading.Thread(
             target=_thread_entry,
-            args=(audio_loader_worker, audio_q, budget, stats),
+            args=(_loader,),
             daemon=True,
         ),
         threading.Thread(
@@ -728,11 +781,13 @@ def run_one_session(budget: SessionBudget) -> None:
 
 def run_scheduler_cycle(
     *,
+    terms: list[str] | None = None,
+    after: date | None = None,
     now_fn: Callable[[], datetime] = _default_now_local,
     sleep_fn: Callable[[float], None] = time.sleep,
-    session_runner: Callable[[SessionBudget], None] = run_one_session,
+    session_runner: Callable[..., None] = run_one_session,
     budget_factory: Callable[[float], SessionBudget] | None = None,
-    count_claimable_fn: Callable[[Any], int] = count_claimable_videos,
+    count_claimable_fn: Callable[..., int] = count_claimable_videos,
     cursor_factory: Callable[..., Any] = getcursor,
 ) -> None:
     now = now_fn()
@@ -765,21 +820,28 @@ def run_scheduler_cycle(
 
     try:
         with cursor_factory(commit=False) as cur:
-            claimable = count_claimable_fn(cur)
+            claimable = count_claimable_fn(cur, terms=terms, after=after)
     except Exception:
         logging.warning("Could not count claimable videos", exc_info=True)
         claimable = None
 
+    filter_desc = ""
+    if terms:
+        filter_desc += f" terms={terms}"
+    if after:
+        filter_desc += f" after={after}"
+
     logging.info(
         "Starting transcription session (%s): now=%s quota=%s ends=%s "
-        "claimable_videos=%s",
+        "claimable_videos=%s%s",
         _session_label(window.start),
         now.isoformat(),
         VIDEOS_PER_SESSION,
         window.end.isoformat(),
         claimable if claimable is not None else "unknown",
+        filter_desc,
     )
-    session_runner(budget)
+    session_runner(budget, terms=terms, after=after)
 
     now = now_fn()
     if now < window.end:
@@ -791,7 +853,12 @@ def run_scheduler_cycle(
         _sleep_until_datetime(window.end, now_fn=now_fn, sleep_fn=sleep_fn)
 
 
-def main(prod: bool = False, limit: int | None = None) -> None:
+def main(
+    prod: bool = False,
+    limit: int | None = None,
+    terms: list[str] | None = None,
+    after: date | None = None,
+) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -801,6 +868,11 @@ def main(prod: bool = False, limit: int | None = None) -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     init_pool(prefix="prod" if prod else "dev")
+
+    if terms:
+        log.info("youtube transcriber: term filter active: %s", terms)
+    if after:
+        log.info("youtube transcriber: date filter active: after %s", after)
 
     try:
         if limit is not None:
@@ -815,7 +887,7 @@ def main(prod: bool = False, limit: int | None = None) -> None:
                 session_seconds=86400.0,
                 spread_fraction=spread,
             )
-            run_one_session(budget)
+            run_one_session(budget, terms=terms, after=after)
             log.info("youtube transcriber: one-shot run complete")
             return
 
@@ -829,7 +901,7 @@ def main(prod: bool = False, limit: int | None = None) -> None:
         )
 
         while True:
-            run_scheduler_cycle()
+            run_scheduler_cycle(terms=terms, after=after)
     finally:
         _cleanup_all_tempdirs()
         close_pool()

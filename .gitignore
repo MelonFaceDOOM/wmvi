@@ -46,3 +46,9 @@ nlp/experiments/runs/*/browse_coref_edits.html
 # script work dirs / local extract outputs
 .*_work/
 *_claims.json
+
+# Telegram probe experiment output
+services/telegram_monitor/probe_results/
+
+measles2_cluster_bundle.zip
+services/podcast/discovery/results/

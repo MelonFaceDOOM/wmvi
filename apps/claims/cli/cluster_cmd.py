@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
@@ -14,13 +15,12 @@ from apps.claims import io as claims_io
 from apps.claims import selections as sel_mod
 from apps.claims.cli import paths as path_helpers
 from apps.claims.clustering import cluster as clustering
-from apps.claims.clustering import hierarchy as cluster_hierarchy
 from apps.claims.clustering import metrics as cluster_metrics
 from apps.claims.clustering import query_eval
 from apps.claims.clustering import score as cluster_score
 from apps.claims.clustering.browse import portable_run_dir_str
 from apps.claims.clustering.metrics import _cluster_medoid, _per_cluster_mean_intra_cosine
-from apps.claims.clustering.score import HierarchyGuards, HierarchyWeights, ObjectiveGuards, ObjectiveWeights
+from apps.claims.clustering.score import ObjectiveGuards, ObjectiveWeights
 from apps.claims.types import EmbedConfig
 
 INSPECT_MODES = ("largest", "loosest", "tightest", "mixed", "noise", "query")
@@ -134,6 +134,40 @@ def _parse_params_json(raw: str | None) -> dict[str, Any]:
     return data
 
 
+_FRAC_ALGORITHMS = ("kmeans", "agglomerative")
+
+
+def n_clusters_from_frac(n: int, frac: float) -> int:
+    """``max(2, round(frac * n))``, clamped to ``[2, n]`` when n ≥ 2."""
+    n = int(n)
+    frac = float(frac)
+    if n < 2:
+        return max(1, n)
+    return min(n, max(2, int(round(frac * n))))
+
+
+def apply_n_clusters_frac(
+    params: dict[str, Any],
+    *,
+    n: int,
+    frac: float | None,
+    algorithm: str,
+) -> dict[str, Any]:
+    """Set ``n_clusters`` from a fraction of grouped claims. Frac wins over params-json."""
+    out = dict(params)
+    if frac is None:
+        return out
+    frac_f = float(frac)
+    if not (0.0 < frac_f <= 1.0):
+        raise ValueError("--n-clusters-frac must be in (0, 1]")
+    if algorithm not in _FRAC_ALGORITHMS:
+        raise ValueError(f"--n-clusters-frac does not apply to algorithm {algorithm!r}")
+    if algorithm == "agglomerative" and out.get("distance_threshold") is not None:
+        raise ValueError("--n-clusters-frac cannot be combined with distance_threshold")
+    out["n_clusters"] = n_clusters_from_frac(n, frac_f)
+    return out
+
+
 def _model_cache_key(config: EmbedConfig) -> str:
     raw = (
         f"{config.model_id}|{config.doc_instruction}|{config.query_instruction}|"
@@ -146,22 +180,78 @@ def query_vectors_path(out_dir: Path, config: EmbedConfig) -> Path:
     return out_dir / f"query_vectors_{_model_cache_key(config)}.npz"
 
 
+def query_embed_available(config: EmbedConfig) -> tuple[bool, str | None]:
+    """Whether we can load the encoder on this machine for query eval."""
+    from apps.claims.embedding.encode import resolve_device
+
+    try:
+        resolve_device(config.device)
+        return True, None
+    except ValueError as exc:
+        return False, str(exc)
+
+
+def _read_query_cache(path: Path) -> dict[str, np.ndarray]:
+    data = np.load(path, allow_pickle=False)
+    ids = list(data["ids"])
+    vectors = np.asarray(data["vectors"], dtype=np.float32)
+    return {str(qid): vectors[i] for i, qid in enumerate(ids)}
+
+
+def _find_query_cache(filename: str, search_dirs: list[Path]) -> Path | None:
+    """Look in each dir, then one level of subdirectories (sibling experiments)."""
+    seen: set[Path] = set()
+    for raw in search_dirs:
+        d = Path(raw)
+        try:
+            d = d.resolve()
+        except OSError:
+            d = Path(raw)
+        if d in seen:
+            continue
+        seen.add(d)
+        direct = d / filename
+        if direct.is_file():
+            return direct
+        if not d.is_dir():
+            continue
+        try:
+            children = list(d.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            if not child.is_dir():
+                continue
+            cand = child / filename
+            if cand.is_file():
+                return cand
+    return None
+
+
 def load_or_build_query_cache(
     *,
     config: EmbedConfig,
     out_dir: Path,
     queries: list[dict[str, Any]],
     force: bool = False,
+    search_dirs: list[Path] | None = None,
+    allow_embed: bool = True,
 ) -> dict[str, np.ndarray]:
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_path = query_vectors_path(out_dir, config)
     if cache_path.is_file() and not force:
-        data = np.load(cache_path, allow_pickle=False)
-        ids = list(data["ids"])
-        vectors = np.asarray(data["vectors"], dtype=np.float32)
-        return {str(qid): vectors[i] for i, qid in enumerate(ids)}
+        return _read_query_cache(cache_path)
+
+    found = _find_query_cache(cache_path.name, list(search_dirs or []))
+    if found is not None and found.resolve() != cache_path.resolve():
+        shutil.copy2(found, cache_path)
+        return _read_query_cache(cache_path)
+    if found is not None:
+        return _read_query_cache(found)
 
     if not queries:
+        return {}
+    if not allow_embed:
         return {}
     ids = [str(row.get("id") or row.get("query") or i) for i, row in enumerate(queries)]
     texts = [str(row["query"]) for row in queries]
@@ -183,6 +273,36 @@ def load_or_build_query_cache(
     return {qid: stacked[i] for i, qid in enumerate(ids)}
 
 
+def prepare_query_eval(
+    *,
+    config: EmbedConfig,
+    cache_dir: Path,
+    run_dir: Path | None,
+    queries: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, np.ndarray], str | None]:
+    """Load query vectors from cache (including sibling experiments) or embed.
+
+    If the embed run asked for CUDA and this machine has none, skip eval rather
+    than fail — k-means itself only needs ``vectors.npy``.
+    """
+    can_embed, reason = query_embed_available(config)
+    search_dirs = [cache_dir]
+    if run_dir is not None:
+        search_dirs.append(Path(run_dir))
+    search_dirs.append(Path(cache_dir).parent)
+    query_vectors = load_or_build_query_cache(
+        config=config,
+        out_dir=cache_dir,
+        queries=queries,
+        search_dirs=search_dirs,
+        allow_embed=can_embed,
+    )
+    if queries and not query_vectors:
+        skip = reason or "no query vector cache; skipped query eval (no encoder)"
+        return [], {}, skip
+    return queries, query_vectors, None
+
+
 def run_eval_with_cached_queries(
     vectors: np.ndarray,
     *,
@@ -198,21 +318,25 @@ def run_eval_with_cached_queries(
         if str(row.get("id") or row.get("query") or "") not in query_vectors
     ]
     if missing:
-        filled = query_eval.embed_queries(
-            config.model_id,
-            [str(row["query"]) for row in missing],
-            doc_instruction=config.doc_instruction,
-            query_instruction=config.query_instruction,
-            device=config.device,
-            dtype=config.dtype,
-            max_seq_length=config.max_seq_length,
-        )
-        for row, vec in zip(missing, filled, strict=True):
-            qid = str(row.get("id") or row.get("query") or "")
-            query_vectors[qid] = vec
+        can_embed, _reason = query_embed_available(config)
+        if can_embed:
+            filled = query_eval.embed_queries(
+                config.model_id,
+                [str(row["query"]) for row in missing],
+                doc_instruction=config.doc_instruction,
+                query_instruction=config.query_instruction,
+                device=config.device,
+                dtype=config.dtype,
+                max_seq_length=config.max_seq_length,
+            )
+            for row, vec in zip(missing, filled, strict=True):
+                qid = str(row.get("id") or row.get("query") or "")
+                query_vectors[qid] = vec
     for row in queries:
         qid = str(row.get("id") or row.get("query") or "")
-        qvec = query_vectors[qid]
+        qvec = query_vectors.get(qid)
+        if qvec is None:
+            continue
         results.append(
             query_eval.eval_query(
                 vectors,
@@ -304,19 +428,29 @@ def cmd_cluster(args: Namespace) -> int:
         if algorithm not in clustering.CLUSTER_ALGORITHMS:
             raise ValueError(f"Unknown algorithm {algorithm!r}")
         params = _parse_params_json(args.params_json)
+        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
+        frac = getattr(args, "n_clusters_frac", None)
+        params = apply_n_clusters_frac(
+            params,
+            n=int(vectors.shape[0]),
+            frac=frac,
+            algorithm=algorithm,
+        )
         stamp = hashlib.sha1(
             json.dumps({"a": algorithm, "p": params, "s": int(args.seed)}, sort_keys=True).encode()
         ).hexdigest()[:10]
         sel_name = getattr(args, "selection", None)
         default_exp = f"cluster_{sel_name}_{stamp}" if sel_name else f"cluster_{stamp}"
         out_dir = _resolve_out_dir(args, default_exp=default_exp)
-        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
         config = _config_from_index(index)
         queries_path = Path(args.queries) if args.queries else _DEFAULT_QUERIES
         queries = query_eval.load_eval_queries(queries_path)
         cache_dir = out_dir if out_dir is not None else run_dir
-        query_vectors = load_or_build_query_cache(
-            config=config, out_dir=cache_dir, queries=queries, force=False
+        eval_queries, query_vectors, eval_skipped = prepare_query_eval(
+            config=config,
+            cache_dir=cache_dir,
+            run_dir=run_dir,
+            queries=queries,
         )
         labels, payload = evaluate_clustering(
             vectors=vectors,
@@ -324,11 +458,15 @@ def cmd_cluster(args: Namespace) -> int:
             algorithm=algorithm,
             params=params,
             seed=int(args.seed),
-            queries=queries,
+            queries=eval_queries,
             query_vectors=query_vectors,
         )
         payload["run_dir"] = portable_run_dir_str(run_dir)
         payload["model_id"] = config.model_id
+        if eval_skipped:
+            payload["eval_skipped"] = eval_skipped
+        if frac is not None:
+            payload["n_clusters_frac"] = float(frac)
         if selection_name:
             payload["selection"] = selection_name
             payload["n_selected"] = int(vectors.shape[0])
@@ -341,156 +479,6 @@ def cmd_cluster(args: Namespace) -> int:
                 labels_path = out_dir / f"labels_{stamp}.npy"
                 np.save(labels_path, labels)
                 payload["labels_path"] = str(labels_path)
-    except Exception as exc:  # noqa: BLE001
-        claims_io.emit_json({"error": str(exc)})
-        return 1
-    claims_io.emit_json(payload)
-    return 0
-
-
-def cmd_hierarchy(args: Namespace) -> int:
-    try:
-        from apps.claims.clustering import presets as cluster_presets
-
-        preset_name = getattr(args, "preset", None)
-        if preset_name:
-            preset = cluster_presets.get_hierarchy_preset(str(preset_name))
-            leaf_algorithm = str(preset["leaf_algorithm"])
-            narrative_algorithm = str(preset["narrative_algorithm"])
-            leaf_params = dict(preset["leaf_params"])
-            narrative_params = dict(preset["narrative_params"])
-        else:
-            leaf_algorithm = str(args.leaf_algorithm or "hdbscan")
-            narrative_algorithm = str(args.narrative_algorithm or "agglomerative")
-            leaf_params = (
-                _parse_params_json(args.leaf_params_json)
-                if args.leaf_params_json
-                else dict(cluster_hierarchy.DEFAULT_LEAF_PARAMS)
-            )
-            narrative_params = (
-                _parse_params_json(args.narrative_params_json)
-                if args.narrative_params_json
-                else dict(cluster_hierarchy.DEFAULT_NARRATIVE_PARAMS)
-            )
-
-        if args.leaf_algorithm:
-            leaf_algorithm = str(args.leaf_algorithm)
-        if args.narrative_algorithm:
-            narrative_algorithm = str(args.narrative_algorithm)
-        if args.leaf_params_json:
-            leaf_params = _parse_params_json(args.leaf_params_json)
-        if args.narrative_params_json:
-            narrative_params = _parse_params_json(args.narrative_params_json)
-
-        for name, algo in (("leaf", leaf_algorithm), ("narrative", narrative_algorithm)):
-            if algo not in clustering.CLUSTER_ALGORITHMS:
-                raise ValueError(f"Unknown {name} algorithm {algo!r}")
-        seed = int(args.seed)
-        stamp = hashlib.sha1(
-            json.dumps(
-                {
-                    "leaf_a": leaf_algorithm,
-                    "leaf_p": leaf_params,
-                    "nar_a": narrative_algorithm,
-                    "nar_p": narrative_params,
-                    "s": seed,
-                    "preset": preset_name,
-                },
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()[:10]
-        sel_name = getattr(args, "selection", None)
-        default_exp = (
-            f"hierarchy_{sel_name}_{preset_name}_{stamp}"
-            if sel_name and preset_name
-            else (
-                f"hierarchy_{sel_name}_{stamp}"
-                if sel_name
-                else (f"hierarchy_{preset_name}_{stamp}" if preset_name else f"hierarchy_{stamp}")
-            )
-        )
-        out_dir = _resolve_out_dir(args, default_exp=default_exp)
-        vectors, index, run_dir, selection_name = _load_run_with_selection(args)
-        claim_texts = claims_io.claim_texts_from_index(index)
-        config = _config_from_index(index)
-        queries_path = Path(args.queries) if args.queries else _DEFAULT_QUERIES
-        queries = query_eval.load_eval_queries(queries_path)
-        cache_dir = out_dir if out_dir is not None else run_dir
-        query_vectors = load_or_build_query_cache(
-            config=config, out_dir=cache_dir, queries=queries, force=False
-        )
-        hier = cluster_hierarchy.build_hierarchy(
-            vectors,
-            leaf_algorithm=leaf_algorithm,
-            leaf_params=leaf_params,
-            narrative_algorithm=narrative_algorithm,
-            narrative_params=narrative_params,
-            seed=seed,
-        )
-        leaf_metrics = cluster_metrics.compute_cluster_metrics(vectors, hier.leaf_labels)
-        narrative_metrics = cluster_metrics.compute_cluster_metrics(vectors, hier.narrative_labels)
-        leaf_shape = cluster_score.shape_from_labels(hier.leaf_labels)
-        nar_shape = cluster_score.shape_from_labels(hier.narrative_labels)
-        eval_suite = run_eval_with_cached_queries(
-            vectors,
-            config=config,
-            labels=hier.narrative_labels,
-            queries=queries,
-            query_vectors=query_vectors,
-        )
-        score = cluster_score.compute_hierarchy_objective(
-            leaf_metrics,
-            narrative_metrics,
-            eval_score=eval_suite.mean_dominant_cluster_share,
-            weights=HierarchyWeights(),
-            guards=HierarchyGuards(),
-            leaf_singleton_frac=leaf_shape["singleton_frac"],
-            narrative_largest_share=nar_shape["largest_cluster_share"],
-        )
-        narratives = cluster_hierarchy.nested_hierarchy_payload(
-            hierarchy=hier,
-            vectors=vectors,
-            claim_texts=claim_texts,
-            n_samples_per_leaf=int(args.n_samples_per_leaf),
-            seed=seed,
-        )
-        payload: dict[str, Any] = {
-            "run_dir": portable_run_dir_str(run_dir),
-            "model_id": config.model_id,
-            "leaf_algorithm": leaf_algorithm,
-            "leaf_params": leaf_params,
-            "narrative_algorithm": narrative_algorithm,
-            "narrative_params": narrative_params,
-            "preset": preset_name,
-            "seed": seed,
-            "n_leaves": hier.n_leaves,
-            "n_narratives": hier.n_narratives,
-            "n_leaf_noise": hier.n_leaf_noise,
-            "leaf_coverage_pct": leaf_metrics.get("coverage_pct"),
-            "leaf_mean_intra_cosine": leaf_metrics.get("mean_intra_cosine"),
-            "eval_score": eval_suite.mean_dominant_cluster_share,
-            "objective": score["objective"],
-            "objective_base": score["objective_base"],
-            "components": score["components"],
-            "penalties": score["penalties"],
-            "flags": score["flags"],
-            "narratives": narratives,
-        }
-        if selection_name:
-            payload["selection"] = selection_name
-            payload["n_selected"] = int(vectors.shape[0])
-        if out_dir is not None:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            result_path = out_dir / f"hierarchy_{stamp}.json"
-            claims_io.write_json(result_path, payload)
-            payload["result_path"] = str(result_path)
-            if args.save_labels:
-                leaf_path = out_dir / f"leaf_labels_{stamp}.npy"
-                nar_path = out_dir / f"narrative_labels_{stamp}.npy"
-                np.save(leaf_path, hier.leaf_labels)
-                np.save(nar_path, hier.narrative_labels)
-                payload["leaf_labels_path"] = str(leaf_path)
-                payload["narrative_labels_path"] = str(nar_path)
     except Exception as exc:  # noqa: BLE001
         claims_io.emit_json({"error": str(exc)})
         return 1
@@ -632,9 +620,6 @@ def cmd_inspect(args: Namespace) -> int:
                 f"labels length ({labels.shape[0]}) != vectors length ({vectors.shape[0]})"
                 + (f" for selection {selection_name!r}" if selection_name else "")
             )
-        parent_labels = None
-        if args.parent_labels is not None:
-            parent_labels = np.asarray(np.load(Path(args.parent_labels)), dtype=int)
         cluster_ids = None
         if args.cluster_ids:
             cluster_ids = [int(x.strip()) for x in str(args.cluster_ids).split(",") if x.strip()]
@@ -657,14 +642,6 @@ def cmd_inspect(args: Namespace) -> int:
             )
             for cid in selected
         ]
-        if parent_labels is not None:
-            for row in clusters:
-                row["parent_cluster_id"] = cluster_hierarchy.parent_id_for_cluster(
-                    child_labels=labels,
-                    parent_labels=parent_labels,
-                    cluster_id=int(row["cluster_id"]),
-                    vectors=vectors,
-                )
         payload = {
             "mode": mode,
             "selected_cluster_ids": selected,
@@ -727,8 +704,11 @@ def cmd_sweep(args: Namespace) -> int:
         queries_path = Path(args.queries) if args.queries else _DEFAULT_QUERIES
         queries = query_eval.load_eval_queries(queries_path)
         out_dir.mkdir(parents=True, exist_ok=True)
-        query_vectors = load_or_build_query_cache(
-            config=config, out_dir=out_dir, queries=queries, force=False
+        eval_queries, query_vectors, eval_skipped = prepare_query_eval(
+            config=config,
+            cache_dir=out_dir,
+            run_dir=run_dir,
+            queries=queries,
         )
         sweep_path = out_dir / "sweep.jsonl"
         best: dict[str, Any] | None = None
@@ -744,10 +724,12 @@ def cmd_sweep(args: Namespace) -> int:
                     algorithm=algorithm,
                     params=params,
                     seed=cfg_seed,
-                    queries=queries,
+                    queries=eval_queries,
                     query_vectors=query_vectors,
                 )
                 payload["config_index"] = i
+                if eval_skipped:
+                    payload["eval_skipped"] = eval_skipped
                 if selection_name:
                     payload["selection"] = selection_name
                 fh.write(json.dumps(payload, ensure_ascii=False) + "\n")

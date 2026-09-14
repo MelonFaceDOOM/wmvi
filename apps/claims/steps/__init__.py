@@ -162,37 +162,23 @@ def step_cluster(
     out_dir = ctx.corpus.experiment_dir(tag, default_exp)
     out_dir.mkdir(parents=True, exist_ok=True)
     queries = query_eval.load_eval_queries(cc._DEFAULT_QUERIES) if cc._DEFAULT_QUERIES.is_file() else []
-    query_vectors = (
-        cc.load_or_build_query_cache(config=config, out_dir=out_dir, queries=queries, force=False)
-        if queries
-        else {}
+    eval_queries, query_vectors, eval_skipped = cc.prepare_query_eval(
+        config=config,
+        cache_dir=out_dir,
+        run_dir=run_dir,
+        queries=queries,
     )
-    if queries:
-        labels, payload = cc.evaluate_clustering(
-            vectors=vectors,
-            config=config,
-            algorithm=algorithm,
-            params=params or {},
-            seed=seed,
-            queries=queries,
-            query_vectors=query_vectors,
-        )
-    else:
-        from apps.claims.clustering import cluster as clustering
-        from apps.claims.clustering import metrics as cluster_metrics
-
-        result = clustering.run_clustering(vectors, algorithm=algorithm, params=params or {}, seed=seed)
-        labels = result.labels
-        metrics = cluster_metrics.compute_cluster_metrics(vectors, labels)
-        payload = {
-            "algorithm": algorithm,
-            "params": params or {},
-            "seed": seed,
-            "n_clusters": result.n_clusters,
-            "n_noise": result.n_noise,
-            "coverage_pct": metrics.get("coverage_pct"),
-            "mean_intra_cosine": metrics.get("mean_intra_cosine"),
-        }
+    labels, payload = cc.evaluate_clustering(
+        vectors=vectors,
+        config=config,
+        algorithm=algorithm,
+        params=params or {},
+        seed=seed,
+        queries=eval_queries,
+        query_vectors=query_vectors,
+    )
+    if eval_skipped:
+        payload["eval_skipped"] = eval_skipped
     payload["run_dir"] = portable_run_dir_str(run_dir)
     if selection_name:
         payload["selection"] = selection_name

@@ -82,3 +82,72 @@ def test_load_or_build_query_cache_embeds_once(tmp_path: Path) -> None:
         )
     assert loads == []
     assert again.keys() == cache.keys()
+
+
+def _cfg() -> EmbedConfig:
+    return EmbedConfig(
+        model_id="Qwen/Qwen3-Embedding-8B",
+        doc_instruction="Instruct:\nQuery:",
+        max_seq_length=512,
+        dtype="bfloat16",
+        device="cuda",
+    )
+
+
+def test_load_or_build_reuses_sibling_cache(tmp_path: Path) -> None:
+    cfg = _cfg()
+    queries = [{"id": f"q{i}", "query": f"claim {i}"} for i in range(3)]
+    sibling = tmp_path / "old_exp"
+    dest = tmp_path / "new_exp"
+    sibling.mkdir()
+    dest.mkdir()
+
+    class FakeEnc:
+        def encode(self, texts: list[str], **kwargs: Any) -> np.ndarray:
+            return np.eye(len(texts), 4, dtype=np.float32)
+
+    with patch(
+        "apps.claims.embedding.encode.load_sentence_transformer",
+        return_value=FakeEnc(),
+    ):
+        cluster_cmd.load_or_build_query_cache(config=cfg, out_dir=sibling, queries=queries)
+
+    loads: list[str] = []
+
+    def boom(model_id: str, **kwargs: Any) -> None:
+        loads.append(model_id)
+        raise AssertionError("should not embed")
+
+    with patch("apps.claims.embedding.encode.load_sentence_transformer", side_effect=boom):
+        cache = cluster_cmd.load_or_build_query_cache(
+            config=cfg,
+            out_dir=dest,
+            queries=queries,
+            search_dirs=[tmp_path],
+            allow_embed=False,
+        )
+    assert loads == []
+    assert len(cache) == 3
+    copied = list(dest.glob("query_vectors_*.npz"))
+    assert len(copied) == 1
+
+
+def test_prepare_query_eval_skips_when_cuda_missing(tmp_path: Path) -> None:
+    cfg = _cfg()
+    queries = [{"id": "q0", "query": "hello"}]
+    dest = tmp_path / "exp"
+    dest.mkdir()
+    with patch(
+        "apps.claims.embedding.encode.resolve_device",
+        side_effect=ValueError("device=cuda requested but torch.cuda.is_available() is False"),
+    ):
+        eval_queries, vecs, skip = cluster_cmd.prepare_query_eval(
+            config=cfg,
+            cache_dir=dest,
+            run_dir=None,
+            queries=queries,
+        )
+    assert eval_queries == []
+    assert vecs == {}
+    assert skip is not None
+    assert "cuda" in skip

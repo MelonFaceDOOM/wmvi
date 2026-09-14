@@ -42,26 +42,6 @@ DEFAULT_PARAMS: dict[str, dict[str, Any]] = {
     "knn_louvain": {**_SHARED_DEFAULTS, "reduce": "pca", "k_neighbors": 15},
 }
 
-CLUSTER_PRESETS: dict[str, dict[str, Any]] = {
-    "kmeans-12": {"name": "kmeans-12", "algorithm": "kmeans", "params": {"n_clusters": 12, "reduce": "none"}},
-    "kmeans-500": {"name": "kmeans-500", "algorithm": "kmeans", "params": {"n_clusters": 500, "reduce": "none"}},
-    "hdbscan-pca50": {
-        "name": "hdbscan-pca50",
-        "algorithm": "hdbscan",
-        "params": {"reduce": "pca", "n_components": 50, "min_cluster_size": 15, "min_samples": 5},
-    },
-    "hdbscan-pca50-small": {
-        "name": "hdbscan-pca50-small",
-        "algorithm": "hdbscan",
-        "params": {"reduce": "pca", "n_components": 50, "min_cluster_size": 8, "min_samples": 5},
-    },
-    "louvain-knn15": {
-        "name": "louvain-knn15",
-        "algorithm": "knn_louvain",
-        "params": {"reduce": "pca", "n_components": 50, "k_neighbors": 15},
-    },
-}
-
 
 @dataclass
 class ClusterResult:

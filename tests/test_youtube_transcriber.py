@@ -204,7 +204,7 @@ def test_claim_and_download_one_releases_slot_when_no_video_claimed() -> None:
     step = tr.claim_and_download_one(
         budget,
         cursor_factory=cursor_factory,
-        claim_next_video_fn=lambda cur: None,
+        claim_next_video_fn=lambda cur, **kw: None,
         sleep_until_fn=lambda target: None,
     )
 
@@ -234,7 +234,7 @@ def test_claim_and_download_one_skips_retryable_download_failure_and_releases_sl
     step = tr.claim_and_download_one(
         budget,
         cursor_factory=cursor_factory,
-        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
+        claim_next_video_fn=lambda cur, **kw: tr.ClaimedVideo(video_id="vid1", url="https://x"),
         download_audio_fn=fail_download,
         cleanup_tempdir_fn=cleanup,
         sleep_until_fn=lambda target: None,
@@ -267,7 +267,7 @@ def test_claim_and_download_one_marks_permanent_failure_and_skips() -> None:
     step = tr.claim_and_download_one(
         budget,
         cursor_factory=cursor_factory,
-        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
+        claim_next_video_fn=lambda cur, **kw: tr.ClaimedVideo(video_id="vid1", url="https://x"),
         download_audio_fn=fail_download,
         mark_failed_fn=lambda cur, video_id, reason: mark_calls.append(
             (video_id, reason)
@@ -301,7 +301,7 @@ def test_claim_and_download_one_systemic_skip_on_auth_failure() -> None:
     step = tr.claim_and_download_one(
         budget,
         cursor_factory=cursor_factory,
-        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
+        claim_next_video_fn=lambda cur, **kw: tr.ClaimedVideo(video_id="vid1", url="https://x"),
         download_audio_fn=fail_download,
         release_claim_fn=lambda cur, video_id: release_calls.append(video_id),
         sleep_until_fn=lambda target: None,
@@ -332,7 +332,7 @@ def test_claim_and_download_one_systemic_skip_on_proxy_failure() -> None:
 
     step = tr.claim_and_download_one(
         budget,
-        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid2", url="https://x"),
+        claim_next_video_fn=lambda cur, **kw: tr.ClaimedVideo(video_id="vid2", url="https://x"),
         download_audio_fn=fail_download,
         release_claim_fn=lambda cur, video_id: release_calls.append(video_id),
         sleep_until_fn=lambda target: None,
@@ -360,7 +360,7 @@ def test_claim_and_download_one_enqueues_downloaded_audio() -> None:
     step = tr.claim_and_download_one(
         budget,
         cursor_factory=cursor_factory,
-        claim_next_video_fn=lambda cur: tr.ClaimedVideo(video_id="vid1", url="https://x"),
+        claim_next_video_fn=lambda cur, **kw: tr.ClaimedVideo(video_id="vid1", url="https://x"),
         download_audio_fn=ok_download,
         sleep_until_fn=lambda target: None,
     )

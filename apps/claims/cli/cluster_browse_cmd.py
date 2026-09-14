@@ -22,9 +22,6 @@ def cmd_cluster_browse(args: Namespace) -> int:
         os.environ["WMVI_CLUSTER_BROWSE_FROM"] = str(Path(from_path).resolve())
     if labels is not None:
         extra += ["--labels", str(Path(labels))]
-    parent_labels = getattr(args, "parent_labels", None)
-    if parent_labels is not None:
-        extra += ["--parent-labels", str(Path(parent_labels))]
     if getattr(args, "corpus", None):
         extra += ["--corpus", str(args.corpus)]
     if getattr(args, "model_tag", None):
