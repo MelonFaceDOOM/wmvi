@@ -217,7 +217,7 @@ flowchart TB
 
 - `label_en` writes `is_en` only for platforms in `PLATFORM_ROW`. **tweet** and **news_article** are skipped even if they appear in `posts_all`. `scripts/recheck_is_en.py` has a wider `PLATFORM_UPDATE_SPEC`.
 - Term matcher FTS uses `post_search_en` (`is_en IS TRUE`), then span-extracts on `posts_all.text`. Posts with `is_en` NULL/false are not matched.
-- Claim fetch joins `post_term_hit` → `posts_all` (term hits are the gate, not raw FTS). `scripts/get_posts_for_search_term.py` walks hits in keyset pages on `post_id` and yields one hydrated slice at a time. `get_posts_extract_upload` punctuates and extracts that slice before the next page is queried, so a wide `--since` window does not load the full result.
+- Claim fetch joins `post_term_hit` → `posts_all` (term hits are the gate, not raw FTS). `scripts/get_posts_for_search_term.py` reads matching ids once from the `(term_id, post_id)` index, date-filters them against `posts_all` by explicit id chunks (no range join over the view), and yields one hydrated slice at a time. `get_posts_extract_upload` punctuates and extracts that slice before the next page is queried, so a wide `--since` window does not load the full result.
 - `dashboard_summary` also unions native `date_entered` for counts; keep it in sync if you add a platform.
 
 ---
@@ -247,7 +247,7 @@ Update this table when behavior changes. `kind`: `trigger` | `worker` | `view` |
 | `posts_all` | `post_search_en` | view | view | `WHERE is_en IS TRUE` |
 | `posts_all` | native `is_en` | `services/label_en` | worker | skips platforms missing from `PLATFORM_ROW` |
 | `posts_all` + `post_search_en` | `matches.post_term_hit` | `services/term_matcher` | worker | incremental `last_checked_post_id`; no rematch on text UPDATE |
-| `post_term_hit` + `posts_all` | claim JSON | `scripts/get_posts_*` | service | on-demand, not a systemd timer; keyset pages on `post_id`, one slice resident |
+| `post_term_hit` + `posts_all` | claim JSON | `scripts/get_posts_*` | service | on-demand, not a systemd timer; ids resolved once, one hydrated slice resident |
 | `posts_all` | summary files | `services/dashboard_summary` | worker | |
 | parent post + image URL | `sm.post_media` | scrape / backfill | service | **proposed** `025` |
 | `sm.post_media` | `sm.image_post` + registry | image interpreter | worker | **proposed** `025`; child post_id |

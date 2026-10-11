@@ -73,8 +73,8 @@ def test_run_pipeline_mocked(tmp_path: Path):
         patch("scripts.get_posts_extract_upload.iter_post_batches", side_effect=fake_batches),
         patch("scripts.get_posts_extract_upload.extract_run", side_effect=_fake_extract),
         patch(
-            "scripts.get_posts_extract_upload.count_posts_only",
-            return_value={"matched_post_count": 1},
+            "scripts.get_posts_extract_upload.matching_post_ids",
+            return_value=[1],
         ),
     ):
         summary = run_pipeline(terms=["measles"], out_path=out, keep_work=True)
@@ -112,8 +112,8 @@ def test_run_pipeline_extracts_each_page(tmp_path: Path):
         patch("scripts.get_posts_extract_upload.iter_post_batches", side_effect=fake_batches),
         patch("scripts.get_posts_extract_upload.extract_run", side_effect=fake_extract),
         patch(
-            "scripts.get_posts_extract_upload.count_posts_only",
-            return_value={"matched_post_count": 2},
+            "scripts.get_posts_extract_upload.matching_post_ids",
+            return_value=[1, 2],
         ),
     ):
         summary = run_pipeline(terms=["measles"], out_path=out)

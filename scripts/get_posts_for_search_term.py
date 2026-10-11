@@ -3,10 +3,11 @@
 Already supports a list of terms. Date range filters on
 ``COALESCE(created_at_ts, date_entered)`` (post time, falling back to ingest time).
 
-Matches are walked in keyset pages on ``post_id``. Only one hydrated slice is
-in memory at a time; the next slice is queried after the caller finishes the
-current one. The same ``--since`` / ``--until`` / ``--terms`` request can cover
-any number of posts.
+Matching ids are resolved once (term-hit index, then a date filter on id
+chunks), and posts are hydrated in pages from that list. Only one hydrated
+slice is in memory at a time; the next slice is queried after the caller
+finishes the current one. The same ``--since`` / ``--until`` / ``--terms``
+request can cover any number of posts.
 
 For fetch + punct/trim + claim extract + upload in one command, use
 ``python -m scripts.get_posts_extract_upload``.
@@ -49,11 +50,13 @@ from dotenv import load_dotenv
 
 from db.db import close_pool, getcursor, init_pool
 
-# One id page is hydrated and handed off before the next query. 200 posts fills
-# an extraction session; the text budget splits a page of long transcripts.
+# Matching ids are resolved once up front (a few MB even for large runs), then
+# hydrated DEFAULT_ROW_FETCH_SIZE at a time. Joining hits to the posts_all view
+# with a date range is a near-full scan of the view; looking up explicit ids is
+# a primary-key probe per branch, so the date filter only runs on id chunks.
 # Cursors close before a slice is yielded.
 DEFAULT_ROW_FETCH_SIZE = 200
-_HYDRATE_SLICE = 200
+_ID_FILTER_CHUNK = 5000
 _PAGE_CHAR_BUDGET = 8_000_000
 
 
@@ -115,24 +118,23 @@ def build_date_params(
     return (s, s, u, u)
 
 
-def _sql_fetch_post_id_page() -> str:
-    date_sql, _ = _date_filter_sql("p")
-    return f"""
-        WITH term_ids AS (
-            SELECT id
-            FROM taxonomy.vaccine_term
-            WHERE name = ANY(%s)
-        )
+def _sql_hit_post_ids() -> str:
+    return """
         SELECT DISTINCT ph.post_id
         FROM matches.post_term_hit ph
-        JOIN term_ids t
-          ON t.id = ph.term_id
-        JOIN sm.posts_all p
-          ON p.post_id = ph.post_id
-        WHERE ph.post_id > %s
+        WHERE ph.term_id IN (
+            SELECT id FROM taxonomy.vaccine_term WHERE name = ANY(%s)
+        )
+    """
+
+
+def _sql_filter_post_ids() -> str:
+    date_sql, _ = _date_filter_sql("p")
+    return f"""
+        SELECT p.post_id
+        FROM sm.posts_all p
+        WHERE p.post_id = ANY(%s)
         {date_sql}
-        ORDER BY ph.post_id
-        LIMIT %s
     """
 
 
@@ -208,32 +210,68 @@ def _sql_fetch_hits_for_ids() -> str:
     """
 
 
+def _matching_post_ids_cur(
+    cur: Any,
+    *,
+    terms: Sequence[str],
+    since: datetime | None,
+    until: datetime | None,
+) -> list[int]:
+    cur.execute(_sql_hit_post_ids(), (list(terms),))
+    hit_ids = sorted(int(r[0]) for r in cur.fetchall() if r and r[0] is not None)
+    date_params = build_date_params(since, until)
+    keep: list[int] = []
+    step = max(1, int(_ID_FILTER_CHUNK))
+    for i in range(0, len(hit_ids), step):
+        cur.execute(_sql_filter_post_ids(), (hit_ids[i : i + step], *date_params))
+        keep.extend(int(r[0]) for r in cur.fetchall() if r and r[0] is not None)
+    keep.sort()
+    return keep
+
+
+def find_matching_post_ids(
+    terms: Sequence[str],
+    *,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> list[int]:
+    """Sorted ids of posts in ``posts_all`` that hit ``terms`` within [since, until).
+
+    Requires an initialized pool.
+    """
+    if not terms:
+        return []
+    with getcursor() as cur:
+        return _matching_post_ids_cur(
+            cur,
+            terms=terms,
+            since=_ensure_utc(since),
+            until=_ensure_utc(until),
+        )
+
+
+def matching_post_ids(
+    terms: Sequence[str],
+    *,
+    use_prod: bool = False,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> list[int]:
+    """Like :func:`find_matching_post_ids`, opening and closing the DB pool."""
+    init_pool(prefix="prod" if use_prod else "dev")
+    try:
+        return find_matching_post_ids(terms, since=since, until=until)
+    finally:
+        close_pool()
+
+
 def count_posts_with_hits(
     terms: Sequence[str],
     *,
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> int:
-    if not terms:
-        return 0
-    date_sql, _ = _date_filter_sql("p")
-    sql = f"""
-        WITH term_ids AS (
-            SELECT id
-            FROM taxonomy.vaccine_term
-            WHERE name = ANY(%s)
-        )
-        SELECT count(DISTINCT ph.post_id)
-        FROM matches.post_term_hit ph
-        JOIN sm.posts_all p
-          ON p.post_id = ph.post_id
-        WHERE ph.term_id IN (SELECT id FROM term_ids)
-        {date_sql}
-    """
-    with getcursor() as cur:
-        cur.execute(sql, (list(terms), *build_date_params(since, until)))
-        row = cur.fetchone()
-    return int(row[0]) if row and row[0] is not None else 0
+    return len(find_matching_post_ids(terms, since=since, until=until))
 
 
 def _post_chars(post: dict[str, Any]) -> int:
@@ -260,22 +298,6 @@ def _split_budget(
         total += nxt
         idx += 1
     return head, posts[idx:]
-
-
-def _fetch_id_page(
-    cur: Any,
-    *,
-    terms: Sequence[str],
-    last_post_id: int,
-    date_params: tuple[Any, Any, Any, Any],
-    page_limit: int,
-) -> list[int]:
-    cur.execute(
-        _sql_fetch_post_id_page(),
-        (list(terms), last_post_id, *date_params, page_limit),
-    )
-    rows = cur.fetchall()
-    return [int(r[0]) for r in rows if r and r[0] is not None]
 
 
 def _hydrate_posts(
@@ -360,10 +382,13 @@ def iter_post_batches(
     since: datetime | None = None,
     until: datetime | None = None,
     limit: int | None = None,
+    post_ids: Sequence[int] | None = None,
 ) -> Iterator[list[dict[str, Any]]]:
     """Yield hydrated post slices that hit any of ``terms``.
 
     ``until`` is exclusive. ``limit`` caps yielded posts (``None`` = no cap).
+    ``post_ids`` skips the id lookup when the caller already ran
+    :func:`matching_post_ids` (e.g. to show a total).
     Database cursors are closed before each yield, so the caller can spend
     a long time on a slice (punctuation, claim extraction) without holding
     connections or the rest of the result set.
@@ -376,71 +401,26 @@ def iter_post_batches(
         raise ValueError(f"since ({since.isoformat()}) must be before until ({until.isoformat()})")
 
     init_pool(prefix="prod" if use_prod else "dev")
-    yielded = 0
-    last_post_id = 0
-    pending_ids: list[int] = []
-    buffered: list[dict[str, Any]] = []
-    date_params = build_date_params(since, until)
     try:
-        while True:
-            if limit is not None and yielded >= int(limit):
-                break
+        if post_ids is None:
+            ids = find_matching_post_ids(terms, since=since, until=until)
+        else:
+            ids = sorted(int(i) for i in post_ids)
+        if limit is not None:
+            ids = ids[: max(0, int(limit))]
 
-            if not pending_ids and not buffered:
-                page_limit = max(1, int(row_fetch_size))
-                if limit is not None:
-                    remaining = int(limit) - yielded
-                    if remaining <= 0:
-                        break
-                    page_limit = min(page_limit, remaining)
-                with getcursor() as cur_ids:
-                    ids = _fetch_id_page(
-                        cur_ids,
-                        terms=terms,
-                        last_post_id=last_post_id,
-                        date_params=date_params,
-                        page_limit=page_limit,
-                    )
-                if not ids:
-                    break
-                if ids[-1] <= last_post_id:
-                    break
-                last_post_id = ids[-1]
-                pending_ids = ids
-
-            if not buffered and pending_ids:
-                slice_n = max(1, int(_HYDRATE_SLICE))
-                if limit is not None:
-                    slice_n = min(slice_n, int(limit) - yielded)
-                    if slice_n <= 0:
-                        break
-                slice_ids = pending_ids[:slice_n]
-                del pending_ids[: len(slice_ids)]
-                with getcursor() as cur_posts, getcursor() as cur_hits:
-                    buffered = _hydrate_posts(
-                        cur_posts,
-                        cur_hits,
-                        terms=terms,
-                        post_ids=slice_ids,
-                    )
-                if not buffered:
-                    continue
-
-            if not buffered:
-                continue
-
-            head, buffered = _split_budget(buffered, max(1, int(_PAGE_CHAR_BUDGET)))
-            if limit is not None:
-                room = int(limit) - yielded
-                if room <= 0:
-                    break
-                if len(head) > room:
-                    buffered = head[room:] + buffered
-                    head = head[:room]
-            if not head:
-                break
-            yielded += len(head)
-            yield head
+        step = max(1, int(row_fetch_size))
+        for i in range(0, len(ids), step):
+            with getcursor() as cur_posts, getcursor() as cur_hits:
+                buffered = _hydrate_posts(
+                    cur_posts,
+                    cur_hits,
+                    terms=terms,
+                    post_ids=ids[i : i + step],
+                )
+            while buffered:
+                head, buffered = _split_budget(buffered, max(1, int(_PAGE_CHAR_BUDGET)))
+                yield head
     finally:
         close_pool()
 

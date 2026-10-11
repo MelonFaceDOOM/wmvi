@@ -54,14 +54,48 @@ def test_write_posts_json_envelope(tmp_path: Path):
     assert rebuilt["post_count"] == 1
 
 
-def test_sql_includes_date_filter():
-    from scripts.get_posts_for_search_term import _sql_fetch_post_id_page
+def test_sql_id_lookup_avoids_range_join_on_view():
+    from scripts.get_posts_for_search_term import _sql_filter_post_ids, _sql_hit_post_ids
 
-    sql = _sql_fetch_post_id_page()
-    assert "COALESCE(p.created_at_ts, p.date_entered)" in sql
-    assert "sm.posts_all" in sql
-    assert "ph.post_id > %s" in sql
-    assert "LIMIT %s" in sql
+    hits_sql = _sql_hit_post_ids()
+    assert "matches.post_term_hit" in hits_sql
+    assert "posts_all" not in hits_sql
+
+    filter_sql = _sql_filter_post_ids()
+    assert "COALESCE(p.created_at_ts, p.date_entered)" in filter_sql
+    assert "sm.posts_all" in filter_sql
+    assert "p.post_id = ANY(%s)" in filter_sql
+    assert "post_term_hit" not in filter_sql
+
+
+def test_matching_post_ids_filters_in_chunks(monkeypatch):
+    import scripts.get_posts_for_search_term as mod
+
+    class FakeCur:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, tuple]] = []
+            self._rows: list[tuple[int]] = []
+
+        def execute(self, sql, params):
+            self.calls.append((sql, params))
+            if "post_term_hit" in sql:
+                self._rows = [(5,), (1,), (3,), (2,), (4,)]
+            else:
+                ids = params[0]
+                self._rows = [(i,) for i in ids if i != 3]
+
+        def fetchall(self):
+            return self._rows
+
+    monkeypatch.setattr(mod, "_ID_FILTER_CHUNK", 2)
+    cur = FakeCur()
+    since = datetime(2023, 1, 1, tzinfo=timezone.utc)
+    ids = mod._matching_post_ids_cur(cur, terms=["measles"], since=since, until=None)
+
+    assert ids == [1, 2, 4, 5]
+    filter_calls = [c for c in cur.calls if "post_term_hit" not in c[0]]
+    assert [c[1][0] for c in filter_calls] == [[1, 2], [3, 4], [5]]
+    assert filter_calls[0][1][1:] == (since, since, None, None)
 
 
 def test_iter_post_batches_empty_terms(monkeypatch):
@@ -76,7 +110,7 @@ def test_iter_post_batches_closes_cursors_before_yield(monkeypatch):
     import scripts.get_posts_for_search_term as mod
 
     state = {"open": 0}
-    id_calls: list[int] = []
+    id_calls: list[tuple] = []
 
     @contextmanager
     def fake_getcursor(*_args, **_kwargs):
@@ -86,15 +120,11 @@ def test_iter_post_batches_closes_cursors_before_yield(monkeypatch):
         finally:
             state["open"] -= 1
 
-    def fake_ids(_cur, *, terms, last_post_id, date_params, page_limit):
-        assert state["open"] == 1
+    def fake_find(terms, *, since, until):
+        assert state["open"] == 0
         assert terms == ["measles"]
-        assert date_params == (None, None, None, None)
-        assert page_limit == mod.DEFAULT_ROW_FETCH_SIZE
-        id_calls.append(last_post_id)
-        if last_post_id == 0:
-            return [1, 2]
-        return []
+        id_calls.append((since, until))
+        return [1, 2]
 
     def fake_hydrate(_cur_posts, _cur_hits, *, terms, post_ids):
         assert state["open"] == 2
@@ -111,10 +141,9 @@ def test_iter_post_batches_closes_cursors_before_yield(monkeypatch):
     monkeypatch.setattr(mod, "getcursor", fake_getcursor)
     monkeypatch.setattr(mod, "init_pool", lambda *_a, **_k: None)
     monkeypatch.setattr(mod, "close_pool", lambda *_a, **_k: None)
-    monkeypatch.setattr(mod, "_fetch_id_page", fake_ids)
+    monkeypatch.setattr(mod, "find_matching_post_ids", fake_find)
     monkeypatch.setattr(mod, "_hydrate_posts", fake_hydrate)
     monkeypatch.setattr(mod, "_PAGE_CHAR_BUDGET", 5)
-    monkeypatch.setattr(mod, "_HYDRATE_SLICE", 10)
 
     seen: list[list[int]] = []
     for batch in mod.iter_post_batches(["measles"]):
@@ -122,7 +151,41 @@ def test_iter_post_batches_closes_cursors_before_yield(monkeypatch):
         seen.append([post["post_id"] for post in batch])
 
     assert seen == [[1], [2]]
-    assert id_calls == [0, 2]
+    assert id_calls == [(None, None)]
+
+
+def test_iter_post_batches_uses_given_ids_and_limit(monkeypatch):
+    import scripts.get_posts_for_search_term as mod
+
+    @contextmanager
+    def fake_getcursor(*_args, **_kwargs):
+        yield object()
+
+    def no_lookup(*_a, **_k):
+        raise AssertionError("post_ids given; id lookup must not run")
+
+    hydrated: list[list[int]] = []
+
+    def fake_hydrate(_cur_posts, _cur_hits, *, terms, post_ids):
+        hydrated.append(list(post_ids))
+        return [{"post_id": i, "text": "x", "hits": [{}]} for i in post_ids]
+
+    monkeypatch.setattr(mod, "getcursor", fake_getcursor)
+    monkeypatch.setattr(mod, "init_pool", lambda *_a, **_k: None)
+    monkeypatch.setattr(mod, "close_pool", lambda *_a, **_k: None)
+    monkeypatch.setattr(mod, "find_matching_post_ids", no_lookup)
+    monkeypatch.setattr(mod, "_hydrate_posts", fake_hydrate)
+
+    batches = list(
+        mod.iter_post_batches(
+            ["measles"],
+            post_ids=[7, 3, 5, 1, 9],
+            row_fetch_size=2,
+            limit=4,
+        )
+    )
+    assert hydrated == [[1, 3], [5, 7]]
+    assert [p["post_id"] for b in batches for p in b] == [1, 3, 5, 7]
 
 
 def test_fetch_and_write_streams_pages(tmp_path: Path, monkeypatch):

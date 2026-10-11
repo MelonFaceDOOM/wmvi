@@ -49,6 +49,7 @@ from scripts.get_posts_for_search_term import (
     count_only as count_posts_only,
     fetch_and_write,
     iter_post_batches,
+    matching_post_ids,
     parse_utc_datetime,
     write_posts_json,
 )
@@ -279,17 +280,21 @@ def run_pipeline(
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print("[count] counting matching posts...", flush=True)
-    matched = int(
-        count_posts_only(
-            terms=terms_list,
-            use_prod=use_prod,
-            since=since,
-            until=until,
-        )["matched_post_count"]
+    print("[count] finding matching post ids...", flush=True)
+    count_started = time.monotonic()
+    post_ids = matching_post_ids(
+        terms_list,
+        use_prod=use_prod,
+        since=since,
+        until=until,
     )
+    matched = len(post_ids)
     total_posts = matched if limit is None else min(matched, max(0, int(limit)))
-    print(f"[count] {total_posts} posts to process", flush=True)
+    print(
+        f"[count] {total_posts} posts to process"
+        f" ({format_duration(time.monotonic() - count_started)})",
+        flush=True,
+    )
 
     work_dir_owned: tempfile.TemporaryDirectory[str] | None = None
     if keep_work:
@@ -332,7 +337,7 @@ def run_pipeline(
         fetched = 0
         started = time.monotonic()
         print(
-            f"[fetch] keyset pages of up to {max(1, int(row_fetch_size))} posts; "
+            f"[fetch] pages of up to {max(1, int(row_fetch_size))} posts; "
             "each slice is extracted before the next query",
             flush=True,
         )
@@ -343,6 +348,7 @@ def run_pipeline(
             until=until,
             limit=limit,
             row_fetch_size=row_fetch_size,
+            post_ids=post_ids,
         ):
             page_n += 1
             fetched += len(batch)
