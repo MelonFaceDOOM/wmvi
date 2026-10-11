@@ -3,6 +3,11 @@
 Already supports a list of terms. Date range filters on
 ``COALESCE(created_at_ts, date_entered)`` (post time, falling back to ingest time).
 
+Matches are walked in keyset pages on ``post_id``. Only one hydrated slice is
+in memory at a time; the next slice is queried after the caller finishes the
+current one. The same ``--since`` / ``--until`` / ``--terms`` request can cover
+any number of posts.
+
 For fetch + punct/trim + claim extract + upload in one command, use
 ``python -m scripts.get_posts_extract_upload``.
 
@@ -13,9 +18,9 @@ To dump taxonomy term names for ``--terms-file``::
 
 Library::
 
-    from scripts.get_posts_for_search_term import iter_posts_for_terms, write_posts_json
+    from scripts.get_posts_for_search_term import iter_post_batches
 
-    for post in iter_posts_for_terms(["measles", "mmr"], since=..., until=...):
+    for batch in iter_post_batches(["measles", "mmr"], since=..., until=...):
         ...
 
 CLI::
@@ -43,6 +48,13 @@ from typing import Any, Iterator, Sequence
 from dotenv import load_dotenv
 
 from db.db import close_pool, getcursor, init_pool
+
+# One id page is hydrated and handed off before the next query. 200 posts fills
+# an extraction session; the text budget splits a page of long transcripts.
+# Cursors close before a slice is yielded.
+DEFAULT_ROW_FETCH_SIZE = 200
+_HYDRATE_SLICE = 200
+_PAGE_CHAR_BUDGET = 8_000_000
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -224,19 +236,137 @@ def count_posts_with_hits(
     return int(row[0]) if row and row[0] is not None else 0
 
 
-def iter_posts_for_terms(
+def _post_chars(post: dict[str, Any]) -> int:
+    text = post.get("text") or ""
+    tsv = post.get("tsv_en") or ""
+    return len(text) + len(tsv)
+
+
+def _split_budget(
+    posts: list[dict[str, Any]],
+    budget: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split off a head that stays within ``budget`` chars. Head is never empty."""
+    if not posts:
+        return [], []
+    head = [posts[0]]
+    total = _post_chars(posts[0])
+    idx = 1
+    while idx < len(posts):
+        nxt = _post_chars(posts[idx])
+        if total + nxt > budget:
+            break
+        head.append(posts[idx])
+        total += nxt
+        idx += 1
+    return head, posts[idx:]
+
+
+def _fetch_id_page(
+    cur: Any,
+    *,
+    terms: Sequence[str],
+    last_post_id: int,
+    date_params: tuple[Any, Any, Any, Any],
+    page_limit: int,
+) -> list[int]:
+    cur.execute(
+        _sql_fetch_post_id_page(),
+        (list(terms), last_post_id, *date_params, page_limit),
+    )
+    rows = cur.fetchall()
+    return [int(r[0]) for r in rows if r and r[0] is not None]
+
+
+def _hydrate_posts(
+    cur_posts: Any,
+    cur_hits: Any,
+    *,
+    terms: Sequence[str],
+    post_ids: Sequence[int],
+) -> list[dict[str, Any]]:
+    """Load post bodies and term hits for ``post_ids``. Drops ids with no hits."""
+    if not post_ids:
+        return []
+    cur_posts.execute(_sql_fetch_posts_for_ids(), (list(post_ids),))
+    posts_by_id: dict[int, dict[str, Any]] = {}
+    for row in cur_posts.fetchall():
+        (
+            post_id,
+            platform,
+            key1,
+            key2,
+            date_entered,
+            created_at_ts,
+            text,
+            tsv_en,
+            is_en,
+            primary_metric,
+            url,
+            reddit_submission_title,
+            reddit_comment_submission_title,
+            telegram_channel,
+            youtube_video_title,
+            podcast_name,
+        ) = row
+        posts_by_id[int(post_id)] = {
+            "post_id": post_id,
+            "platform": platform,
+            "key1": key1,
+            "key2": key2,
+            "date_entered": _json_val(_ensure_utc(date_entered)),
+            "created_at_ts": _json_val(_ensure_utc(created_at_ts)),
+            "text": text,
+            "tsv_en": str(tsv_en) if tsv_en is not None else None,
+            "is_en": is_en,
+            "primary_metric": primary_metric,
+            "url": url,
+            "reddit_submission_title": reddit_submission_title,
+            "reddit_comment_submission_title": reddit_comment_submission_title,
+            "telegram_channel": telegram_channel,
+            "youtube_video_title": youtube_video_title,
+            "podcast_name": podcast_name,
+            "hits": [],
+        }
+
+    cur_hits.execute(_sql_fetch_hits_for_ids(), (list(terms), list(post_ids)))
+    for row in cur_hits.fetchall():
+        post_id, term_id, term_name, match_start, match_end = row
+        post = posts_by_id.get(int(post_id))
+        if post is None:
+            continue
+        post["hits"].append(
+            {
+                "term_id": term_id,
+                "term_name": term_name,
+                "match_start": match_start,
+                "match_end": match_end,
+            }
+        )
+
+    posts: list[dict[str, Any]] = []
+    for post_id in post_ids:
+        post = posts_by_id.get(int(post_id))
+        if post and post["hits"]:
+            posts.append(post)
+    return posts
+
+
+def iter_post_batches(
     terms: Sequence[str],
     *,
     use_prod: bool = False,
-    row_fetch_size: int = 2000,
+    row_fetch_size: int = DEFAULT_ROW_FETCH_SIZE,
     since: datetime | None = None,
     until: datetime | None = None,
     limit: int | None = None,
-) -> Iterator[dict[str, Any]]:
-    """Yield post dicts that hit any of ``terms``, optionally within [since, until).
+) -> Iterator[list[dict[str, Any]]]:
+    """Yield hydrated post slices that hit any of ``terms``.
 
-    ``until`` is exclusive. Timestamps use COALESCE(created_at_ts, date_entered).
-    ``limit`` caps yielded posts (None = no cap).
+    ``until`` is exclusive. ``limit`` caps yielded posts (``None`` = no cap).
+    Database cursors are closed before each yield, so the caller can spend
+    a long time on a slice (punctuation, claim extraction) without holding
+    connections or the rest of the result set.
     """
     if not terms:
         return
@@ -247,99 +377,101 @@ def iter_posts_for_terms(
 
     init_pool(prefix="prod" if use_prod else "dev")
     yielded = 0
+    last_post_id = 0
+    pending_ids: list[int] = []
+    buffered: list[dict[str, Any]] = []
+    date_params = build_date_params(since, until)
     try:
-        sql_post_id_page = _sql_fetch_post_id_page()
-        sql_posts_for_ids = _sql_fetch_posts_for_ids()
-        sql_hits_for_ids = _sql_fetch_hits_for_ids()
-        last_post_id = 0
-        date_params = build_date_params(since, until)
+        while True:
+            if limit is not None and yielded >= int(limit):
+                break
 
-        with getcursor() as cur_ids, getcursor() as cur_posts, getcursor() as cur_hits:
-            while True:
+            if not pending_ids and not buffered:
                 page_limit = max(1, int(row_fetch_size))
                 if limit is not None:
                     remaining = int(limit) - yielded
                     if remaining <= 0:
                         break
                     page_limit = min(page_limit, remaining)
-
-                cur_ids.execute(
-                    sql_post_id_page,
-                    (list(terms), last_post_id, *date_params, page_limit),
-                )
-                id_rows = cur_ids.fetchall()
-                if not id_rows:
-                    break
-                post_ids = [int(r[0]) for r in id_rows if r and r[0] is not None]
-                if not post_ids:
-                    break
-                last_post_id = post_ids[-1]
-
-                cur_posts.execute(sql_posts_for_ids, (post_ids,))
-                posts_by_id: dict[int, dict[str, Any]] = {}
-                for row in cur_posts.fetchall():
-                    (
-                        post_id,
-                        platform,
-                        key1,
-                        key2,
-                        date_entered,
-                        created_at_ts,
-                        text,
-                        tsv_en,
-                        is_en,
-                        primary_metric,
-                        url,
-                        reddit_submission_title,
-                        reddit_comment_submission_title,
-                        telegram_channel,
-                        youtube_video_title,
-                        podcast_name,
-                    ) = row
-                    posts_by_id[int(post_id)] = {
-                        "post_id": post_id,
-                        "platform": platform,
-                        "key1": key1,
-                        "key2": key2,
-                        "date_entered": _json_val(_ensure_utc(date_entered)),
-                        "created_at_ts": _json_val(_ensure_utc(created_at_ts)),
-                        "text": text,
-                        "tsv_en": str(tsv_en) if tsv_en is not None else None,
-                        "is_en": is_en,
-                        "primary_metric": primary_metric,
-                        "url": url,
-                        "reddit_submission_title": reddit_submission_title,
-                        "reddit_comment_submission_title": reddit_comment_submission_title,
-                        "telegram_channel": telegram_channel,
-                        "youtube_video_title": youtube_video_title,
-                        "podcast_name": podcast_name,
-                        "hits": [],
-                    }
-
-                cur_hits.execute(sql_hits_for_ids, (list(terms), post_ids))
-                for row in cur_hits.fetchall():
-                    post_id, term_id, term_name, match_start, match_end = row
-                    post = posts_by_id.get(int(post_id))
-                    if post is None:
-                        continue
-                    post["hits"].append(
-                        {
-                            "term_id": term_id,
-                            "term_name": term_name,
-                            "match_start": match_start,
-                            "match_end": match_end,
-                        }
+                with getcursor() as cur_ids:
+                    ids = _fetch_id_page(
+                        cur_ids,
+                        terms=terms,
+                        last_post_id=last_post_id,
+                        date_params=date_params,
+                        page_limit=page_limit,
                     )
+                if not ids:
+                    break
+                if ids[-1] <= last_post_id:
+                    break
+                last_post_id = ids[-1]
+                pending_ids = ids
 
-                for post_id in post_ids:
-                    post = posts_by_id.get(int(post_id))
-                    if post and post["hits"]:
-                        yield post
-                        yielded += 1
-                        if limit is not None and yielded >= int(limit):
-                            return
+            if not buffered and pending_ids:
+                slice_n = max(1, int(_HYDRATE_SLICE))
+                if limit is not None:
+                    slice_n = min(slice_n, int(limit) - yielded)
+                    if slice_n <= 0:
+                        break
+                slice_ids = pending_ids[:slice_n]
+                del pending_ids[: len(slice_ids)]
+                with getcursor() as cur_posts, getcursor() as cur_hits:
+                    buffered = _hydrate_posts(
+                        cur_posts,
+                        cur_hits,
+                        terms=terms,
+                        post_ids=slice_ids,
+                    )
+                if not buffered:
+                    continue
+
+            if not buffered:
+                continue
+
+            head, buffered = _split_budget(buffered, max(1, int(_PAGE_CHAR_BUDGET)))
+            if limit is not None:
+                room = int(limit) - yielded
+                if room <= 0:
+                    break
+                if len(head) > room:
+                    buffered = head[room:] + buffered
+                    head = head[:room]
+            if not head:
+                break
+            yielded += len(head)
+            yield head
     finally:
         close_pool()
+
+
+def iter_posts_for_terms(
+    terms: Sequence[str],
+    *,
+    use_prod: bool = False,
+    row_fetch_size: int = DEFAULT_ROW_FETCH_SIZE,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    limit: int | None = None,
+) -> Iterator[dict[str, Any]]:
+    """Yield post dicts that hit any of ``terms``, optionally within [since, until).
+
+    ``until`` is exclusive. Timestamps use COALESCE(created_at_ts, date_entered).
+    ``limit`` caps yielded posts (None = no cap).
+
+    Pages are fetched underneath. ``list(...)`` on this iterator still holds the
+    full result; use :func:`iter_post_batches` or :func:`fetch_and_write` for
+    large ranges.
+    """
+    for batch in iter_post_batches(
+        terms,
+        use_prod=use_prod,
+        row_fetch_size=row_fetch_size,
+        since=since,
+        until=until,
+        limit=limit,
+    ):
+        yield from batch
 
 
 def build_posts_payload(
@@ -387,6 +519,66 @@ def write_posts_json(
     return payload
 
 
+class JsonPostsStreamWriter:
+    """Write a ``{..., "posts": [...], "post_count": N}`` file one post at a time."""
+
+    def __init__(self, final_path: Path, meta: dict[str, Any]) -> None:
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        self.final_path = final_path
+        self.tmp_path = final_path.with_suffix(final_path.suffix + ".tmp")
+        self._f = self.tmp_path.open("w", encoding="utf-8")
+        self._first_post = True
+        self._closed = False
+        self._finalized = False
+        self.written_posts = 0
+
+        self._f.write("{\n")
+        for key, value in meta.items():
+            if key == "posts":
+                continue
+            self._f.write(f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)},\n")
+        self._f.write('  "posts": [\n')
+
+    def write_post(self, post: dict[str, Any]) -> None:
+        if not self._first_post:
+            self._f.write(",\n")
+        self._first_post = False
+        blob = json.dumps(post, ensure_ascii=False, indent=2)
+        self._f.write("\n".join("    " + line for line in blob.splitlines()))
+        self.written_posts += 1
+        self._f.flush()
+
+    def finalize(self, extra: dict[str, Any] | None = None) -> None:
+        if self._finalized:
+            return
+        tail: dict[str, Any] = {"post_count": self.written_posts}
+        if extra:
+            for key, value in extra.items():
+                if key not in tail:
+                    tail[key] = value
+        self._f.write("\n  ]")
+        for key, value in tail.items():
+            self._f.write(",\n")
+            self._f.write(f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)}")
+        self._f.write("\n}\n")
+        self._f.flush()
+        self._close_file()
+        self.tmp_path.replace(self.final_path)
+        self._finalized = True
+
+    def abort(self) -> None:
+        if self._finalized:
+            return
+        self._close_file()
+        self.tmp_path.unlink(missing_ok=True)
+
+    def _close_file(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._f.close()
+
+
 def fetch_and_write(
     *,
     terms: Sequence[str],
@@ -395,47 +587,67 @@ def fetch_and_write(
     since: datetime | None = None,
     until: datetime | None = None,
     limit: int | None = None,
-    row_fetch_size: int = 2000,
+    row_fetch_size: int = DEFAULT_ROW_FETCH_SIZE,
     count_first: bool = False,
 ) -> dict[str, Any]:
-    """Fetch matching posts and write ``out_path``. Returns summary metadata."""
+    """Fetch matching posts and write ``out_path``. Returns summary metadata.
+
+    Posts are streamed to disk one database slice at a time.
+    """
     terms_list = [t.strip() for t in terms if str(t).strip()]
     if not terms_list:
         raise ValueError("At least one search term is required")
 
+    since_u = _ensure_utc(since)
+    until_u = _ensure_utc(until)
     matched: int | None = None
     if count_first:
         init_pool(prefix="prod" if use_prod else "dev")
         try:
-            matched = count_posts_with_hits(terms_list, since=since, until=until)
+            matched = count_posts_with_hits(terms_list, since=since_u, until=until_u)
         finally:
             close_pool()
 
-    posts = list(
-        iter_posts_for_terms(
+    writer = JsonPostsStreamWriter(
+        out_path,
+        {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "terms": terms_list,
+            "since": since_u.isoformat() if since_u else None,
+            "until": until_u.isoformat() if until_u else None,
+        },
+    )
+    finalized = False
+    try:
+        total = 0
+        page_n = 0
+        for batch in iter_post_batches(
             terms_list,
             use_prod=use_prod,
             row_fetch_size=row_fetch_size,
-            since=since,
-            until=until,
+            since=since_u,
+            until=until_u,
             limit=limit,
-        )
-    )
-    write_posts_json(
-        out_path,
-        posts,
-        terms=terms_list,
-        since=since,
-        until=until,
-        matched_post_count=matched if matched is not None else len(posts),
-    )
+        ):
+            page_n += 1
+            for post in batch:
+                writer.write_post(post)
+            total += len(batch)
+            print(f"[fetch] page {page_n}: {len(batch)} posts ({total} total)", flush=True)
+        matched_out = matched if matched is not None else writer.written_posts
+        writer.finalize(extra={"matched_post_count": matched_out})
+        finalized = True
+    finally:
+        if not finalized:
+            writer.abort()
+
     return {
         "out": str(out_path),
-        "post_count": len(posts),
-        "matched_post_count": matched if matched is not None else len(posts),
+        "post_count": writer.written_posts,
+        "matched_post_count": matched if matched is not None else writer.written_posts,
         "terms": terms_list,
-        "since": since.isoformat() if since else None,
-        "until": until.isoformat() if until else None,
+        "since": since_u.isoformat() if since_u else None,
+        "until": until_u.isoformat() if until_u else None,
         "use_prod": use_prod,
     }
 

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
@@ -275,6 +276,27 @@ def _load_payload(input_file: Path) -> tuple[dict[str, Any], list[dict[str, Any]
     return payload, rows
 
 
+def format_duration(seconds: float) -> str:
+    """Compact duration: ``45s``, ``1m 30s``, ``1h 01m``."""
+    total = max(0, int(round(seconds)))
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
+
+
+def format_eta(*, done: int, total: int | None, elapsed_s: float) -> str:
+    """ETA from a completed/total ratio. ``unknown`` until the first completion."""
+    if total is None or done <= 0 or elapsed_s < 0:
+        return "unknown"
+    if done >= total:
+        return format_duration(0)
+    return format_duration(elapsed_s * (total - done) / done)
+
+
 def batched(seq: list[dict[str, Any]], size: int) -> Iterator[list[dict[str, Any]]]:
     step = max(1, int(size))
     for i in range(0, len(seq), step):
@@ -365,6 +387,8 @@ def run(
     )
 
     completed = 0
+    extract_started = time.monotonic()
+    pending_total = len(pending_tasks)
     for batch in batched(pending_tasks, batch_count):
         request_tasks = [
             RequestTask(
@@ -385,7 +409,13 @@ def run(
                 continue
             writer.write_post(_apply_request_result(row, result))
             completed += 1
-        print(f"[progress] extracted {completed}/{len(pending_tasks)} pending rows", flush=True)
+        elapsed = time.monotonic() - extract_started
+        eta = format_eta(done=completed, total=pending_total, elapsed_s=elapsed)
+        print(
+            f"[progress] extracted {completed}/{pending_total} pending rows"
+            f" | elapsed {format_duration(elapsed)} | eta {eta}",
+            flush=True,
+        )
     writer.finalize()
     print(f"[ok] wrote {writer.written_posts} total rows -> {out_file.resolve()}", flush=True)
 

@@ -15,7 +15,7 @@ CLI::
     python -m scripts.get_posts_extract_upload \\
       --terms measles --since 2024-01-01 --until 2025-01-01 --prod --smoke
 
-    # Full run:
+    # Full run (any date span; posts are fetched and extracted one page at a time):
     python -m scripts.get_posts_extract_upload \\
       --terms measles --since 2024-01-01 --until 2025-01-01 \\
       --prod --out measles_claims.json --upload
@@ -26,13 +26,14 @@ from __future__ import annotations
 import argparse
 import json
 import tempfile
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 
-from nlp.claim_extraction.batch import run_on_posts as extract_run
+from nlp.claim_extraction.batch import format_duration, format_eta, run_on_posts as extract_run
 from nlp.claim_extraction.defaults import (
     DEFAULT_BATCH_COUNT,
     DEFAULT_MAX_CLAIMS,
@@ -40,11 +41,14 @@ from nlp.claim_extraction.defaults import (
     DEFAULT_MAX_WORKERS,
     MODEL_NAME,
 )
-from nlp.claim_extraction.nest import nest_posts_chunks_claims, write_nested_json
+from nlp.claim_extraction.nest import nest_posts_chunks_claims
 from nlp.claim_extraction.prep import prepare_and_explode
 from scripts.get_posts_for_search_term import (
+    DEFAULT_ROW_FETCH_SIZE,
+    JsonPostsStreamWriter,
     count_only as count_posts_only,
     fetch_and_write,
+    iter_post_batches,
     parse_utc_datetime,
     write_posts_json,
 )
@@ -203,6 +207,48 @@ def run_smoke(
         }
 
 
+def _extract_chunk_batch(
+    chunk_rows: list[dict[str, Any]],
+    *,
+    work_dir: Path,
+    terms: list[str],
+    since: datetime | None,
+    until: datetime | None,
+    batch_count: int,
+    max_workers: int,
+    max_claims: int,
+    max_retries: int,
+) -> list[dict[str, Any]]:
+    """Extract one in-memory slice. The batch files are removed before return."""
+    if not chunk_rows:
+        return []
+    batch_chunks = work_dir / "_batch_chunks.json"
+    batch_extract = work_dir / "_batch_extract.json"
+    batch_extract.unlink(missing_ok=True)
+    try:
+        write_posts_json(
+            batch_chunks,
+            chunk_rows,
+            terms=terms,
+            since=since,
+            until=until,
+        )
+        extract_run(
+            posts_path=batch_chunks,
+            out_path=batch_extract,
+            alignment=True,
+            batch_count=batch_count,
+            max_workers=max_workers,
+            max_claims=max_claims,
+            max_retries=max_retries,
+        )
+        extract_payload = json.loads(batch_extract.read_text(encoding="utf-8"))
+        return [r for r in extract_payload.get("posts", []) if isinstance(r, dict)]
+    finally:
+        batch_chunks.unlink(missing_ok=True)
+        batch_extract.unlink(missing_ok=True)
+
+
 def run_pipeline(
     *,
     terms: list[str],
@@ -219,14 +265,31 @@ def run_pipeline(
     upload: bool = False,
     upload_as: str | None = None,
     keep_work: bool = False,
+    row_fetch_size: int = DEFAULT_ROW_FETCH_SIZE,
 ) -> dict[str, Any]:
-    """Fetch → prep → extract → nest → optional upload. Returns summary dict."""
+    """Fetch → prep → extract → nest → optional upload, one DB slice at a time.
+
+    Always counts matches first so the progress line can show an overall ETA.
+    ``count_first`` is accepted so existing callers keep working.
+    """
     terms_list = [t.strip() for t in terms if str(t).strip()]
     if not terms_list:
         raise ValueError("At least one search term is required")
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print("[count] counting matching posts...", flush=True)
+    matched = int(
+        count_posts_only(
+            terms=terms_list,
+            use_prod=use_prod,
+            since=since,
+            until=until,
+        )["matched_post_count"]
+    )
+    total_posts = matched if limit is None else min(matched, max(0, int(limit)))
+    print(f"[count] {total_posts} posts to process", flush=True)
 
     work_dir_owned: tempfile.TemporaryDirectory[str] | None = None
     if keep_work:
@@ -236,73 +299,130 @@ def run_pipeline(
         work_dir_owned = tempfile.TemporaryDirectory(prefix="get_posts_extract_")
         work_dir = Path(work_dir_owned.name)
 
-    posts_path = work_dir / "posts.json"
-    chunks_path = work_dir / "chunk_rows.json"
-    extract_path = work_dir / "extract_rows.json"
+    fetch_meta = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "terms": terms_list,
+        "since": _iso(since),
+        "until": _iso(until),
+    }
+    nested_writer = JsonPostsStreamWriter(
+        out_path,
+        {
+            **fetch_meta,
+            "model": MODEL_NAME,
+            "use_prod": use_prod,
+            "claims_extraction_mode": "alignment",
+        },
+    )
+    posts_writer: JsonPostsStreamWriter | None = None
+    chunks_writer: JsonPostsStreamWriter | None = None
+    extract_writer: JsonPostsStreamWriter | None = None
+    if keep_work:
+        posts_writer = JsonPostsStreamWriter(work_dir / "posts.json", fetch_meta)
+        chunks_writer = JsonPostsStreamWriter(work_dir / "chunk_rows.json", fetch_meta)
+        extract_writer = JsonPostsStreamWriter(work_dir / "extract_rows.json", fetch_meta)
+    writers = [w for w in (nested_writer, posts_writer, chunks_writer, extract_writer) if w is not None]
 
+    finalized = False
+    post_count = 0
+    chunk_count = 0
+    claim_count = 0
     try:
-        fetch_summary = fetch_and_write(
-            terms=terms_list,
-            out_path=posts_path,
+        page_n = 0
+        fetched = 0
+        started = time.monotonic()
+        print(
+            f"[fetch] keyset pages of up to {max(1, int(row_fetch_size))} posts; "
+            "each slice is extracted before the next query",
+            flush=True,
+        )
+        for batch in iter_post_batches(
+            terms_list,
             use_prod=use_prod,
             since=since,
             until=until,
             limit=limit,
-            count_first=count_first,
-        )
-        posts_payload = json.loads(posts_path.read_text(encoding="utf-8"))
-        posts = [p for p in posts_payload.get("posts", []) if isinstance(p, dict)]
+            row_fetch_size=row_fetch_size,
+        ):
+            page_n += 1
+            fetched += len(batch)
+            print(f"[fetch] page {page_n}: {len(batch)} posts ({fetched} total)", flush=True)
+            if posts_writer is not None:
+                for post in batch:
+                    posts_writer.write_post(post)
 
-        prepared, chunk_rows = prepare_and_explode(posts)
-        write_posts_json(
-            chunks_path,
-            chunk_rows,
-            terms=terms_list,
-            since=since,
-            until=until,
-            matched_post_count=fetch_summary.get("matched_post_count"),
-        )
+            prepared, chunk_rows = prepare_and_explode(batch)
+            if chunks_writer is not None:
+                for row in chunk_rows:
+                    chunks_writer.write_post(row)
 
-        extract_run(
-            posts_path=chunks_path,
-            out_path=extract_path,
-            alignment=True,
-            batch_count=batch_count,
-            max_workers=max_workers,
-            max_claims=max_claims,
-            max_retries=max_retries,
-        )
-        extract_payload = json.loads(extract_path.read_text(encoding="utf-8"))
-        extract_rows = [r for r in extract_payload.get("posts", []) if isinstance(r, dict)]
+            extract_rows = _extract_chunk_batch(
+                chunk_rows,
+                work_dir=work_dir,
+                terms=terms_list,
+                since=since,
+                until=until,
+                batch_count=batch_count,
+                max_workers=max_workers,
+                max_claims=max_claims,
+                max_retries=max_retries,
+            )
+            if extract_writer is not None:
+                for row in extract_rows:
+                    extract_writer.write_post(row)
 
-        nested = nest_posts_chunks_claims(
-            prepared,
-            extract_rows,
-            terms=terms_list,
-            since=_iso(since),
-            until=_iso(until),
-            model=MODEL_NAME,
-            extra_meta={"use_prod": use_prod, "claims_extraction_mode": "alignment"},
-        )
-        write_nested_json(out_path, nested)
+            nested = nest_posts_chunks_claims(
+                prepared,
+                extract_rows,
+                terms=terms_list,
+                since=_iso(since),
+                until=_iso(until),
+                model=MODEL_NAME,
+            )
+            for post in nested.get("posts", []):
+                if isinstance(post, dict):
+                    nested_writer.write_post(post)
+            post_count += int(nested.get("post_count") or 0)
+            chunk_count += int(nested.get("chunk_count") or 0)
+            claim_count += int(nested.get("claim_count") or 0)
+            elapsed = time.monotonic() - started
+            eta = format_eta(done=fetched, total=total_posts, elapsed_s=elapsed)
+            print(
+                f"[progress] posts {fetched}/{total_posts}"
+                f" | elapsed {format_duration(elapsed)} | eta {eta}"
+                f" | chunks {chunk_count} | claims {claim_count}",
+                flush=True,
+            )
+
+        nested_writer.finalize(extra={"chunk_count": chunk_count, "claim_count": claim_count})
+        matched_out = matched if matched is not None else fetched
+        for writer in (posts_writer, chunks_writer, extract_writer):
+            if writer is not None:
+                writer.finalize(extra={"matched_post_count": matched_out})
+        finalized = True
 
         summary: dict[str, Any] = {
             "out": str(out_path),
-            "post_count": nested["post_count"],
-            "chunk_count": nested["chunk_count"],
-            "claim_count": nested["claim_count"],
+            "post_count": post_count,
+            "chunk_count": chunk_count,
+            "claim_count": claim_count,
             "terms": terms_list,
             "since": _iso(since),
             "until": _iso(until),
             "use_prod": use_prod,
             "model": MODEL_NAME,
         }
+        if matched is not None:
+            summary["matched_post_count"] = matched
         if upload:
             from storage.nitwitch_upload import upload_file
 
             summary["uploaded_url"] = upload_file(out_path, remote_name=upload_as)
         return summary
     finally:
+        if not finalized:
+            for writer in writers:
+                writer.abort()
         if work_dir_owned is not None:
             work_dir_owned.cleanup()
 
