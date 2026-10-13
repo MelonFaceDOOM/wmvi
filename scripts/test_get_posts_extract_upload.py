@@ -204,3 +204,93 @@ def test_run_smoke_mocked():
     assert summary["mode"] == "smoke"
     assert summary["sample"]["post_id"] == 9
     assert summary["sample"]["chunk"]["claims"][0]["claim"] == "Measles can cause death."
+
+
+def test_partial_log_drops_torn_tail(tmp_path: Path):
+    import json
+
+    from scripts.get_posts_extract_upload import PartialPostsLog
+
+    out = tmp_path / "nested.json"
+    path = out.with_name(out.name + ".partial.jsonl")
+    whole = json.dumps({"post_id": 1, "chunks": [{"claims": [{"claim": "a"}]}]})
+    torn = json.dumps({"post_id": 2, "chunks": []})
+    path.write_text(whole + "\n" + torn[:12], encoding="utf-8")
+
+    log = PartialPostsLog.open(out, {"terms": ["measles"], "since": None, "until": None, "use_prod": False, "model": "m", "claims_extraction_mode": "alignment"})
+
+    assert log.done_ids == {1}
+    assert log.claim_count == 1
+    text = path.read_text(encoding="utf-8")
+    assert text.endswith("\n")
+    assert '"post_id": 2' not in text
+
+
+def test_partial_log_refuses_different_run(tmp_path: Path):
+    from scripts.get_posts_extract_upload import PartialPostsLog
+
+    out = tmp_path / "nested.json"
+    meta = {"terms": ["measles"], "since": "2023-01-01T00:00:00+00:00", "until": None, "use_prod": True, "model": "m", "claims_extraction_mode": "alignment"}
+    PartialPostsLog.open(out, meta)
+    other = {**meta, "since": "2024-01-01T00:00:00+00:00"}
+    try:
+        PartialPostsLog.open(out, other)
+    except ValueError as err:
+        assert "different run" in str(err)
+    else:
+        raise AssertionError("expected a different-run refusal")
+
+
+def test_run_pipeline_resumes_after_crash(tmp_path: Path):
+    import json
+
+    out = tmp_path / "nested.json"
+    state = {"calls": 0}
+    seen: list[list[int]] = []
+
+    def fake_batches(*_args, **kwargs):
+        ids = list(kwargs["post_ids"])
+        seen.append(ids)
+        for post_id in ids:
+            yield [_sample_post(post_id)]
+
+    def fake_extract(**kwargs):
+        state["calls"] += 1
+        if state["calls"] == 2:
+            raise RuntimeError("ssl dropped after the first page was saved")
+        _fake_extract(**kwargs)
+
+    with (
+        patch("scripts.get_posts_extract_upload.iter_post_batches", side_effect=fake_batches),
+        patch("scripts.get_posts_extract_upload.extract_run", side_effect=fake_extract),
+        patch("scripts.get_posts_extract_upload.matching_post_ids", return_value=[1, 2]),
+    ):
+        try:
+            run_pipeline(terms=["measles"], out_path=out)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("expected the first run to crash")
+
+    partial = out.with_name(out.name + ".partial.jsonl")
+    assert partial.is_file()
+    assert not out.is_file()
+    assert seen == [[1, 2]]
+
+    def fake_extract_ok(**kwargs):
+        state["calls"] += 1
+        _fake_extract(**kwargs)
+
+    with (
+        patch("scripts.get_posts_extract_upload.iter_post_batches", side_effect=fake_batches),
+        patch("scripts.get_posts_extract_upload.extract_run", side_effect=fake_extract_ok),
+        patch("scripts.get_posts_extract_upload.matching_post_ids", return_value=[1, 2]),
+    ):
+        summary = run_pipeline(terms=["measles"], out_path=out)
+
+    assert seen[1] == [2]
+    assert state["calls"] == 3
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert [post["post_id"] for post in payload["posts"]] == [1, 2]
+    assert payload["post_count"] == summary["post_count"] == 2
+    assert not partial.is_file()

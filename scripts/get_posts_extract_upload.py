@@ -19,17 +19,21 @@ CLI::
     python -m scripts.get_posts_extract_upload \\
       --terms measles --since 2024-01-01 --until 2025-01-01 \\
       --prod --out measles_claims.json --upload
+
+    Re-running the same command continues a crashed run. Finished pages live in
+    ``<out>.partial.jsonl`` until the final JSON is written.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from dotenv import load_dotenv
 
@@ -208,6 +212,195 @@ def run_smoke(
         }
 
 
+def partial_posts_path(out_path: Path) -> Path:
+    return out_path.with_name(out_path.name + ".partial.jsonl")
+
+
+def partial_meta_path(out_path: Path) -> Path:
+    return out_path.with_name(out_path.name + ".partial.meta.json")
+
+
+def _post_tallies(post: dict[str, Any]) -> tuple[int, int]:
+    chunks = post.get("chunks")
+    if not isinstance(chunks, list):
+        return 0, 0
+    claims = 0
+    for chunk in chunks:
+        if isinstance(chunk, dict) and isinstance(chunk.get("claims"), list):
+            claims += len(chunk["claims"])
+    return len(chunks), claims
+
+
+def _drop_torn_tail(path: Path) -> bool:
+    """Truncate a trailing partial line. Complete lines end with ``\\n``."""
+    if not path.is_file():
+        return False
+    size = path.stat().st_size
+    if size == 0:
+        return False
+    with path.open("rb+") as handle:
+        handle.seek(size - 1)
+        if handle.read(1) == b"\n":
+            return False
+        pos = size
+        while pos > 0:
+            step = min(65536, pos)
+            pos -= step
+            handle.seek(pos)
+            block = handle.read(step)
+            newline = block.rfind(b"\n")
+            if newline >= 0:
+                handle.truncate(pos + newline + 1)
+                return True
+        handle.truncate(0)
+        return True
+
+
+class PartialPostsLog:
+    """Append-only nested posts. A crash keeps every finished line.
+
+    The final ``--out`` JSON is assembled from this file only after every
+    matching post has been saved. Rerunning the same command skips ids already
+    in the log.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        meta_path: Path,
+        done_ids: set[int],
+        chunk_count: int,
+        claim_count: int,
+    ) -> None:
+        self.path = path
+        self.meta_path = meta_path
+        self.done_ids = done_ids
+        self.chunk_count = chunk_count
+        self.claim_count = claim_count
+
+    @classmethod
+    def open(cls, out_path: Path, meta: dict[str, Any]) -> PartialPostsLog:
+        path = partial_posts_path(out_path)
+        meta_path = partial_meta_path(out_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if meta_path.is_file():
+            saved = json.loads(meta_path.read_text(encoding="utf-8"))
+            if saved != meta:
+                raise ValueError(
+                    f"{meta_path} belongs to a different run {saved}; this run is {meta}. "
+                    "Delete the partial files to start over, or keep the same terms, dates, and model."
+                )
+        else:
+            tmp = meta_path.with_suffix(meta_path.suffix + ".tmp")
+            tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            tmp.replace(meta_path)
+        if _drop_torn_tail(path):
+            print(f"[resume] dropped a partial last line in {path}", flush=True)
+        done_ids: set[int] = set()
+        chunk_count = 0
+        claim_count = 0
+        if path.is_file() and path.stat().st_size:
+            with path.open(encoding="utf-8") as handle:
+                for line_no, line in enumerate(handle, start=1):
+                    if not line.strip():
+                        continue
+                    try:
+                        post = json.loads(line)
+                    except json.JSONDecodeError as err:
+                        raise ValueError(f"corrupt partial log {path} line {line_no}") from err
+                    if not isinstance(post, dict) or post.get("post_id") is None:
+                        raise ValueError(f"partial log {path} line {line_no} has no post_id")
+                    done_ids.add(int(post["post_id"]))
+                    chunks, claims = _post_tallies(post)
+                    chunk_count += chunks
+                    claim_count += claims
+        return cls(path, meta_path, done_ids, chunk_count, claim_count)
+
+    def append(self, posts: list[dict[str, Any]]) -> None:
+        fresh: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        for post in posts:
+            if not isinstance(post, dict) or post.get("post_id") is None:
+                raise ValueError("nested post is missing post_id")
+            post_id = int(post["post_id"])
+            if post_id in self.done_ids or post_id in seen:
+                continue
+            seen.add(post_id)
+            fresh.append(post)
+        if not fresh:
+            return
+        with self.path.open("a", encoding="utf-8") as handle:
+            for post in fresh:
+                handle.write(json.dumps(post, ensure_ascii=False) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        for post in fresh:
+            self.done_ids.add(int(post["post_id"]))
+            chunks, claims = _post_tallies(post)
+            self.chunk_count += chunks
+            self.claim_count += claims
+
+    def iter_posts(self) -> Iterator[dict[str, Any]]:
+        if not self.path.is_file():
+            return
+        with self.path.open(encoding="utf-8") as handle:
+            for line_no, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    post = json.loads(line)
+                except json.JSONDecodeError as err:
+                    raise ValueError(f"corrupt partial log {self.path} line {line_no}") from err
+                if isinstance(post, dict):
+                    yield post
+
+    def discard(self) -> None:
+        self.path.unlink(missing_ok=True)
+        self.meta_path.unlink(missing_ok=True)
+
+
+def _assemble_nested_json(
+    log: PartialPostsLog,
+    out_path: Path,
+    meta: dict[str, Any],
+) -> tuple[int, int, int]:
+    """Stream the partial log into the final nested JSON. The log is left in place."""
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    post_count = 0
+    chunk_count = 0
+    claim_count = 0
+    first = True
+    with tmp.open("w", encoding="utf-8") as handle:
+        handle.write("{\n")
+        for key, value in meta.items():
+            handle.write(f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)},\n")
+        handle.write('  "posts": [\n')
+        for post in log.iter_posts():
+            if not first:
+                handle.write(",\n")
+            first = False
+            blob = json.dumps(post, ensure_ascii=False, indent=2)
+            handle.write("\n".join("    " + line for line in blob.splitlines()))
+            chunks, claims = _post_tallies(post)
+            post_count += 1
+            chunk_count += chunks
+            claim_count += claims
+        handle.write("\n  ]")
+        tail = {
+            "post_count": post_count,
+            "chunk_count": chunk_count,
+            "claim_count": claim_count,
+        }
+        for key, value in tail.items():
+            handle.write(",\n")
+            handle.write(f"  {json.dumps(key)}: {json.dumps(value, ensure_ascii=False)}")
+        handle.write("\n}\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    tmp.replace(out_path)
+    return post_count, chunk_count, claim_count
+
+
 def _extract_chunk_batch(
     chunk_rows: list[dict[str, Any]],
     *,
@@ -272,6 +465,11 @@ def run_pipeline(
 
     Always counts matches first so the progress line can show an overall ETA.
     ``count_first`` is accepted so existing callers keep working.
+
+    Each finished page is appended to ``<out>.partial.jsonl`` and fsynced before
+    the next page starts. A crash leaves that file in place; rerunning the same
+    command skips saved post ids and continues. The final JSON replaces ``--out``
+    only after every page has been saved.
     """
     terms_list = [t.strip() for t in terms if str(t).strip()]
     if not terms_list:
@@ -310,49 +508,61 @@ def run_pipeline(
         "since": _iso(since),
         "until": _iso(until),
     }
-    nested_writer = JsonPostsStreamWriter(
-        out_path,
-        {
-            **fetch_meta,
-            "model": MODEL_NAME,
-            "use_prod": use_prod,
-            "claims_extraction_mode": "alignment",
-        },
-    )
+    resume_meta = {
+        "terms": terms_list,
+        "since": _iso(since),
+        "until": _iso(until),
+        "use_prod": bool(use_prod),
+        "model": MODEL_NAME,
+        "claims_extraction_mode": "alignment",
+    }
+    file_meta = {**fetch_meta, "model": MODEL_NAME, "use_prod": use_prod, "claims_extraction_mode": "alignment"}
+    log = PartialPostsLog.open(out_path, resume_meta)
+    capped_ids = post_ids if limit is None else post_ids[: max(0, int(limit))]
+    remaining = [post_id for post_id in capped_ids if post_id not in log.done_ids]
+    already = len(capped_ids) - len(remaining)
+    if already or log.path.is_file():
+        print(
+            f"[resume] {already} posts already saved in {log.path}; {len(remaining)} remaining",
+            flush=True,
+        )
+
     posts_writer: JsonPostsStreamWriter | None = None
     chunks_writer: JsonPostsStreamWriter | None = None
     extract_writer: JsonPostsStreamWriter | None = None
-    if keep_work:
+    if keep_work and remaining:
         posts_writer = JsonPostsStreamWriter(work_dir / "posts.json", fetch_meta)
         chunks_writer = JsonPostsStreamWriter(work_dir / "chunk_rows.json", fetch_meta)
         extract_writer = JsonPostsStreamWriter(work_dir / "extract_rows.json", fetch_meta)
-    writers = [w for w in (nested_writer, posts_writer, chunks_writer, extract_writer) if w is not None]
+    writers = [w for w in (posts_writer, chunks_writer, extract_writer) if w is not None]
 
     finalized = False
-    post_count = 0
-    chunk_count = 0
-    claim_count = 0
     try:
         page_n = 0
-        fetched = 0
+        new_fetched = 0
         started = time.monotonic()
-        print(
-            f"[fetch] pages of up to {max(1, int(row_fetch_size))} posts; "
-            "each slice is extracted before the next query",
-            flush=True,
-        )
-        for batch in iter_post_batches(
-            terms_list,
-            use_prod=use_prod,
-            since=since,
-            until=until,
-            limit=limit,
-            row_fetch_size=row_fetch_size,
-            post_ids=post_ids,
-        ):
+        pages: Any = ()
+        if remaining:
+            print(
+                f"[fetch] pages of up to {max(1, int(row_fetch_size))} posts; "
+                "each slice is extracted before the next query",
+                flush=True,
+            )
+            pages = iter_post_batches(
+                terms_list,
+                use_prod=use_prod,
+                since=since,
+                until=until,
+                row_fetch_size=row_fetch_size,
+                post_ids=remaining,
+            )
+        for batch in pages:
             page_n += 1
-            fetched += len(batch)
-            print(f"[fetch] page {page_n}: {len(batch)} posts ({fetched} total)", flush=True)
+            new_fetched += len(batch)
+            print(
+                f"[fetch] page {page_n}: {len(batch)} posts ({already + new_fetched} total)",
+                flush=True,
+            )
             if posts_writer is not None:
                 for post in batch:
                     posts_writer.write_post(post)
@@ -385,23 +595,19 @@ def run_pipeline(
                 until=_iso(until),
                 model=MODEL_NAME,
             )
-            for post in nested.get("posts", []):
-                if isinstance(post, dict):
-                    nested_writer.write_post(post)
-            post_count += int(nested.get("post_count") or 0)
-            chunk_count += int(nested.get("chunk_count") or 0)
-            claim_count += int(nested.get("claim_count") or 0)
+            page_posts = [post for post in nested.get("posts", []) if isinstance(post, dict)]
+            log.append(page_posts)
             elapsed = time.monotonic() - started
-            eta = format_eta(done=fetched, total=total_posts, elapsed_s=elapsed)
+            eta = format_eta(done=new_fetched, total=len(remaining), elapsed_s=elapsed)
             print(
-                f"[progress] posts {fetched}/{total_posts}"
+                f"[progress] posts {already + new_fetched}/{total_posts}"
                 f" | elapsed {format_duration(elapsed)} | eta {eta}"
-                f" | chunks {chunk_count} | claims {claim_count}",
+                f" | chunks {log.chunk_count} | claims {log.claim_count}",
                 flush=True,
             )
 
-        nested_writer.finalize(extra={"chunk_count": chunk_count, "claim_count": claim_count})
-        matched_out = matched if matched is not None else fetched
+        post_count, chunk_count, claim_count = _assemble_nested_json(log, out_path, file_meta)
+        matched_out = matched if matched is not None else already + new_fetched
         for writer in (posts_writer, chunks_writer, extract_writer):
             if writer is not None:
                 writer.finalize(extra={"matched_post_count": matched_out})
@@ -424,6 +630,7 @@ def run_pipeline(
             from storage.nitwitch_upload import upload_file
 
             summary["uploaded_url"] = upload_file(out_path, remote_name=upload_as)
+        log.discard()
         return summary
     finally:
         if not finalized:

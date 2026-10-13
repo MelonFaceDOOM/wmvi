@@ -42,10 +42,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+import psycopg2
 from dotenv import load_dotenv
 
 from db.db import close_pool, getcursor, init_pool
@@ -58,6 +60,8 @@ from db.db import close_pool, getcursor, init_pool
 DEFAULT_ROW_FETCH_SIZE = 200
 _ID_FILTER_CHUNK = 5000
 _PAGE_CHAR_BUDGET = 8_000_000
+_HYDRATE_ATTEMPTS = 3
+_HYDRATE_RETRY_S = (2, 5)
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -410,14 +414,36 @@ def iter_post_batches(
             ids = ids[: max(0, int(limit))]
 
         step = max(1, int(row_fetch_size))
+        prefix = "prod" if use_prod else "dev"
         for i in range(0, len(ids), step):
-            with getcursor() as cur_posts, getcursor() as cur_hits:
-                buffered = _hydrate_posts(
-                    cur_posts,
-                    cur_hits,
-                    terms=terms,
-                    post_ids=ids[i : i + step],
-                )
+            slice_ids = ids[i : i + step]
+            buffered = None
+            for attempt in range(1, _HYDRATE_ATTEMPTS + 1):
+                try:
+                    with getcursor() as cur_posts, getcursor() as cur_hits:
+                        buffered = _hydrate_posts(
+                            cur_posts,
+                            cur_hits,
+                            terms=terms,
+                            post_ids=slice_ids,
+                        )
+                    break
+                except psycopg2.OperationalError as err:
+                    if attempt == _HYDRATE_ATTEMPTS:
+                        raise
+                    wait_s = _HYDRATE_RETRY_S[min(attempt - 1, len(_HYDRATE_RETRY_S) - 1)]
+                    print(
+                        f"[fetch] database connection dropped ({err}); "
+                        f"retrying in {wait_s}s ({attempt + 1}/{_HYDRATE_ATTEMPTS})",
+                        flush=True,
+                    )
+                    time.sleep(wait_s)
+                    try:
+                        close_pool()
+                    except Exception:
+                        pass
+                    init_pool(prefix=prefix)
+            assert buffered is not None
             while buffered:
                 head, buffered = _split_budget(buffered, max(1, int(_PAGE_CHAR_BUDGET)))
                 yield head

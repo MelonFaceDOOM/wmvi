@@ -188,6 +188,36 @@ def test_iter_post_batches_uses_given_ids_and_limit(monkeypatch):
     assert [p["post_id"] for b in batches for p in b] == [1, 3, 5, 7]
 
 
+def test_iter_post_batches_retries_dropped_connection(monkeypatch):
+    import psycopg2
+
+    import scripts.get_posts_for_search_term as mod
+
+    @contextmanager
+    def fake_getcursor(*_args, **_kwargs):
+        yield object()
+
+    calls = {"n": 0, "reinited": 0}
+
+    def fake_hydrate(_cur_posts, _cur_hits, *, terms, post_ids):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise psycopg2.OperationalError("SSL connection has been closed unexpectedly")
+        return [{"post_id": i, "text": "x", "hits": [{}]} for i in post_ids]
+
+    monkeypatch.setattr(mod, "getcursor", fake_getcursor)
+    monkeypatch.setattr(mod, "init_pool", lambda *_a, **_k: calls.__setitem__("reinited", calls["reinited"] + 1))
+    monkeypatch.setattr(mod, "close_pool", lambda *_a, **_k: None)
+    monkeypatch.setattr(mod, "find_matching_post_ids", lambda *_a, **_k: [1])
+    monkeypatch.setattr(mod, "_hydrate_posts", fake_hydrate)
+    monkeypatch.setattr(mod.time, "sleep", lambda *_a, **_k: None)
+
+    batches = list(mod.iter_post_batches(["measles"], use_prod=True))
+    assert [p["post_id"] for b in batches for p in b] == [1]
+    assert calls["n"] == 2
+    assert calls["reinited"] >= 2
+
+
 def test_fetch_and_write_streams_pages(tmp_path: Path, monkeypatch):
     def fake_batches(*_args, **_kwargs):
         yield [{"post_id": 1, "text": "a", "hits": []}]
