@@ -153,20 +153,37 @@ def _write_claims(path: Path, payload: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def backfill_claims(
-    path: Path,
-    by_id: dict[int, dict[str, Any]],
-    *,
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    """Merge ``by_id`` into ``path`` and rewrite it unless ``dry_run``."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def load_claims(path: Path) -> dict[str, Any]:
+    """Parse ``path`` once. ``json.load`` avoids holding the raw file text too."""
+    with path.open(encoding="utf-8") as handle:
+        payload = json.load(handle)
     if not isinstance(payload, dict):
         raise ValueError(f"{path} is not a JSON object")
     posts = payload.get("posts")
     if not isinstance(posts, list):
         raise ValueError(f"{path} has no posts list")
+    return payload
+
+
+def backfill_claims(
+    path: Path,
+    by_id: dict[int, dict[str, Any]],
+    *,
+    payload: dict[str, Any] | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Merge ``by_id`` into ``payload`` and rewrite ``path`` unless ``dry_run``.
+
+    Pass the object already returned by :func:`load_claims`. A second parse of a
+    multi-hundred-megabyte claims file is what got the process killed.
+    """
+    if payload is None:
+        payload = load_claims(path)
+    posts = payload.get("posts")
+    if not isinstance(posts, list):
+        raise ValueError(f"{path} has no posts list")
     stats = merge_claims_context(posts, by_id)
+    by_id.clear()
     lines = context_fill_lines(posts)
     for line in lines:
         print(line, flush=True)
@@ -191,11 +208,8 @@ def main(argv: list[str] | None = None) -> int:
     if not path.is_file():
         raise SystemExit(f"claims file not found: {path}")
 
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    posts = payload.get("posts") if isinstance(payload, dict) else None
-    if not isinstance(posts, list):
-        raise SystemExit(f"{path} has no posts list")
-    ids = _post_ids(posts)
+    payload = load_claims(path)
+    ids = _post_ids(payload["posts"])
     print(f"[context] {len(ids)} post ids in {path}", flush=True)
 
     init_pool(prefix="prod" if args.prod else "dev")
@@ -203,9 +217,9 @@ def main(argv: list[str] | None = None) -> int:
         by_id = fetch_post_context(ids)
     finally:
         close_pool()
+    del ids
 
-    # backfill_claims reads the file again so the write uses one payload.
-    backfill_claims(path, by_id, dry_run=args.dry_run)
+    backfill_claims(path, by_id, payload=payload, dry_run=args.dry_run)
     return 0
 
 
