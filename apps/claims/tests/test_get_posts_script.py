@@ -235,6 +235,141 @@ def test_fetch_and_write_streams_pages(tmp_path: Path, monkeypatch):
     assert not (tmp_path / "posts.json.tmp").exists()
 
 
+def test_post_context_sql_joins_parent_video_and_channel():
+    from scripts.get_posts_for_search_term import (
+        _context_select_sql,
+        _post_context_joins,
+        _sql_fetch_post_context_for_ids,
+        _sql_fetch_posts_for_ids,
+    )
+
+    joins = _post_context_joins()
+    assert "rc_sub.id = rc_meta.link_id" in joins
+    assert "regexp_replace(rc_meta.link_id" not in joins
+    assert "p.platform = 'youtube_comment'" in joins
+    assert "p.key1 = yc_video.video_id" in joins
+    assert "scrape.telegram_channel_state" in joins
+    select_sql = _context_select_sql()
+    assert "t\\.me/c/" in select_sql
+
+    for sql in (_sql_fetch_posts_for_ids(), _sql_fetch_post_context_for_ids()):
+        assert joins.strip() in sql
+        for name in (
+            "reddit_subreddit",
+            "telegram_channel_name",
+            "youtube_channel_title",
+            "podcast_episode_title",
+            "reddit_comment_submission_title",
+        ):
+            assert f"AS {name}" in sql
+
+
+def test_row_to_post_keeps_body_and_context():
+    from scripts.get_posts_for_search_term import CONTEXT_FIELDS, _POST_COLUMNS, _row_to_post
+
+    context = {
+        "reddit_submission_title": None,
+        "reddit_comment_submission_title": "Parent title",
+        "reddit_subreddit": "DebateVaccines",
+        "telegram_channel": None,
+        "telegram_channel_name": None,
+        "youtube_video_title": None,
+        "youtube_channel_title": None,
+        "podcast_name": None,
+        "podcast_episode_title": None,
+    }
+    row = tuple(
+        [9, "reddit_comment", "t1_abc", "", None, None, "the body", None, True, 1, "http://u"]
+        + [context[name] for name in CONTEXT_FIELDS]
+    )
+    assert len(row) == len(_POST_COLUMNS) + len(CONTEXT_FIELDS)
+    post = _row_to_post(row)
+    assert post["text"] == "the body"
+    assert post["reddit_comment_submission_title"] == "Parent title"
+    assert post["reddit_subreddit"] == "DebateVaccines"
+    assert post["podcast_episode_title"] is None
+    assert post["hits"] == []
+
+
+def test_apply_post_context_fills_fields_and_keeps_chunk():
+    from scripts.backfill_claims_context import apply_post_context
+
+    post = {
+        "post_id": 3,
+        "platform": "reddit_comment",
+        "text": "full text",
+        "reddit_submission_title": "Already here",
+        "chunks": [{"chunk_index": 1, "text": "chunk only"}],
+    }
+    apply_post_context(
+        post,
+        {
+            "reddit_submission_title": None,
+            "reddit_comment_submission_title": "  Fear of MMR  ",
+            "reddit_subreddit": "DebateVaccines",
+            "telegram_channel": None,
+            "telegram_channel_name": None,
+            "youtube_video_title": None,
+            "youtube_channel_title": None,
+            "podcast_name": None,
+            "podcast_episode_title": None,
+        },
+    )
+    assert post["chunks"] == [{"chunk_index": 1, "text": "chunk only"}]
+    assert post["text"] == "full text"
+    assert post["reddit_submission_title"] == "Already here"
+    assert post["reddit_comment_submission_title"] == "Fear of MMR"
+    assert post["reddit_subreddit"] == "DebateVaccines"
+    assert post["youtube_video_title"] is None
+
+
+def test_backfill_claims_writes_context_without_touching_chunks(tmp_path: Path):
+    from scripts.backfill_claims_context import backfill_claims
+
+    path = tmp_path / "claims.json"
+    path.write_text(
+        json.dumps(
+            {
+                "terms": ["mmr"],
+                "posts": [
+                    {
+                        "post_id": 7,
+                        "platform": "youtube_comment",
+                        "text": "comment",
+                        "chunks": [{"chunk_index": 0, "text": "comment chunk"}],
+                    },
+                    {
+                        "post_id": 8,
+                        "platform": "podcast_episode",
+                        "text": "transcript",
+                        "chunks": [{"chunk_index": 2, "text": "later excerpt"}],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    stats = backfill_claims(
+        path,
+        {
+            7: {
+                "youtube_video_title": "Vaccine myths",
+                "youtube_channel_title": "A Channel",
+            }
+        },
+    )
+    assert stats["updated"] == 1
+    assert stats["missing"] == 1
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    comment, episode = saved["posts"]
+    assert comment["chunks"][0]["text"] == "comment chunk"
+    assert comment["youtube_video_title"] == "Vaccine myths"
+    assert comment["youtube_channel_title"] == "A Channel"
+    assert episode["chunks"][0]["text"] == "later excerpt"
+    assert "youtube_video_title" not in episode
+    assert not (tmp_path / "claims.json.tmp").exists()
+
+
 def test_fetch_and_write_empty(tmp_path: Path, monkeypatch):
     def fake_batches(*_args, **_kwargs):
         if False:

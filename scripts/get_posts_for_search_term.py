@@ -142,8 +142,98 @@ def _sql_filter_post_ids() -> str:
     """
 
 
-def _sql_fetch_posts_for_ids() -> str:
+# Order matches _context_select_sql(). Hydrate and the claims backfill both read it.
+CONTEXT_FIELDS = (
+    "reddit_submission_title",
+    "reddit_comment_submission_title",
+    "reddit_subreddit",
+    "telegram_channel",
+    "telegram_channel_name",
+    "youtube_video_title",
+    "youtube_channel_title",
+    "podcast_name",
+    "podcast_episode_title",
+)
+
+_POST_COLUMNS = (
+    "post_id",
+    "platform",
+    "key1",
+    "key2",
+    "date_entered",
+    "created_at_ts",
+    "text",
+    "tsv_en",
+    "is_en",
+    "primary_metric",
+    "url",
+)
+
+
+def _post_context_joins() -> str:
+    """Joins for platform titles, subreddit, channel, and show/episode names.
+
+    Reddit submission ids and comment link_ids are both stored as ``t3_…``.
+    YouTube comment ``key1`` is the video id. Telegram's display title is not
+    stored; ``telegram_channel_name`` is the public username.
+    """
     return """
+        LEFT JOIN sm.reddit_submission rs_meta
+          ON p.platform = 'reddit_submission'
+         AND p.key1 = rs_meta.id
+         AND p.key2 = ''
+        LEFT JOIN sm.reddit_comment rc_meta
+          ON p.platform = 'reddit_comment'
+         AND p.key1 = rc_meta.id
+         AND p.key2 = ''
+        LEFT JOIN sm.reddit_submission rc_sub
+          ON p.platform = 'reddit_comment'
+         AND rc_sub.id = rc_meta.link_id
+        LEFT JOIN sm.telegram_post tp_meta
+          ON p.platform = 'telegram_post'
+         AND p.key1 = tp_meta.channel_id::text
+         AND p.key2 = tp_meta.message_id::text
+        LEFT JOIN scrape.telegram_channel_state tcs
+          ON p.platform = 'telegram_post'
+         AND tp_meta.channel_id = tcs.channel_id
+        LEFT JOIN youtube.video yv_meta
+          ON p.platform = 'youtube_video'
+         AND p.key1 = yv_meta.video_id
+         AND p.key2 = ''
+        LEFT JOIN youtube.video yc_video
+          ON p.platform = 'youtube_comment'
+         AND p.key1 = yc_video.video_id
+        LEFT JOIN podcasts.episodes pe_meta
+          ON p.platform = 'podcast_episode'
+         AND p.key1 = pe_meta.id
+         AND p.key2 = ''
+        LEFT JOIN podcasts.shows ps_meta
+          ON p.platform = 'podcast_episode'
+         AND pe_meta.podcast_id = ps_meta.id
+    """
+
+
+def _context_select_sql() -> str:
+    return """
+            rs_meta.title AS reddit_submission_title,
+            rc_sub.title AS reddit_comment_submission_title,
+            COALESCE(rs_meta.subreddit, rc_meta.subreddit) AS reddit_subreddit,
+            tp_meta.channel_id::text AS telegram_channel,
+            CASE
+                WHEN NULLIF(btrim(tcs.username), '') IS NOT NULL
+                    THEN NULLIF(btrim(regexp_replace(tcs.username, '^@', '')), '')
+                WHEN tp_meta.link ~ '^https?://t\\.me/c/' THEN NULL
+                ELSE NULLIF(substring(tp_meta.link from '^https?://t\\.me/([^/]+)/'), '')
+            END AS telegram_channel_name,
+            COALESCE(yv_meta.title, yc_video.title) AS youtube_video_title,
+            COALESCE(yv_meta.channel_title, yc_video.channel_title) AS youtube_channel_title,
+            ps_meta.title AS podcast_name,
+            pe_meta.title AS podcast_episode_title
+    """
+
+
+def _sql_fetch_posts_for_ids() -> str:
+    return f"""
         SELECT
             p.post_id,
             p.platform,
@@ -156,41 +246,43 @@ def _sql_fetch_posts_for_ids() -> str:
             p.is_en,
             p.primary_metric,
             p.url,
-            rs_meta.title AS reddit_submission_title,
-            rc_sub.title AS reddit_comment_submission_title,
-            tp_meta.channel_id::text AS telegram_channel,
-            yv_meta.title AS youtube_video_title,
-            ps_meta.title AS podcast_name
+            {_context_select_sql()}
         FROM sm.posts_all p
-        LEFT JOIN sm.reddit_submission rs_meta
-          ON p.platform = 'reddit_submission'
-         AND p.key1 = rs_meta.id
-         AND p.key2 = ''
-        LEFT JOIN sm.reddit_comment rc_meta
-          ON p.platform = 'reddit_comment'
-         AND p.key1 = rc_meta.id
-         AND p.key2 = ''
-        LEFT JOIN sm.reddit_submission rc_sub
-          ON p.platform = 'reddit_comment'
-         AND rc_sub.id = regexp_replace(rc_meta.link_id, '^t3_', '')
-        LEFT JOIN sm.telegram_post tp_meta
-          ON p.platform = 'telegram_post'
-         AND p.key1 = tp_meta.channel_id::text
-         AND p.key2 = tp_meta.message_id::text
-        LEFT JOIN youtube.video yv_meta
-          ON p.platform = 'youtube_video'
-         AND p.key1 = yv_meta.video_id
-         AND p.key2 = ''
-        LEFT JOIN podcasts.episodes pe_meta
-          ON p.platform = 'podcast_episode'
-         AND p.key1 = pe_meta.id
-         AND p.key2 = ''
-        LEFT JOIN podcasts.shows ps_meta
-          ON p.platform = 'podcast_episode'
-         AND pe_meta.podcast_id = ps_meta.id
+        {_post_context_joins()}
         WHERE p.post_id = ANY(%s)
         ORDER BY p.post_id
     """
+
+
+def _sql_fetch_post_context_for_ids() -> str:
+    """Same context columns as the post fetch, without body or search hits."""
+    return f"""
+        SELECT
+            p.post_id,
+            p.platform,
+            {_context_select_sql()}
+        FROM sm.posts_all p
+        {_post_context_joins()}
+        WHERE p.post_id = ANY(%s)
+    """
+
+
+def _row_to_post(row: tuple[Any, ...]) -> dict[str, Any]:
+    width = len(_POST_COLUMNS) + len(CONTEXT_FIELDS)
+    if len(row) != width:
+        raise ValueError(f"post row has {len(row)} columns, expected {width}")
+    post: dict[str, Any] = {}
+    for key, val in zip(_POST_COLUMNS, row[: len(_POST_COLUMNS)]):
+        if key in ("date_entered", "created_at_ts"):
+            post[key] = _json_val(_ensure_utc(val))
+        elif key == "tsv_en":
+            post[key] = str(val) if val is not None else None
+        else:
+            post[key] = val
+    for key, val in zip(CONTEXT_FIELDS, row[len(_POST_COLUMNS) :]):
+        post[key] = val
+    post["hits"] = []
+    return post
 
 
 def _sql_fetch_hits_for_ids() -> str:
@@ -317,43 +409,8 @@ def _hydrate_posts(
     cur_posts.execute(_sql_fetch_posts_for_ids(), (list(post_ids),))
     posts_by_id: dict[int, dict[str, Any]] = {}
     for row in cur_posts.fetchall():
-        (
-            post_id,
-            platform,
-            key1,
-            key2,
-            date_entered,
-            created_at_ts,
-            text,
-            tsv_en,
-            is_en,
-            primary_metric,
-            url,
-            reddit_submission_title,
-            reddit_comment_submission_title,
-            telegram_channel,
-            youtube_video_title,
-            podcast_name,
-        ) = row
-        posts_by_id[int(post_id)] = {
-            "post_id": post_id,
-            "platform": platform,
-            "key1": key1,
-            "key2": key2,
-            "date_entered": _json_val(_ensure_utc(date_entered)),
-            "created_at_ts": _json_val(_ensure_utc(created_at_ts)),
-            "text": text,
-            "tsv_en": str(tsv_en) if tsv_en is not None else None,
-            "is_en": is_en,
-            "primary_metric": primary_metric,
-            "url": url,
-            "reddit_submission_title": reddit_submission_title,
-            "reddit_comment_submission_title": reddit_comment_submission_title,
-            "telegram_channel": telegram_channel,
-            "youtube_video_title": youtube_video_title,
-            "podcast_name": podcast_name,
-            "hits": [],
-        }
+        post = _row_to_post(tuple(row))
+        posts_by_id[int(post["post_id"])] = post
 
     cur_hits.execute(_sql_fetch_hits_for_ids(), (list(terms), list(post_ids)))
     for row in cur_hits.fetchall():
