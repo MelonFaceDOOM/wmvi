@@ -1,0 +1,52 @@
+{
+  "n_docs": 1000,
+  "n_docs_logged": 1000,
+  "n_empty_docs": 470,
+  "empty_event_rate": 0.47,
+  "n_mentions": 979,
+  "mentions_per_logged_doc": 0.979,
+  "n_raw_llm_events": 1002,
+  "n_quote_dropped": 23,
+  "quote_drop_rate": 0.023,
+  "n_place_conflict": 31,
+  "place_conflict_rate": 0.0317,
+  "share_fine_place": 0.2094,
+  "share_stated_dates": 0.2155,
+  "type_histogram": {
+    "outbreak": 281,
+    "policy_change": 110,
+    "other": 327,
+    "regulatory_action": 32,
+    "personnel_change": 24,
+    "legal_action": 22,
+    "death": 65,
+    "study_publication": 71,
+    "exposure": 47
+  },
+  "focus_histogram": {
+    "existence": 304,
+    "official_update": 39,
+    "cases": 132,
+    "status": 281,
+    "cause": 109,
+    "death": 70,
+    "exposure": 44
+  },
+  "precision_histogram": {
+    "unknown": 768,
+    "day": 46,
+    "month": 20,
+    "year": 144,
+    "range": 1
+  },
+  "platform_histogram": {
+    "podcast_episode": 53,
+    "reddit_comment": 522,
+    "reddit_submission": 144,
+    "telegram_post": 55,
+    "youtube_comment": 135,
+    "youtube_video": 91
+  },
+  "browse_path": "apps/claims/events/runs/run_3/browse.json",
+  "mentions_path": "apps/claims/events/runs/run_3/mentions.jsonl"
+}

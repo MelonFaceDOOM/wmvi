@@ -1,0 +1,543 @@
+{
+  "strategy": "filter_place_key_v2",
+  "n_mentions_in": 11210,
+  "n_dropped": 2276,
+  "drop_reason_histogram": {
+    "vague_unplaced_wave": 2249,
+    "vague_place_title": 27
+  },
+  "n_grouped": 8934,
+  "n_imputed_proxy": 2560,
+  "n_clusters": 3198,
+  "size_histogram": {
+    "1": 2645,
+    "2-5": 423,
+    "6-20": 92,
+    "21-100": 27,
+    "100+": 11
+  },
+  "type_histogram": {
+    "outbreak": 301,
+    "institutional_action": 1481,
+    "cases": 103,
+    "study_publication": 267,
+    "notable_case": 936,
+    "vaccine_injury": 43,
+    "other": 67
+  },
+  "n_unplaced_clusters": 1239,
+  "n_unplaced_mentions": 1546,
+  "n_mixed_year": 81,
+  "n_singleton": 2645,
+  "n_overmerge_suspects": 71,
+  "n_undermerge_suspect_groups": 320,
+  "top_clusters": [
+    {
+      "cluster_id": "outbreak-united-states-fed84054529d",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 1223,
+      "n_posts": 1148,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 823,
+        "2025": 151,
+        "2026": 138,
+        "2024": 78,
+        "2008": 2,
+        "2021": 1,
+        "2019": 4,
+        "2020": 1,
+        "1989": 1,
+        "2023": 18,
+        "2022": 2,
+        "2018": 1,
+        "1967": 1,
+        "2009": 1,
+        "2015": 1
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 345,
+        "stated": 400,
+        "unknown": 478
+      },
+      "example_titles": [
+        "Measles outbreak in the United States",
+        "Measles outbreak in a U.S. state",
+        "U.S. measles outbreak activity in 2025",
+        "US measles cases surpass 1,500 in 2025",
+        "US measles outbreak case total tops 1,500 in 2025",
+        "Measles spreading across the United States",
+        "Measles cases rising in the United States",
+        "Measles outbreaks reported across the United States"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-texas-9d723ab100ad",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Texas",
+      "unplaced": false,
+      "n_mentions": 431,
+      "n_posts": 415,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 329,
+        "2025": 79,
+        "2026": 17,
+        "2024": 4,
+        "2020": 2
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 112,
+        "stated": 102,
+        "unknown": 217
+      },
+      "example_titles": [
+        "Measles outbreak in Lubbock County, Texas",
+        "Texas measles outbreak activity in 2025",
+        "Measles cases rising in Texas",
+        "Measles outbreak at ICE’s Dilley family detention facility",
+        "Measles outbreak at Dilley children’s facility",
+        "Measles outbreak at children’s detention facility in Dilley",
+        "Measles infections reported at Texas detention facility",
+        "Measles outbreak at children’s facility in Dilley, Texas"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-south-carolina-0646316d96da",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "South Carolina",
+      "unplaced": false,
+      "n_mentions": 280,
+      "n_posts": 272,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 226,
+        "2025": 24,
+        "2026": 30
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 103,
+        "stated": 54,
+        "unknown": 123
+      },
+      "example_titles": [
+        "South Carolina measles outbreak",
+        "South Carolina measles outbreak accelerating",
+        "South Carolina measles outbreak spreads across community sites",
+        "Current measles outbreak in South Carolina",
+        "Accelerating measles outbreak in South Carolina",
+        "Illness outbreak affecting two South Carolina counties",
+        "Measles outbreak in South Carolina",
+        "South Carolina measles cases surpass 800"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-samoa-28906e0c603f",
+      "event_type": "outbreak",
+      "country": "Samoa",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 227,
+      "n_posts": 219,
+      "title_slug": "",
+      "year_histogram": {
+        "2019": 83,
+        "unknown": 141,
+        "2018": 1,
+        "2020": 1,
+        "2005": 1
+      },
+      "date_source_histogram": {
+        "stated": 86,
+        "unknown": 130,
+        "posted_at_proxy": 11
+      },
+      "example_titles": [
+        "2019 measles outbreak in Samoa",
+        "Measles outbreak in Samoa",
+        "Samoa measles outbreak",
+        "Measles deaths in Samoa",
+        "Measles epidemic in Samoa",
+        "Measles outbreak spread from New Zealand to Samoa",
+        "Measles outbreak hit Samoa in 2019",
+        "2019 Samoa measles epidemic"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-canada-alberta-827511c95ed0",
+      "event_type": "outbreak",
+      "country": "Canada",
+      "admin1": "Alberta",
+      "unplaced": false,
+      "n_mentions": 174,
+      "n_posts": 164,
+      "title_slug": "",
+      "year_histogram": {
+        "2025": 26,
+        "unknown": 144,
+        "2024": 3,
+        "2026": 1
+      },
+      "date_source_histogram": {
+        "stated": 30,
+        "posted_at_proxy": 6,
+        "unknown": 138
+      },
+      "example_titles": [
+        "Measles outbreak in Alberta and Canada in 2025",
+        "Measles outbreak in Alberta",
+        "Measles spreading in Taber",
+        "Measles outbreak at the University of Alberta",
+        "Alberta measles outbreak reaches 1,914 reported cases",
+        "Measles outbreaks reported in Alberta",
+        "Alberta measles cases reported in 2026",
+        "Measles outbreak in southern Alberta"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-florida-b8efb4396934",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Florida",
+      "unplaced": false,
+      "n_mentions": 170,
+      "n_posts": 150,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 133,
+        "2024": 25,
+        "2026": 10,
+        "2025": 1,
+        "1995": 1
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 105,
+        "unknown": 28,
+        "stated": 37
+      },
+      "example_titles": [
+        "Measles outbreak linked to a Florida university",
+        "Measles cases reported in Ave Maria",
+        "Measles outbreak in Florida",
+        "Campus measles outbreak grows in Florida",
+        "Measles outbreak confirmed at the University of Florida in Alachua County",
+        "Measles outbreak confirmed at University of Florida",
+        "Measles outbreak at University of Florida campus",
+        "Florida school measles outbreak"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-canada-031aa4670edc",
+      "event_type": "outbreak",
+      "country": "Canada",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 154,
+      "n_posts": 150,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 110,
+        "2025": 30,
+        "2024": 10,
+        "2026": 1,
+        "2011": 1,
+        "2014": 1,
+        "2013": 1
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 23,
+        "stated": 44,
+        "unknown": 87
+      },
+      "example_titles": [
+        "Measles outbreak in Canada",
+        "Several measles cases reported near the poster's home",
+        "Canada reported measles cases in 2025",
+        "Canadian measles outbreak passes one-year mark",
+        "Measles outbreaks in the speaker’s area",
+        "Measles affecting Canada more heavily than the United States",
+        "Sustained measles outbreaks in Canada",
+        "Year-long measles outbreak in Canada"
+      ]
+    },
+    {
+      "cluster_id": "institutional-action-united-states-cdc-fe5a97f15efe",
+      "event_type": "institutional_action",
+      "country": "United States",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 127,
+      "n_posts": 112,
+      "title_slug": "cdc",
+      "year_histogram": {
+        "unknown": 107,
+        "2026": 8,
+        "2025": 2,
+        "2021": 3,
+        "2024": 7
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 63,
+        "stated": 20,
+        "unknown": 44
+      },
+      "example_titles": [
+        "CDC confirms additional US measles cases",
+        "Abrysvo included in CDC child and adolescent immunization schedule",
+        "United States loses measles elimination status",
+        "CDC reports measles case counts for 2025 and 2026",
+        "CDC cuts routine childhood vaccine schedule",
+        "CDC advised against simultaneous chickenpox and MMR vaccination for toddlers",
+        "CDC withdrew recommendation for all adults to receive COVID booster shots",
+        "CDC recommends against giving toddlers chickenpox and MMR vaccines in combination"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-pennsylvania-b4779a67df80",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Pennsylvania",
+      "unplaced": false,
+      "n_mentions": 113,
+      "n_posts": 87,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 78,
+        "2024": 9,
+        "1926": 1,
+        "2026": 10,
+        "2023": 14,
+        "2022": 1
+      },
+      "date_source_histogram": {
+        "unknown": 9,
+        "stated": 35,
+        "posted_at_proxy": 69
+      },
+      "example_titles": [
+        "Recent measles outbreak in Pennsylvania",
+        "Philadelphia measles cluster",
+        "Measles outbreak reaches Pennsylvania",
+        "Legionnaires disease cluster in Pennsylvania",
+        "Measles epidemic sweeps Pennsylvania",
+        "Measles cases reported in Lebanon County",
+        "Recent measles spread in Pennsylvania",
+        "Rising measles cases in Pennsylvania"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-kingdom-england-f37328fb12f6",
+      "event_type": "outbreak",
+      "country": "United Kingdom",
+      "admin1": "England",
+      "unplaced": false,
+      "n_mentions": 111,
+      "n_posts": 95,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 84,
+        "2025": 6,
+        "2026": 6,
+        "2013": 1,
+        "2023": 9,
+        "2024": 5
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 68,
+        "unknown": 16,
+        "stated": 27
+      },
+      "example_titles": [
+        "Measles cases reported in London",
+        "Measles cases rising in London",
+        "Measles cases accumulate in England in 2025",
+        "Measles cases reported across England",
+        "More than 60 children infected in north London measles outbreak",
+        "London measles outbreak",
+        "North London measles outbreak exceeds 60 child infections",
+        "North London measles outbreak hospitalizes children from at least seven schools"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-utah-31d779b4886a",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Utah",
+      "unplaced": false,
+      "n_mentions": 110,
+      "n_posts": 108,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 97,
+        "2025": 6,
+        "2026": 5,
+        "2011": 2
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 48,
+        "unknown": 49,
+        "stated": 13
+      },
+      "example_titles": [
+        "Confirmed measles cases reported across Utah",
+        "Utah measles outbreak update",
+        "Measles reported as rampant in St. George",
+        "Measles transmission in Utah",
+        "Measles outbreaks reported in Utah and Arizona",
+        "Measles outbreak in Short Creek community",
+        "U.S. measles infections surpass 1,500",
+        "Measles outbreaks grow in Utah and Arizona"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-bangladesh-b5889d45804a",
+      "event_type": "outbreak",
+      "country": "Bangladesh",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 97,
+      "n_posts": 95,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 85,
+        "2026": 12
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 71,
+        "stated": 12,
+        "unknown": 14
+      },
+      "example_titles": [
+        "Measles outbreak kills 46 children in Bangladesh",
+        "Measles outbreak kills at least 15 in Bangladesh",
+        "Suspected measles outbreak in Bangladesh kills nearly 100 children",
+        "Measles outbreak spreads in Bangladesh",
+        "Fatal measles outbreak spreads in Bangladesh",
+        "Deadly measles spike in Bangladesh",
+        "Suspected measles deaths among children in Bangladesh",
+        "Suspected measles deaths among 100 children in Bangladesh"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-kingdom-84ee8d59e7e1",
+      "event_type": "outbreak",
+      "country": "United Kingdom",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 96,
+      "n_posts": 91,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 75,
+        "2024": 4,
+        "2025": 6,
+        "2026": 3,
+        "1998": 2,
+        "2023": 6
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 40,
+        "unknown": 35,
+        "stated": 21
+      },
+      "example_titles": [
+        "Measles resurgence in the UK",
+        "Measles deaths rise in the UK",
+        "Rise in measles deaths in the UK",
+        "Measles transmission returns to the UK",
+        "Renewed measles transmission in the UK",
+        "Britain reports more measles cases than the United States",
+        "Measles returns in the United Kingdom",
+        "Measles transmission re-established in the UK"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-canada-ontario-f8aa84321e8c",
+      "event_type": "outbreak",
+      "country": "Canada",
+      "admin1": "Ontario",
+      "unplaced": false,
+      "n_mentions": 88,
+      "n_posts": 87,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 74,
+        "2025": 9,
+        "2024": 4,
+        "2026": 1
+      },
+      "date_source_histogram": {
+        "unknown": 65,
+        "stated": 14,
+        "posted_at_proxy": 9
+      },
+      "example_titles": [
+        "Measles cases in Ontario",
+        "Largest measles outbreak in Ontario in 2025",
+        "Major measles outbreak in Ontario",
+        "Measles outbreak in Ontario",
+        "Ontario declares measles outbreak over after more than 2,300 infections",
+        "Measles transmission in Ontario",
+        "Measles cases in Ontario surpass total reported in the United States",
+        "Measles outbreaks in Ontario"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-illinois-4cd7b9dd3403",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Illinois",
+      "unplaced": false,
+      "n_mentions": 83,
+      "n_posts": 73,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 61,
+        "2024": 20,
+        "2025": 1,
+        "2023": 1
+      },
+      "date_source_histogram": {
+        "unknown": 8,
+        "stated": 22,
+        "posted_at_proxy": 53
+      },
+      "example_titles": [
+        "57-case measles outbreak linked to a Chicago migrant shelter",
+        "Chicago shelter measles outbreak contained",
+        "Chicago shelter measles outbreak stopped after rapid vaccination",
+        "Localized measles outbreak at a migrant shelter in Chicago",
+        "Measles outbreak in a Chicago migrant shelter",
+        "Chicago measles outbreak in migrant shelter",
+        "Measles outbreak in Chicago",
+        "Second measles case confirmed in the Metro East"
+      ]
+    }
+  ],
+  "config": {
+    "input": "apps/claims/events/runs/run_11/mentions.jsonl",
+    "strategy": "filter_place_key_v2",
+    "key": {
+      "outbreak_cases": [
+        "event_type",
+        "country",
+        "admin1_or_finest_place"
+      ],
+      "named_types": [
+        "event_type",
+        "country",
+        "admin1",
+        "actor_or_title_slug"
+      ]
+    },
+    "unplaced": "dropped if outbreak/cases with no place hook or vague-place title",
+    "date": "not a key; posted_at_proxy year on news-like placed unknown-time mentions",
+    "notes": "filter + aliases + titles off for waves; do not split mixed stated years",
+    "n_mentions_in": 11210
+  }
+}

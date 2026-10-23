@@ -1,0 +1,2076 @@
+{
+  "n_docs": 10000,
+  "both_empty": 8557,
+  "both_nonempty": 1142,
+  "ref_only_docs": 174,
+  "cand_only_docs": 127,
+  "emptiness_agreement": 0.9699,
+  "informative_agreement": 0.7914,
+  "ref_mentions": 1815,
+  "cand_mentions": 1725,
+  "quote_matched": 1460,
+  "quote_precision": 0.8464,
+  "quote_recall": 0.8044,
+  "quote_f1": 0.8249,
+  "type_agree": 0.9623,
+  "year_agree_when_either_dated": 0.8765,
+  "year_agree_when_ref_dated": 0.9312,
+  "place_conflict_rate": 0.0418,
+  "lost_on_empty_chunk": 212,
+  "lost_beside_other_mention": 143,
+  "gained_on_empty_chunk": 144,
+  "gained_beside_other_mention": 121,
+  "ref_types": {
+    "outbreak": 828,
+    "vaccine_injury": 11,
+    "institutional_action": 608,
+    "notable_case": 267,
+    "study_publication": 58,
+    "cases": 20,
+    "other": 23
+  },
+  "cand_types": {
+    "vaccine_injury": 12,
+    "outbreak": 815,
+    "institutional_action": 546,
+    "notable_case": 282,
+    "study_publication": 32,
+    "cases": 28,
+    "other": 10
+  },
+  "verdict": "caution",
+  "bars": {
+    "replace": "quote recall>=0.9, precision>=0.9, type agree>=0.95, dated-year agree>=0.9, place conflict<=0.05",
+    "caution": "quote recall>=0.8, precision>=0.8, type agree>=0.9"
+  },
+  "lost": [
+    {
+      "doc_id": "10225130:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Israel insists on COVID-19 booster doses",
+        "year": "",
+        "place": "israel",
+        "actor": "Israel",
+        "quote": "israel, which now is about 90%, like 89.5% in terms of the population vaccinated, and now they have, you know, they sort of insist on a booster dose."
+      }
+    },
+    {
+      "doc_id": "10272600:0",
+      "reference": {
+        "event_type": "study_publication",
+        "title": "Andrew Wakefield publishes an MMR paper in The Lancet",
+        "year": "",
+        "place": "",
+        "actor": "Andrew Wakefield",
+        "quote": "it basically described 12 kids who had an autism-like syndrome, who had gotten the mmr"
+      }
+    },
+    {
+      "doc_id": "10367063:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "United Kingdom achieves measles-free status",
+        "year": "2017",
+        "place": "united kingdom",
+        "actor": "United Kingdom",
+        "quote": "uk achieved measles free status in 2017"
+      }
+    },
+    {
+      "doc_id": "10386270:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreaks in the United Kingdom",
+        "year": "",
+        "place": "united kingdom",
+        "actor": "",
+        "quote": "we've seen outbreaks in uk"
+      }
+    },
+    {
+      "doc_id": "10495373:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles epidemic in Samoa",
+        "year": "2019",
+        "place": "samoa",
+        "actor": "",
+        "quote": "twenty-nineteen though the country was in a public health crisis."
+      }
+    },
+    {
+      "doc_id": "10534020:5",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Quarantine and protective separation implemented during Chicago measles outbreak",
+        "year": "",
+        "place": "united states, illinois, chicago",
+        "actor": "",
+        "quote": "we're having people quarantine to protect themselves and the people around them"
+      }
+    },
+    {
+      "doc_id": "10534031:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "CDC issues health alert over rising measles cases",
+        "year": "",
+        "place": "united states",
+        "actor": "CDC",
+        "quote": "that's according to a health alert from the cdc."
+      }
+    },
+    {
+      "doc_id": "10534040:16",
+      "reference": {
+        "event_type": "cases",
+        "title": "One polio case reported in India",
+        "year": "2011",
+        "place": "india",
+        "actor": "",
+        "quote": "only one case of polio was reported in 2011 in the month of january"
+      }
+    },
+    {
+      "doc_id": "10534040:2",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "India committed to eliminate measles and control rubella by 2020",
+        "year": "2013",
+        "place": "india",
+        "actor": "India",
+        "quote": "in 2013 they are making a commitment that they will eliminate measles and they will control rubella"
+      }
+    },
+    {
+      "doc_id": "10534040:28",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "India commits to eliminate measles and control rubella by 2020",
+        "year": "2013",
+        "place": "india",
+        "actor": "India",
+        "quote": "in 2013 they are making a commitment that they will eliminate measles and they will control rubella"
+      }
+    },
+    {
+      "doc_id": "10534040:3",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Only one polio case was reported in India in January 2011",
+        "year": "2011",
+        "place": "india",
+        "actor": "",
+        "quote": "only one case of polio was reported in 2011 in the month of january"
+      }
+    },
+    {
+      "doc_id": "10534040:43",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "India removed from the list of polio-endemic countries",
+        "year": "2012",
+        "place": "india",
+        "actor": "India",
+        "quote": "by 2012 india was removed from the list of polio endemic countries"
+      }
+    },
+    {
+      "doc_id": "10534040:43",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "India universalized hepatitis B vaccination",
+        "year": "2010",
+        "place": "india",
+        "actor": "government of India",
+        "quote": "in 2011 and 2010 government of india universalized the hepatitis b vaccination to all the states union territories in the country"
+      }
+    },
+    {
+      "doc_id": "10534040:55",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "House-to-house vaccination of missed children introduced in India",
+        "year": "1999",
+        "place": "india",
+        "actor": "Pulse Polio Immunization Program",
+        "quote": "house to house vaccination of missed children is done was introduced in the year 1999 to 2000"
+      }
+    },
+    {
+      "doc_id": "10534040:55",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Only one polio case reported in India in January 2011",
+        "year": "2011",
+        "place": "india",
+        "actor": "",
+        "quote": "as a result only one case of polio was reported in 2011 in the month of january"
+      }
+    },
+    {
+      "doc_id": "10537359:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "New World Screwworm cases in Texas livestock decline",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "new cases of the **new world screwworm** are down"
+      }
+    },
+    {
+      "doc_id": "10537359:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in the United States",
+        "year": "",
+        "place": "united states",
+        "actor": "",
+        "quote": "the u.s., also [experiencing a measles outbreak](https://abcnews.com/health/measles-cases-2026-set-surpass-years-total/story?id=134740486)"
+      }
+    },
+    {
+      "doc_id": "10574392:3",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "California eliminates religious and personal-belief vaccine exemptions",
+        "year": "",
+        "place": "united states, california",
+        "actor": "California",
+        "quote": "when california, for example, with through it's religious and personal belief exemption from state laws"
+      }
+    },
+    {
+      "doc_id": "10627985:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "United States childhood vaccine schedule reduced from 19 vaccines to 11",
+        "year": "2025",
+        "place": "united states",
+        "actor": "Trump regime",
+        "quote": "those awful \"vaccine skeptics\" put in charge by trump have reduced the childhood schedule from 19 vaccines to 11"
+      }
+    },
+    {
+      "doc_id": "10820317:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Cyclospora outbreak linked to contaminated produce",
+        "year": "",
+        "place": "",
+        "actor": "",
+        "quote": "the outbreak follows the trump administration’s decision to dramatically reduce the cdc’s foodnet monitoring program."
+      }
+    },
+    {
+      "doc_id": "10878384:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "CDC reports 2026 measles cases surpassed the 2025 total",
+        "year": "2026",
+        "place": "",
+        "actor": "CDC",
+        "quote": "cdc: 2026 measles cases surpassed number of cases in 2025"
+      }
+    },
+    {
+      "doc_id": "10878720:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Adult in New Mexico died of measles",
+        "year": "2025",
+        "place": "united states, new mexico",
+        "actor": "",
+        "quote": "adult in new mexico who died of measles last year too"
+      }
+    },
+    {
+      "doc_id": "10887839:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "CDC reports 2026 measles cases exceed all of 2025",
+        "year": "2026",
+        "place": "united states",
+        "actor": "CDC",
+        "quote": "cdc reports more measles cases so far this year than in all of 2025"
+      }
+    },
+    {
+      "doc_id": "10887840:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "CDC reports measles cases in 2026 have surpassed the total for 2025",
+        "year": "2026",
+        "place": "united states",
+        "actor": "CDC",
+        "quote": "cdc reports more measles cases so far this year than in all of 2025"
+      }
+    },
+    {
+      "doc_id": "10893322:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Federal government screwworm control program funding cut",
+        "year": "",
+        "place": "",
+        "actor": "Federal government",
+        "quote": "there was a federal government program controlling screwworm, but its funding was cut."
+      }
+    },
+    {
+      "doc_id": "10929217:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles surge in Canada",
+        "year": "2025",
+        "place": "canada",
+        "actor": "",
+        "quote": "canada actually had more confirmed cases of measles than the us in 2025, over 5k for a smaller population"
+      }
+    },
+    {
+      "doc_id": "11044150:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Delaware County health officials launch mobile measles vaccination clinic",
+        "year": "",
+        "place": "united states, pennsylvania, delaware county",
+        "actor": "Delaware County health officials",
+        "quote": "are launching a mobile health clinic to get residents vaccinated against measles"
+      }
+    },
+    {
+      "doc_id": "11081576:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles cases in Maryland reach 12 in 2026",
+        "year": "2026",
+        "place": "united states, maryland",
+        "actor": "",
+        "quote": "almost all of the 12 cases recorded so far this year — up from three for all of 2025 — were “imported” into maryland"
+      }
+    },
+    {
+      "doc_id": "11103608:0",
+      "reference": {
+        "event_type": "other",
+        "title": "138 missing girls and women rescued under Operation Anweshan-III",
+        "year": "",
+        "place": "india",
+        "actor": "police",
+        "quote": "138 missing girls and women rescued in one week under operation anweshan-iii"
+      }
+    },
+    {
+      "doc_id": "11103608:0",
+      "reference": {
+        "event_type": "other",
+        "title": "Cyberabad AHTU rescues 127 children during Operation Muskaan",
+        "year": "2026",
+        "place": "india, hyderabad",
+        "actor": "Cyberabad Anti-Human Trafficking Unit",
+        "quote": "operation muskaan: cyberabad ahtu rescues 127 children as part of operation muskaan"
+      }
+    },
+    {
+      "doc_id": "11103608:0",
+      "reference": {
+        "event_type": "other",
+        "title": "Cyberabad SHE Teams apprehend 15 people for indecent acts in public places",
+        "year": "2026",
+        "place": "india, hyderabad",
+        "actor": "Cyberabad SHE Teams",
+        "quote": "she teams nab 15 individuals for indecent acts in public places"
+      }
+    },
+    {
+      "doc_id": "11103608:0",
+      "reference": {
+        "event_type": "other",
+        "title": "RPF rescues and reunites seven minors with families across Northeast Frontier Railway",
+        "year": "",
+        "place": "india, assam, northeast frontier railway network",
+        "actor": "Railway Protection Force",
+        "quote": "seven minors rescued and reunited with families across nfr in assam"
+      }
+    },
+    {
+      "doc_id": "11185370:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "United States about to lose measles-free status",
+        "year": "",
+        "place": "united states",
+        "actor": "",
+        "quote": "america is about to lose its measles free status"
+      }
+    },
+    {
+      "doc_id": "11404964:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "RFK Jr tells US families to vaccinate children against measles",
+        "year": "",
+        "place": "united states",
+        "actor": "RFK Jr",
+        "quote": "rfk jr tells us families to vaccinate children against measles"
+      }
+    },
+    {
+      "doc_id": "11404971:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Prince Munhyo died of measles in 1786",
+        "year": "1786",
+        "place": "",
+        "actor": "Prince Munhyo",
+        "quote": "in 1786, 5-year-old prince munhyo died of measles."
+      }
+    },
+    {
+      "doc_id": "11424117:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "RFK Jr tells US families to vaccinate children against measles",
+        "year": "",
+        "place": "united states",
+        "actor": "RFK Jr",
+        "quote": "rfk jr tells us families to vaccinate children against measles"
+      }
+    },
+    {
+      "doc_id": "11424119:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "RFK Jr tells US families to vaccinate children against measles",
+        "year": "",
+        "place": "united states",
+        "actor": "RFK Jr",
+        "quote": "rfk jr tells us families to vaccinate children against measles amid outbreak"
+      }
+    },
+    {
+      "doc_id": "11429479:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Global measles outbreak in 2023",
+        "year": "2023",
+        "place": "",
+        "actor": "",
+        "quote": "a global measles outbreak occured in 2023 over 10 million cases."
+      }
+    },
+    {
+      "doc_id": "11435267:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Canada",
+        "year": "",
+        "place": "canada",
+        "actor": "",
+        "quote": "the measles outbreak in canada"
+      }
+    },
+    {
+      "doc_id": "11477352:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "RFK Jr tells U.S. families to vaccinate children against measles",
+        "year": "",
+        "place": "united states",
+        "actor": "RFK Jr",
+        "quote": "rfk jr tells us families to vaccinate children against measles amid outbreak"
+      }
+    }
+  ],
+  "gained": [
+    {
+      "doc_id": "10013117:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in New Mexico exceeds 200 reported cases",
+        "year": "",
+        "place": "united states, new mexico",
+        "actor": "",
+        "quote": "in new mexico near the border where they have 200 plus reported cases"
+      }
+    },
+    {
+      "doc_id": "10231517:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreaks in Texas",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "measles outbreaks in texas"
+      }
+    },
+    {
+      "doc_id": "10272283:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Lancet says elements of Wakefield paper are incorrect",
+        "year": "",
+        "place": "",
+        "actor": "Lancet",
+        "quote": "in a statement published on feb. 2, the [redacted] medical journal said that it is now clear that “several elements” of a 1998 paper it published by dr. andrew wakefield and his co"
+      }
+    },
+    {
+      "doc_id": "10360427:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Pennsylvania",
+        "year": "",
+        "place": "united states, pennsylvania",
+        "actor": "",
+        "quote": "an area of pa that is having measles issues"
+      }
+    },
+    {
+      "doc_id": "10367061:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "UK Health Security Agency publishes provisional measles epidemiological overview",
+        "year": "",
+        "place": "united kingdom",
+        "actor": "UK Health Security Agency",
+        "quote": "the data published by united kingdom has security agency"
+      }
+    },
+    {
+      "doc_id": "10495373:0",
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Three siblings killed by measles in Samoa",
+        "year": "",
+        "place": "samoa",
+        "actor": "",
+        "quote": "in one family two sisters and a brother were killed by the disease."
+      }
+    },
+    {
+      "doc_id": "10495373:0",
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Two young boys killed by measles in Samoa",
+        "year": "",
+        "place": "samoa",
+        "actor": "",
+        "quote": "in another family two sisters in law both lost sons, age 14 months and six months."
+      }
+    },
+    {
+      "doc_id": "10495373:1",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles epidemic in Samoa",
+        "year": "",
+        "place": "samoa",
+        "actor": "",
+        "quote": "by the time the simone government declared an end to the epidemic, 83 people had died again."
+      }
+    },
+    {
+      "doc_id": "10495373:1",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Samoa government asks U.S. CDC for help with measles epidemic",
+        "year": "",
+        "place": "samoa",
+        "actor": "Samoa government",
+        "quote": "the simone government even asked the u.s. cdc for help."
+      }
+    },
+    {
+      "doc_id": "10515496:0",
+      "candidate": {
+        "event_type": "cases",
+        "title": "Imported measles cases in Ontario",
+        "year": "",
+        "place": "canada, ontario",
+        "actor": "",
+        "quote": "cases are confirmed in ontario and quebec"
+      }
+    },
+    {
+      "doc_id": "10534014:1",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Pakistan adds measles-rubella vaccine to routine immunization schedule",
+        "year": "",
+        "place": "pakistan",
+        "actor": "Pakistan",
+        "quote": "now, mri vaccine is added in eps casual at nine and 15 months of age"
+      }
+    },
+    {
+      "doc_id": "10534036:6",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles returns in Florida",
+        "year": "",
+        "place": "united states, florida",
+        "actor": "",
+        "quote": "florida welcomes back the measles"
+      }
+    },
+    {
+      "doc_id": "10534040:16",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "House-to-house polio vaccination of missed children introduced",
+        "year": "1999",
+        "place": "india",
+        "actor": "",
+        "quote": "house to house vaccination of the missed children so they will conduct camps wherein the oral polio drops will be provided to all the children"
+      }
+    },
+    {
+      "doc_id": "10534040:16",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "BCG vaccine vial size reduced from 20 doses to 10 doses",
+        "year": "",
+        "place": "india",
+        "actor": "",
+        "quote": "downsizing the bcg viral from 20 doses to 10 doses"
+      }
+    },
+    {
+      "doc_id": "10534040:3",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "House-to-house vaccination of missed children introduced",
+        "year": "1999",
+        "place": "india",
+        "actor": "",
+        "quote": "india was removed from the list of polio endemic countries"
+      }
+    },
+    {
+      "doc_id": "10534040:43",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Japanese encephalitis vaccination integrated into routine immunization in India",
+        "year": "",
+        "place": "india",
+        "actor": "",
+        "quote": "the japanese and cephalitis vaccine is being integrated into routine immunization now"
+      }
+    },
+    {
+      "doc_id": "10534040:57",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Pentavalent vaccine expanded to all states in India",
+        "year": "",
+        "place": "india",
+        "actor": "",
+        "quote": "the pentvalent vaccine has been provided to all the states"
+      }
+    },
+    {
+      "doc_id": "10537359:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "New World Screwworm cases decline in Texas livestock",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "“the total abundance of mps in indian ocean specimens"
+      }
+    },
+    {
+      "doc_id": "10537359:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Canada blocks animal imports from Texas over New World Screwworm concerns",
+        "year": "",
+        "place": "canada",
+        "actor": "Canada",
+        "quote": "canada [has blocked the import](https://www.kxan.com/news/international/canada-suspends-animal-exports-from-texas-due-to-new-world-screwworm-concerns/) of a wide range of animals f"
+      }
+    },
+    {
+      "doc_id": "10627985:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Canada loses measles-free status",
+        "year": "2025",
+        "place": "canada",
+        "actor": "Canada",
+        "quote": "it was **canada**, and not the usa, that first lost the \"measles free\" status in 2025"
+      }
+    },
+    {
+      "doc_id": "10627985:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Trump administration reduces childhood vaccine schedule from 19 vaccines to 11",
+        "year": "2025",
+        "place": "united states",
+        "actor": "Trump administration",
+        "quote": "any changes to the vaccine schedule since 2025"
+      }
+    },
+    {
+      "doc_id": "10878752:0",
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Child dies of measles; RFK Jr. attends funeral",
+        "year": "2025",
+        "place": "",
+        "actor": "",
+        "quote": "that kid died of measles last year or so"
+      }
+    },
+    {
+      "doc_id": "10893215:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Samoa",
+        "year": "",
+        "place": "samoa",
+        "actor": "RFK",
+        "quote": "rfk measles vaccine and samoa"
+      }
+    },
+    {
+      "doc_id": "10919734:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "End of U.S. funding for Gavi",
+        "year": "",
+        "place": "united states",
+        "actor": "United States",
+        "quote": "ending u.s. funding for gavi"
+      }
+    },
+    {
+      "doc_id": "11081576:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Maryland measles cases rise to 12 in 2026",
+        "year": "2026",
+        "place": "united states, maryland",
+        "actor": "Maryland Department of Health",
+        "quote": "just seven months into the year, confirmed measles cases maryland are already four times higher that they were for all of last year"
+      }
+    },
+    {
+      "doc_id": "11405599:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Canada",
+        "year": "",
+        "place": "canada",
+        "actor": "",
+        "quote": "canada has 4x the amount of measles."
+      }
+    },
+    {
+      "doc_id": "11405599:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in England",
+        "year": "",
+        "place": "united kingdom, england",
+        "actor": "",
+        "quote": "england has 2x the amount of measles."
+      }
+    },
+    {
+      "doc_id": "11497160:0",
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Leprosy reported in Florida",
+        "year": "",
+        "place": "united states, florida",
+        "actor": "",
+        "quote": "leprosy has now surfaced in of all places, florida."
+      }
+    },
+    {
+      "doc_id": "11624549:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Thousands of HHS public-health websites and data stripped",
+        "year": "",
+        "place": "united states",
+        "actor": "Trump",
+        "quote": "stripped thousands of hhs public‑health websites and data"
+      }
+    },
+    {
+      "doc_id": "11686271:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "CDC quarantines household in Rome after measles case",
+        "year": "1991",
+        "place": "united states, georgia, rome",
+        "actor": "CDC",
+        "quote": "in 1991"
+      }
+    },
+    {
+      "doc_id": "11708613:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Wakefield struck off",
+        "year": "",
+        "place": "",
+        "actor": "",
+        "quote": "wakefield was struck off"
+      }
+    },
+    {
+      "doc_id": "11791968:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Influenza season particularly bad in New Zealand",
+        "year": "2025",
+        "place": "new zealand",
+        "actor": "",
+        "quote": "there have been a couple of particularly bad winters for illness here the last two years: last year it was influenza"
+      }
+    },
+    {
+      "doc_id": "11791968:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "RSV season particularly bad in New Zealand",
+        "year": "2026",
+        "place": "new zealand",
+        "actor": "",
+        "quote": "there have been a couple of particularly bad winters for illness here the last two years: last year it was influenza, this year rsv"
+      }
+    },
+    {
+      "doc_id": "11970669:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Trump appoints Robert F. Kennedy Jr. as health secretary",
+        "year": "",
+        "place": "united states",
+        "actor": "Donald Trump",
+        "quote": "trump appointed as his health secretary robert f. kennedy jr."
+      }
+    },
+    {
+      "doc_id": "12066333:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Measles designated eliminated in the United States",
+        "year": "",
+        "place": "united states",
+        "actor": "",
+        "quote": "measles had been designated as \"eliminated\" in the us!"
+      }
+    },
+    {
+      "doc_id": "12097420:0",
+      "candidate": {
+        "event_type": "vaccine_injury",
+        "title": "Jenny McCarthy blamed MMR for her son’s autism",
+        "year": "",
+        "place": "",
+        "actor": "Jenny McCarthy",
+        "quote": "her son diagnosed autistic, so she blamed mmr vaccine (\"toxins\" in the vaccine)."
+      }
+    },
+    {
+      "doc_id": "12172438:0",
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Andrew Wakefield loses his license to practice",
+        "year": "",
+        "place": "",
+        "actor": "",
+        "quote": "once he lost his license to practice"
+      }
+    },
+    {
+      "doc_id": "12366913:0",
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Measles death in Gaines County",
+        "year": "",
+        "place": "united states, texas, gaines county",
+        "actor": "",
+        "quote": "https://www.texastribune.org/2025/03/20/texas-measles-family-gaines-county-death/"
+      }
+    },
+    {
+      "doc_id": "1239219:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "South Carolina measles outbreak reaches 789 cases",
+        "year": "",
+        "place": "united states, south carolina",
+        "actor": "",
+        "quote": "south carolina measles outbreak reaches 789 cases, surpassing texas"
+      }
+    },
+    {
+      "doc_id": "1239225:0",
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Texas measles outbreak surpassed by South Carolina",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "surpassing texas"
+      }
+    }
+  ],
+  "type_mismatch": [
+    {
+      "doc_id": "10013117:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in New Mexico",
+        "year": "",
+        "place": "united states, new mexico",
+        "actor": "",
+        "quote": "a second child who contracted measles and had not been vaccinated"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Second child with measles in New Mexico to undergo autopsy",
+        "year": "",
+        "place": "united states, new mexico",
+        "actor": "",
+        "quote": "do autopsy on a second child who contracted measles and had not been vaccinated"
+      }
+    },
+    {
+      "doc_id": "10495373:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Samoa declares a measles epidemic",
+        "year": "2019",
+        "place": "samoa",
+        "actor": "government of Samoa",
+        "quote": "the government of samoa declared a measles epidemic in october of 2019."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles epidemic in Samoa",
+        "year": "2019",
+        "place": "samoa",
+        "actor": "government of Samoa",
+        "quote": "the government of samoa declared a measles epidemic in october of 2019"
+      }
+    },
+    {
+      "doc_id": "10495373:1",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles epidemic in Simone",
+        "year": "",
+        "place": "",
+        "actor": "Simone government",
+        "quote": "by the time the simone government declared an end to the epidemic, 83 people had died again."
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Samoa declares an end to the measles epidemic",
+        "year": "",
+        "place": "samoa",
+        "actor": "Samoa government",
+        "quote": "by the time the simone government declared an end to the epidemic, 83 people had died again."
+      }
+    },
+    {
+      "doc_id": "10515496:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Imported measles cases confirmed in Ontario and Quebec",
+        "year": "",
+        "place": "canada, ontario",
+        "actor": "",
+        "quote": "we've had some new imported cases of measles recently"
+      },
+      "candidate": {
+        "event_type": "cases",
+        "title": "Imported measles cases in Quebec",
+        "year": "",
+        "place": "canada, quebec",
+        "actor": "",
+        "quote": "cases are confirmed in ontario and quebec"
+      }
+    },
+    {
+      "doc_id": "10534014:3",
+      "reference": {
+        "event_type": "cases",
+        "title": "Pakistan reports laboratory-confirmed and clinically confirmed congenital rubella syndrome cases in 2020",
+        "year": "2020",
+        "place": "pakistan",
+        "actor": "Pakistan",
+        "quote": "in the year 2020, however pakistan added an additional site and reported both 22 laboratory confirmed cases and 279 clinical confirmed cases"
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Pakistan added a congenital rubella syndrome surveillance site",
+        "year": "2020",
+        "place": "pakistan",
+        "actor": "Pakistan",
+        "quote": "in the year 2020, however pakistan added an additional site and reported both 22 laboratory confirmed cases and 279 clinical confirmed cases"
+      }
+    },
+    {
+      "doc_id": "10534042:0",
+      "reference": {
+        "event_type": "other",
+        "title": "India receives Measles and Rubella Champion Award",
+        "year": "",
+        "place": "united states, district of columbia, washington, american red cross headquarters",
+        "actor": "Measles and Rubella Partnership",
+        "quote": "india bags prestigious award for efforts to combat measles rubella"
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "India receives the Measles and Rubella Champion Award",
+        "year": "",
+        "place": "united states, district of columbia, washington, american red cross headquarters",
+        "actor": "Measles and Rubella Partnership",
+        "quote": "india bags prestigious award for efforts to combat measles rubella"
+      }
+    },
+    {
+      "doc_id": "10574426:6",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Measles vaccination shortages reported in Canadian public health units",
+        "year": "",
+        "place": "canada",
+        "actor": "",
+        "quote": "there were some public health units that were having shortages"
+      },
+      "candidate": {
+        "event_type": "other",
+        "title": "Measles vaccine shortages reported in some Canadian public health units",
+        "year": "",
+        "place": "canada",
+        "actor": "",
+        "quote": "there were some public health units that were having shortages"
+      }
+    },
+    {
+      "doc_id": "10716110:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Delaware reports second confirmed measles case in Kent County",
+        "year": "2026",
+        "place": "united states, delaware, kent county",
+        "actor": "DPH",
+        "quote": "“dph is reporting its second confirmed measles case."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Second confirmed measles case reported in Kent County",
+        "year": "",
+        "place": "united states, delaware, kent county",
+        "actor": "DPH",
+        "quote": "dph is reporting its second confirmed measles case."
+      }
+    },
+    {
+      "doc_id": "10820314:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Delaware declares a measles outbreak",
+        "year": "",
+        "place": "united states, delaware",
+        "actor": "Delaware",
+        "quote": "delaware declares an outbreak"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak declared in Delaware",
+        "year": "",
+        "place": "united states, delaware",
+        "actor": "Delaware",
+        "quote": "delaware declares an outbreak"
+      }
+    },
+    {
+      "doc_id": "11204826:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles detected in Anchorage",
+        "year": "",
+        "place": "united states, anchorage",
+        "actor": "",
+        "quote": "measles detected in anchorage"
+      },
+      "candidate": {
+        "event_type": "cases",
+        "title": "Measles detected in Anchorage",
+        "year": "",
+        "place": "anchorage",
+        "actor": "",
+        "quote": "measles detected in anchorage"
+      }
+    },
+    {
+      "doc_id": "11939096:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Early measles vaccination guidance issued in Michigan",
+        "year": "",
+        "place": "united states, michigan",
+        "actor": "",
+        "quote": "within 2 months it was the official guidance to vax for it early since cases were spiking"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles cases spike in Michigan",
+        "year": "",
+        "place": "united states, michigan",
+        "actor": "",
+        "quote": "in michigan when there were signs of people getting measles"
+      }
+    },
+    {
+      "doc_id": "1248699:0",
+      "reference": {
+        "event_type": "cases",
+        "title": "Measles at Dilley Detention Center",
+        "year": "",
+        "place": "dilley, dilley detention center",
+        "actor": "",
+        "quote": "measles at dilley detention center"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Measles at Dilley Detention Center",
+        "year": "",
+        "place": "dilley, dilley detention center",
+        "actor": "",
+        "quote": "measles at dilley detention center"
+      }
+    },
+    {
+      "doc_id": "1249647:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two measles infections confirmed at a Texas detention facility",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "2 measles infections confirmed at texas facility where 5-year-old detained in minnesota was held."
+      },
+      "candidate": {
+        "event_type": "cases",
+        "title": "Two measles infections confirmed at a Texas facility",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "2 measles infections confirmed at texas facility where 5-year-old detained in minnesota was held"
+      }
+    },
+    {
+      "doc_id": "1249655:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "ICE halts all movement at Texas detention facility due to measles infections",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "ICE",
+        "quote": "ice halts \"all movement\" at texas detention facility due to measles infections"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles infections at a Texas detention facility",
+        "year": "",
+        "place": "united states, texas, texas detention facility",
+        "actor": "",
+        "quote": "texas detention facility due to measles infections"
+      }
+    },
+    {
+      "doc_id": "1250272:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two detainees test positive for measles at a South Texas ICE detention center",
+        "year": "",
+        "place": "united states, texas, south texas ice detention center",
+        "actor": "",
+        "quote": "two detainees test positive for measles at south texas ice detention center"
+      },
+      "candidate": {
+        "event_type": "cases",
+        "title": "Two measles cases at a South Texas ICE detention center",
+        "year": "",
+        "place": "united states, texas, south texas ice detention center",
+        "actor": "",
+        "quote": "two detainees test positive for measles at south texas ice detention center"
+      }
+    },
+    {
+      "doc_id": "1250274:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two detainees test positive for measles at South Texas ICE detention center",
+        "year": "",
+        "place": "united states, texas, south texas ice detention center",
+        "actor": "",
+        "quote": "two detainees test positive for measles at south texas ice detention center"
+      },
+      "candidate": {
+        "event_type": "cases",
+        "title": "Two detainees test positive for measles at a South Texas ICE detention center",
+        "year": "",
+        "place": "united states, texas, south texas ice detention center",
+        "actor": "",
+        "quote": "two detainees test positive for measles at south texas ice detention center"
+      }
+    },
+    {
+      "doc_id": "1609747:1",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two children die in West Texas measles outbreak",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "the two deaths so far in west texas were children."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Texas",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "most of the cases in texas are children"
+      }
+    },
+    {
+      "doc_id": "1641186:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Auckland Grammar tells some students to stay home amid measles concerns",
+        "year": "2025",
+        "place": "new zealand, auckland, auckland, auckland grammar",
+        "actor": "Auckland Grammar",
+        "quote": "auckland grammar were already working closely with public health officials when they told some kids to stay home this week"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles quarantine at Auckland Grammar",
+        "year": "2025",
+        "place": "new zealand, auckland, auckland grammar",
+        "actor": "Auckland Grammar",
+        "quote": "auckland grammar were already working closely with public health officials when they told some kids to stay home this week"
+      }
+    },
+    {
+      "doc_id": "1670623:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Alberta",
+        "year": "",
+        "place": "canada, alberta",
+        "actor": "",
+        "quote": "things are particularly bad in alberta, a right-wing leaning province where vaccine disinformation is running rampant, which has a higher number of cases than the whole usa"
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Alberta government does not declare a measles health emergency",
+        "year": "",
+        "place": "canada, alberta",
+        "actor": "Alberta government",
+        "quote": "health officials in alberta are criticizing the governments decision not to declare a health emergency"
+      }
+    },
+    {
+      "doc_id": "1679140:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles case reported in Guilford County",
+        "year": "",
+        "place": "united states, north carolina, guilford county",
+        "actor": "North Carolina Department of Health and Human Services",
+        "quote": "a case of measles in a child who was visiting"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Imported measles case in a child visiting Forsyth and Guilford counties",
+        "year": "",
+        "place": "united states, north carolina",
+        "actor": "North Carolina Department of Health and Human Services",
+        "quote": "has confirmed a case of measles in a child who was visiting forsyth and guilford counties"
+      }
+    },
+    {
+      "doc_id": "2345946:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles spread among March for Life attendees",
+        "year": "",
+        "place": "march for life demonstration",
+        "actor": "",
+        "quote": "\"march for life\" attendees are getting measles"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Measles infections among March for Life attendees",
+        "year": "",
+        "place": "march for life demonstration",
+        "actor": "",
+        "quote": "\"march for life\" attendees are getting measles"
+      }
+    },
+    {
+      "doc_id": "3857080:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Measles deaths among unvaccinated children in Texas",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "the children dieing in texas because patients didn't get the measles vaccine"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Texas",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "children dieing in texas because patients didn't get the measles vaccine"
+      }
+    },
+    {
+      "doc_id": "4289734:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two children die during Texas measles outbreak",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "two children died during the outbreak in texas."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Texas reached 762 cases before ending",
+        "year": "",
+        "place": "united states, texas",
+        "actor": "",
+        "quote": "a massive outbreak in texas, which reached 762 cases before it ended in august last year"
+      }
+    },
+    {
+      "doc_id": "4486773:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two measles encephalitis cases confirmed in South Carolina",
+        "year": "",
+        "place": "united states, south carolina",
+        "actor": "the department",
+        "quote": "the department confirmed to the independent that there have been two cases of measles encephalitis since south carolina’s outbreak."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in South Carolina",
+        "year": "",
+        "place": "united states, south carolina",
+        "actor": "",
+        "quote": "south carolina’s outbreak"
+      }
+    },
+    {
+      "doc_id": "4560342:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Pertussis outbreak in Louisiana",
+        "year": "2025",
+        "place": "united states, louisiana",
+        "actor": "",
+        "quote": "a pertussis (whooping cough) outbreak in louisiana in 2025 for two months, even after two infants died."
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Two infants die during Louisiana pertussis outbreak",
+        "year": "2025",
+        "place": "united states, louisiana",
+        "actor": "",
+        "quote": "a pertussis (whooping cough) outbreak in louisiana in 2025"
+      }
+    },
+    {
+      "doc_id": "4757031:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Camp East Montana placed under quarantine after measles outbreak",
+        "year": "",
+        "place": "united states, texas, camp east montana",
+        "actor": "",
+        "quote": "camp east montana immigrant concentration camp was under quarantine following a measles outbreak"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak at Camp East Montana",
+        "year": "",
+        "place": "united states, texas, camp east montana",
+        "actor": "",
+        "quote": "the sprawling camp east montana immigrant concentration camp was under quarantine following a measles outbreak at the texas detention facility."
+      }
+    },
+    {
+      "doc_id": "4764885:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Colorado confirms third measles case of 2026",
+        "year": "2026",
+        "place": "united states, colorado",
+        "actor": "Colorado",
+        "quote": "potential exposures in westy - colorado confirms the third measles case of 2026"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Third measles case of 2026 confirmed in Colorado",
+        "year": "2026",
+        "place": "united states, colorado, westminster",
+        "actor": "Colorado",
+        "quote": "potential exposures in westy - colorado confirms the third measles case of 2026"
+      }
+    },
+    {
+      "doc_id": "6183708:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles cases among six babies in Ontario",
+        "year": "",
+        "place": "canada, ontario",
+        "actor": "",
+        "quote": "six babies were born with the measles to unvaccinated moms in ontario this spring"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Premature baby dies amid measles infections in Ontario",
+        "year": "",
+        "place": "canada, ontario",
+        "actor": "",
+        "quote": "six babies were born with the measles to unvaccinated moms in ontario this spring. one premature baby died."
+      }
+    },
+    {
+      "doc_id": "6670959:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Spartanburg County schools exclude potentially exposed students during measles outbreak",
+        "year": "",
+        "place": "united states, south carolina, spartanburg county",
+        "actor": "Global Academy of South Carolina and Fairforest Elementary",
+        "quote": "both schools have been proactive in taking recommended precautionary measures"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak at two Spartanburg County schools",
+        "year": "",
+        "place": "united states, south carolina, spartanburg county",
+        "actor": "DPH",
+        "quote": "two schools in spartanburg county – global academy of south carolina and fairforest elementary – have confirmed measles cases identified with the current outbreak"
+      }
+    },
+    {
+      "doc_id": "6715577:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Alberta",
+        "year": "",
+        "place": "canada, alberta",
+        "actor": "",
+        "quote": "with the measles outbreak, a newborn baby has died of measles here in alberta."
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Newborn baby dies of measles in Alberta",
+        "year": "",
+        "place": "canada, alberta",
+        "actor": "",
+        "quote": "a newborn baby has died of measles here in alberta"
+      }
+    }
+  ],
+  "year_mismatch": [
+    {
+      "doc_id": "10495402:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Nepalgunj, Banke district",
+        "year": "2023",
+        "place": "nepal, banke, nepalgunj",
+        "actor": "",
+        "quote": "nepal in the year 2023 recorded an outbreak of measles in nepal ganch sub-metropolitan city in baki district following a cluster of cases of fever and rash."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Nepalgunj, Banke district",
+        "year": "",
+        "place": "nepal, banke, nepalgunj",
+        "actor": "",
+        "quote": "nepal in the year 2023 recorded an outbreak of measles in nepal ganch sub-metropolitan city in baki district"
+      }
+    },
+    {
+      "doc_id": "10716110:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Delaware reports second confirmed measles case in Kent County",
+        "year": "2026",
+        "place": "united states, delaware, kent county",
+        "actor": "DPH",
+        "quote": "“dph is reporting its second confirmed measles case."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Second confirmed measles case reported in Kent County",
+        "year": "",
+        "place": "united states, delaware, kent county",
+        "actor": "DPH",
+        "quote": "dph is reporting its second confirmed measles case."
+      }
+    },
+    {
+      "doc_id": "12025301:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "New measles exposure sites in Gresham, Clark County",
+        "year": "2026",
+        "place": "clark county, gresham",
+        "actor": "health officials",
+        "quote": "new measles exposure sites in gresham, clark county"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "New measles exposure sites in Gresham and Clark County",
+        "year": "",
+        "place": "",
+        "actor": "Health officials",
+        "quote": "new measles exposure sites in gresham, clark county"
+      }
+    },
+    {
+      "doc_id": "1615446:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "2019 measles outbreak in Samoa",
+        "year": "2019",
+        "place": "samoa",
+        "actor": "",
+        "quote": "2019 samoa trip ahead of measles outbreak"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Samoa",
+        "year": "",
+        "place": "samoa",
+        "actor": "",
+        "quote": "2019 samoa trip ahead of measles outbreak"
+      }
+    },
+    {
+      "doc_id": "1626302:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in South Carolina schools",
+        "year": "2026",
+        "place": "united states, south carolina",
+        "actor": "",
+        "quote": "https://arstechnica.com/health/2026/01/sc-measles-23-schools-hit-over-550-quarantined-as-outbreak-hits-record/"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in South Carolina",
+        "year": "",
+        "place": "united states, south carolina",
+        "actor": "",
+        "quote": "sc-measles-23-schools-hit-over-550-quarantined-as-outbreak-hits-record"
+      }
+    },
+    {
+      "doc_id": "1643229:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles cases in Wellington",
+        "year": "2025",
+        "place": "new zealand, wellington",
+        "actor": "",
+        "quote": "talked to them yesterday about measles cases in wellington"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles cases in Wellington",
+        "year": "",
+        "place": "wellington",
+        "actor": "",
+        "quote": "measles cases in wellington"
+      }
+    },
+    {
+      "doc_id": "1670726:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Alberta",
+        "year": "2025",
+        "place": "canada, alberta",
+        "actor": "health officials in Alberta",
+        "quote": "canada’s public health agency has recorded about 4,200 measles cases this year"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Alberta",
+        "year": "",
+        "place": "canada, alberta",
+        "actor": "",
+        "quote": "health officials in alberta, a western province that has become a hot spot for the outbreak"
+      }
+    },
+    {
+      "doc_id": "1680673:0",
+      "reference": {
+        "event_type": "cases",
+        "title": "Measles case reported in Illinois",
+        "year": "2025",
+        "place": "united states, illinois",
+        "actor": "",
+        "quote": "the utah measles case has also been reported in illinois. right now."
+      },
+      "candidate": {
+        "event_type": "cases",
+        "title": "Measles case in Utah",
+        "year": "",
+        "place": "united states, utah",
+        "actor": "",
+        "quote": "the utah measles case has also been reported in illinois."
+      }
+    },
+    {
+      "doc_id": "1756569:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak at a massive New York City migrant shelter",
+        "year": "2024",
+        "place": "united states, new york, new york city, migrant shelter",
+        "actor": "",
+        "quote": "https://www.unmc.edu/healthsecurity/transmission/2024/07/16/measles-breaks-out-at-massive-nyc-migrant-shelter/"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak at a massive NYC migrant shelter",
+        "year": "",
+        "place": "united states, new york, new york city, nyc migrant shelter",
+        "actor": "",
+        "quote": "measles-breaks-out-at-massive-nyc-migrant-shelter"
+      }
+    },
+    {
+      "doc_id": "4289734:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in South Carolina reaches 789 cases",
+        "year": "2026",
+        "place": "united states, south carolina",
+        "actor": "state health department",
+        "quote": "with 789 cases reported as of tuesday, the south carolina outbreak surpassed a massive outbreak in texas"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in South Carolina reaches 789 cases",
+        "year": "2025",
+        "place": "united states, south carolina",
+        "actor": "",
+        "quote": "the fast-growing measles outbreak in south carolina is now the largest in the united states"
+      }
+    },
+    {
+      "doc_id": "4302747:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Unvaccinated school-aged child dies of measles in Lubbock",
+        "year": "2025",
+        "place": "united states, texas, lubbock",
+        "actor": "school-aged child",
+        "quote": "the school-aged child who tested positive for measles was hospitalized in lubbock and passed away on thursday from what the child’s doctors described as measles pulmonary failure."
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Unvaccinated school-aged child dies of measles in Lubbock",
+        "year": "",
+        "place": "united states, texas, lubbock",
+        "actor": "school-aged child",
+        "quote": "the school-aged child who tested positive for measles was hospitalized in lubbock and passed away on thursday from what the child’s doctors described as measles pulmonary failure."
+      }
+    },
+    {
+      "doc_id": "4330195:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles and smallpox tore through Darenia",
+        "year": "1543",
+        "place": "",
+        "actor": "Sasan",
+        "quote": "in 1543 this all ended."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Smallpox outbreak in Darenia",
+        "year": "",
+        "place": "",
+        "actor": "",
+        "quote": "measles and smallpox tore through darenia, wiping out an estimated half of the natives and the royal family"
+      }
+    },
+    {
+      "doc_id": "4661801:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Trump nominates Casey Means for Surgeon General",
+        "year": "2026",
+        "place": "united states",
+        "actor": "Donald Trump",
+        "quote": "trump nominates anti-science quack casey means"
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Donald Trump nominates Casey Means for surgeon general",
+        "year": "",
+        "place": "united states",
+        "actor": "Donald Trump",
+        "quote": "trump nominates anti-science quack casey means"
+      }
+    },
+    {
+      "doc_id": "6571284:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "CDC officials allegedly ordered destruction of autism-vaccine study data",
+        "year": "2002",
+        "place": "united states, georgia, fulton county",
+        "actor": "Frank DeStefano",
+        "quote": "in 2002, cdc did an internal study of fulton county, georgia children in the us"
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "CDC official allegedly ordered destruction of MMR-autism study data",
+        "year": "",
+        "place": "united states, georgia, fulton county",
+        "actor": "Frank DeStefano",
+        "quote": "in 2002, cdc did an internal study of fulton county, georgia children in the us"
+      }
+    },
+    {
+      "doc_id": "6807169:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak among strawberry pickers in Nova Scotia",
+        "year": "2025",
+        "place": "canada, nova scotia",
+        "actor": "",
+        "quote": "an outbreak of measles amongst [redacted] strawberry pickers in nova scotia"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak among strawberry pickers in Nova Scotia",
+        "year": "",
+        "place": "canada, nova scotia",
+        "actor": "",
+        "quote": "an outbreak of measles amongst [redacted] strawberry pickers in nova scotia"
+      }
+    },
+    {
+      "doc_id": "8278036:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Second measles outbreak in Colorado reaches 16 cases",
+        "year": "2026",
+        "place": "united states, colorado",
+        "actor": "",
+        "quote": "https://www.cpr.org/2026/04/15/colorado-second-measles-outbreak-16-cases/"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Second measles outbreak in Colorado reaches 16 cases",
+        "year": "",
+        "place": "united states, colorado",
+        "actor": "",
+        "quote": "colorado-second-measles-outbreak-16-cases"
+      }
+    },
+    {
+      "doc_id": "8285258:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Second measles outbreak reported in Colorado",
+        "year": "2026",
+        "place": "united states, colorado",
+        "actor": "",
+        "quote": "https://www.cpr.org/2026/04/15/colorado-second-measles-outbreak-16-cases/"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Second measles outbreak in Colorado reaches 16 cases",
+        "year": "",
+        "place": "united states, colorado",
+        "actor": "",
+        "quote": "/2026/04/15/colorado-second-measles-outbreak-16-cases/"
+      }
+    },
+    {
+      "doc_id": "8319951:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Kansas City in the late 1960s",
+        "year": "1960",
+        "place": "united states, kansas city",
+        "actor": "",
+        "quote": "there was a measles outbreak in kansas city in the late 1960s. it was called german measles at the time."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "German measles outbreak in Kansas City",
+        "year": "",
+        "place": "united states, kansas city",
+        "actor": "",
+        "quote": "there was a measles outbreak in kansas city in the late 1960s. it was called german measles at the time."
+      }
+    },
+    {
+      "doc_id": "8320999:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "USA Department of Health reports 2,000 measles cases in 2025",
+        "year": "2025",
+        "place": "united states",
+        "actor": "USA Department of Health",
+        "quote": "a post from the usa department of health touting that the us has 'only' 2000 measles cases in 2025"
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "USA Department of Health posts 2025 U.S. measles case total",
+        "year": "",
+        "place": "united states",
+        "actor": "USA Department of Health",
+        "quote": "post from the usa department of health touting that the us has 'only' 2000 measles cases in 2025"
+      }
+    },
+    {
+      "doc_id": "8544923:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "Measles considered eliminated in the United States by 2000",
+        "year": "2000",
+        "place": "united states",
+        "actor": "",
+        "quote": "measles was considered eliminated from the united states by the year 2000."
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "Measles considered eliminated from the United States",
+        "year": "",
+        "place": "united states",
+        "actor": "",
+        "quote": "measles was considered eliminated from the united states by the year 2000"
+      }
+    },
+    {
+      "doc_id": "9392230:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Mumps outbreak declared at ServiceOntario office in Toronto",
+        "year": "2026",
+        "place": "canada, ontario, toronto, serviceontario, 777 bay st., 15th-floor unit",
+        "actor": "Toronto Public Health",
+        "quote": "exposure to the illness occurred between april 8 and may 17"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Mumps outbreak at ServiceOntario’s Toronto office",
+        "year": "",
+        "place": "canada, ontario, toronto, serviceontario, 15th-floor unit, 777 bay st.",
+        "actor": "Toronto Public Health",
+        "quote": "exposure to the illness occurred between april 8 and may 17"
+      }
+    },
+    {
+      "doc_id": "9633916:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Lancaster County",
+        "year": "2026",
+        "place": "united states, pennsylvania, lancaster county",
+        "actor": "",
+        "quote": "lancaster, which has some of the lowest kindergarten vaccination rates in the state, has been a hot spot all year, with 39 of the 65 total measles cases reported in the state."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Lancaster County",
+        "year": "",
+        "place": "united states, pennsylvania, lancaster county",
+        "actor": "",
+        "quote": "in lancaster, measles cases are rising as providers try to combat low vaccination rates"
+      }
+    },
+    {
+      "doc_id": "9663850:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Two children die from measles in England",
+        "year": "2026",
+        "place": "united kingdom, england",
+        "actor": "",
+        "quote": "two-children-die-from-measles-as-england-data-shows-100-new-infections"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Two children die from measles in England",
+        "year": "",
+        "place": "united kingdom, england",
+        "actor": "",
+        "quote": "two-children-die-from-measles"
+      }
+    },
+    {
+      "doc_id": "9663850:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in England",
+        "year": "2026",
+        "place": "united kingdom, england",
+        "actor": "",
+        "quote": "as-england-data-shows-100-new-infections"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in England",
+        "year": "",
+        "place": "united kingdom, england",
+        "actor": "",
+        "quote": "england-data-shows-100-new-infections"
+      }
+    },
+    {
+      "doc_id": "9790977:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in the Delaware Valley",
+        "year": "2023",
+        "place": "united states",
+        "actor": "",
+        "quote": "there have been 10 cases in the delaware valley, nine in south eastern pennsylvania."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles cases rise in the Delaware Valley",
+        "year": "",
+        "place": "united states",
+        "actor": "",
+        "quote": "there have been 10 cases in the delaware valley"
+      }
+    },
+    {
+      "doc_id": "9790980:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Philadelphia",
+        "year": "2024",
+        "place": "philadelphia",
+        "actor": "",
+        "quote": "we've seen an outbreak in philadelphia over the past few weeks."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Philadelphia",
+        "year": "",
+        "place": "united states, pennsylvania, philadelphia",
+        "actor": "",
+        "quote": "we've seen an outbreak in philadelphia over the past few weeks."
+      }
+    },
+    {
+      "doc_id": "9811828:0",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Broward County",
+        "year": "2024",
+        "place": "broward county, manatee bay elementary school",
+        "actor": "",
+        "quote": "there's a total of nine cases of measles in broward county. of those nine cases, seven are at the same school."
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Broward County",
+        "year": "",
+        "place": "broward county, manatee bay elementary school",
+        "actor": "",
+        "quote": "there's a total of nine cases of measles in broward county"
+      }
+    },
+    {
+      "doc_id": "9836648:1",
+      "reference": {
+        "event_type": "outbreak",
+        "title": "Philadelphia measles outbreak reaches eight cases",
+        "year": "2023",
+        "place": "united states, pennsylvania, philadelphia",
+        "actor": "",
+        "quote": "by the end of december we have two more cases, so two more people developed measles"
+      },
+      "candidate": {
+        "event_type": "outbreak",
+        "title": "Measles outbreak in Philadelphia",
+        "year": "",
+        "place": "philadelphia",
+        "actor": "",
+        "quote": "by the end of december we have two more cases"
+      }
+    },
+    {
+      "doc_id": "9836687:0",
+      "reference": {
+        "event_type": "institutional_action",
+        "title": "WHO reported more than 300,000 measles cases worldwide in 2023",
+        "year": "2023",
+        "place": "",
+        "actor": "World Health Organization",
+        "quote": "the world health organization announced recently, reporting more than 300,000 cases in 2023. that's a whopping 79% increase from the year prior."
+      },
+      "candidate": {
+        "event_type": "institutional_action",
+        "title": "WHO reports more than 300,000 measles cases in 2023",
+        "year": "",
+        "place": "",
+        "actor": "World Health Organization",
+        "quote": "the world health organization announced recently, reporting more than 300,000 cases in 2023. that's a whopping 79% increase from the year prior."
+      }
+    },
+    {
+      "doc_id": "9836694:0",
+      "reference": {
+        "event_type": "notable_case",
+        "title": "Ohio reports its first measles case of 2024",
+        "year": "2024",
+        "place": "united states, ohio",
+        "actor": "Ohio Department of Health",
+        "quote": "the ohio department of health reported the state's first measles case of the year earlier this month"
+      },
+      "candidate": {
+        "event_type": "notable_case",
+        "title": "Ohio reports its first measles case of the year",
+        "year": "",
+        "place": "united states, ohio",
+        "actor": "Ohio Department of Health",
+        "quote": "the ohio department of health reported the state's first measles case of the year earlier this month"
+      }
+    }
+  ],
+  "candidate_docs": 10000,
+  "missing_from_reference": 0
+}

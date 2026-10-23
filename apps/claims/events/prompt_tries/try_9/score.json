@@ -1,0 +1,740 @@
+{
+  "summary": {
+    "n_docs": 79,
+    "emptiness_hits": 67,
+    "fp_docs": 7,
+    "fn_docs": 5,
+    "gold_events": 78,
+    "pred_events": 94,
+    "matched": 65,
+    "optional_matched": 0,
+    "optional_omitted": 1,
+    "precision": 0.6915,
+    "recall": 0.8333,
+    "f1": 0.7558,
+    "place_acc": 0.9138,
+    "date_acc": 0.9692,
+    "start_acc": 0.9615,
+    "scope_acc": 0.9538,
+    "study_acc": 1.0,
+    "composite_core": 0.8345,
+    "composite": 0.8517
+  },
+  "docs": [
+    {
+      "doc_id": "1609747:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "west_texas_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Gaines County",
+          "diffs": [
+            "locality: 'Seminole' vs ''"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1248675:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at ICE\u2019s Dilley family detention facility",
+          "diffs": [
+            "site: 'Dilley family detention facility' vs 'ICE\u2019s Dilley family detention facility'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1592419:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at Dilley family detention facility",
+          "diffs": [
+            "site: 'Dilley detention facility' vs ''"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1477362:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak in Canada passes one-year mark"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "canada_elimination",
+          "event_type": "institutional_action",
+          "pred_title": "Canada loses measles-free status",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1246892:0",
+      "gold_n": 3,
+      "pred_n": 4,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "notable_case",
+          "title": "Measles case reported in a traveler who flew into LAX"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "disneyland_traveler_2026",
+          "event_type": "notable_case",
+          "pred_title": "Measles case reported after time at Disneyland",
+          "diffs": []
+        },
+        {
+          "identity": "oc_imported_2026",
+          "event_type": "notable_case",
+          "pred_title": "Internationally traveled measles case reported in Orange County",
+          "diffs": []
+        },
+        {
+          "identity": "socal_2026",
+          "event_type": "outbreak",
+          "pred_title": "Three measles cases confirmed in Southern California",
+          "diffs": [
+            "date_precision: 'unknown' vs 'range'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "272798:0",
+      "gold_n": 3,
+      "pred_n": 4,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "ACIP recommends MMRV only from age 4"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "acip_covid",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP endorses shared decision-making language for COVID-19 vaccines",
+          "diffs": []
+        },
+        {
+          "identity": "acip_mmrv_separate",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP votes down prescription requirement for COVID-19 vaccinations",
+          "diffs": []
+        },
+        {
+          "identity": "acip_hepb_novote",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP votes to remove VFC coverage for MMRV at age 1",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "4403786:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication",
+          "pred_title": "The Lancet retracts Andrew Wakefield\u2019s MMR paper",
+          "diffs": [
+            "country: 'United Kingdom' vs ''",
+            "place_scope: 'at_named_place' vs 'unplaced'"
+          ]
+        },
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action",
+          "pred_title": "Andrew Wakefield struck off the UK medical register",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9811853:0",
+      "gold_n": 1,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "cases",
+          "title": "Measles case confirmed in Miami County"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "Miami County Health Department alerts residents to possible measles exposure"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "miami_county_kroger",
+          "event_type": "notable_case",
+          "pred_title": "Measles exposure reported at Englewood Kroger",
+          "diffs": [
+            "admin2: 'Miami County' vs ''"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1684294:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "march_for_life_exposure",
+          "event_type": "notable_case",
+          "pred_title": "March for Life attendees may have been exposed to measles",
+          "diffs": [
+            "country: 'United States' vs ''",
+            "admin1: 'District of Columbia' vs ''",
+            "place_scope: 'at_named_place' vs 'unplaced'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9995661:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreaks reported across England"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "england_outbreaks",
+          "event_type": "outbreak",
+          "pred_title": "Pooping cough outbreaks reported across England",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1625193:0",
+      "gold_n": 1,
+      "pred_n": 4,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles spreads continuously in the United Kingdom"
+        },
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreaks affect 57 countries as global infections rise"
+        },
+        {
+          "event_type": "outbreak",
+          "title": "Measles cases rise across Mexico, the United States, and Canada"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "uk_elimination",
+          "event_type": "institutional_action",
+          "pred_title": "United Kingdom loses measles-free status",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "321527:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "new_albany_clinic",
+          "event_type": "institutional_action"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "326752:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "At least 270 U.S. students quarantined amid measles outbreaks"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "us_nationwide_spread",
+          "event_type": "outbreak",
+          "pred_title": "Measles spreads nationwide in the United States",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1188626:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "uk_child_death",
+          "event_type": "notable_case"
+        }
+      ],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak reported in an unnamed state"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1314884:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [
+        {
+          "identity": "us_uptick",
+          "event_type": "cases"
+        }
+      ],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles uptick across the United States"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "CDC warns of a measles uptick across the United States"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1626274:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Wisconsin decides to mandate the vaccine"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "3123367:0",
+      "gold_n": 2,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "FDA requires new studies that could delay approval"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "hepb_birth_language",
+          "event_type": "institutional_action",
+          "pred_title": "New language added about hepatitis B vaccination at birth",
+          "diffs": []
+        },
+        {
+          "identity": "fda_new_studies",
+          "event_type": "institutional_action",
+          "pred_title": "FDA and CDC reinforce recommendation for separate MMR and varicella shots",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "4912054:0",
+      "gold_n": 0,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "CDC head allegedly ordered MMR documents destroyed"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "CDC allegedly admitted concealing an MMR-autism link"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "6649994:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "TB cases rise in the Czech Republic"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "6090750:0",
+      "gold_n": 0,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Hungary requires childhood vaccinations for several diseases"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "Romania requires childhood vaccinations for several diseases"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1625866:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "canada_elimination",
+          "event_type": "institutional_action",
+          "pred_title": "Canada loses its measles-free status",
+          "diffs": []
+        },
+        {
+          "identity": "canada_2025_wave",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Canada",
+          "diffs": [
+            "date_precision: 'year' vs 'range'",
+            "stated_start: '2025-01-01' vs '2025-02-05'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "168542:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak in Canada"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1489995:0",
+      "gold_n": 3,
+      "pred_n": 4,
+      "missed": [
+        {
+          "identity": "worldwide_25_year_high",
+          "event_type": "cases"
+        }
+      ],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles cases rise across Latin America"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "Latin American governments step up measles vaccination efforts"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "rfk_policy_reversal",
+          "event_type": "institutional_action",
+          "pred_title": "US vaccine policy reversed under Robert F Kennedy Jr",
+          "diffs": []
+        },
+        {
+          "identity": "us_worst_outbreak",
+          "event_type": "outbreak",
+          "pred_title": "United States faces its worst measles outbreak in decades",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1670254:0",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [
+        {
+          "identity": "carbon_county_2025",
+          "event_type": "cases"
+        }
+      ],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles spreads to four people in Carbon County"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "rawlins_steakhouse",
+          "event_type": "notable_case",
+          "pred_title": "Possible measles exposure at Michael\u2019s Big City Steak House",
+          "diffs": []
+        },
+        {
+          "identity": "rawlins_walmart",
+          "event_type": "notable_case",
+          "pred_title": "Possible measles exposure at Rawlins Walmart",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1669436:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "wakefield_publication",
+          "event_type": "study_publication"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "213665:0",
+      "gold_n": 3,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "wakefield_publication",
+          "event_type": "study_publication"
+        },
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication"
+        },
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "4302770:0",
+      "gold_n": 0,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "notable_case",
+          "title": "Adult woman dies of measles in 2015"
+        },
+        {
+          "event_type": "notable_case",
+          "title": "Last child measles death reported in 2003"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "11624549:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Thousands of HHS public-health websites and data stripped"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "7509061:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "mmr_second_dose_1989",
+          "event_type": "institutional_action"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "6701289:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [
+        {
+          "identity": "auckland_2019",
+          "event_type": "cases"
+        }
+      ],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles wave in Auckland"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "auckland_shortage_2019",
+          "event_type": "institutional_action",
+          "pred_title": "GPs faced a measles vaccine stock shortage",
+          "diffs": [
+            "country: 'New Zealand' vs ''",
+            "locality: 'Auckland' vs ''",
+            "place_scope: 'at_named_place' vs 'unplaced'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1638284:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "joffe_resignation",
+          "event_type": "institutional_action"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9836602:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "india_mr_award_2024",
+          "event_type": "other"
+        }
+      ],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "India receives the 2024 Measles and Rubella Champion Award"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1677634:0",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "chihuahua_2025",
+          "event_type": "cases",
+          "pred_title": "Mexico records 2,597 measles cases",
+          "diffs": [
+            "admin1: 'Chihuahua' vs ''"
+          ]
+        },
+        {
+          "identity": "canada_3170_2025",
+          "event_type": "cases",
+          "pred_title": "Canada confirms 3,170 measles cases",
+          "diffs": []
+        },
+        {
+          "identity": "us_1267_2025",
+          "event_type": "cases",
+          "pred_title": "U.S. measles cases reach 1,267 this year",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    }
+  ]
+}

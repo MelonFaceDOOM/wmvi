@@ -1,0 +1,363 @@
+{
+  "summary": {
+    "n_docs": 79,
+    "emptiness_hits": 75,
+    "fp_docs": 3,
+    "fn_docs": 1,
+    "gold_events": 69,
+    "pred_events": 75,
+    "matched": 66,
+    "optional_matched": 0,
+    "optional_omitted": 4,
+    "precision": 0.88,
+    "recall": 0.9565,
+    "f1": 0.9167,
+    "place_acc": 0.9658,
+    "date_acc": 0.9394,
+    "start_acc": 0.8621,
+    "scope_acc": 0.9697,
+    "study_acc": 1.0,
+    "composite_core": 0.9386,
+    "composite": 0.9444
+  },
+  "docs": [
+    {
+      "doc_id": "1609747:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "west_texas_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Gaines County",
+          "diffs": [
+            "date_precision: 'range' vs 'unknown'",
+            "stated_start: '2025-04-21' vs None"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1592419:0",
+      "gold_n": 1,
+      "pred_n": 4,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Elizabeth Caisaguano released from ICE custody"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "Judge Fred Biery blocks removal or transfer of Elizabeth Caisaguano and her mother"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "Brad Karp resigns as chair of Paul Weiss"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at Dilley detention center",
+          "diffs": [
+            "site: 'Dilley detention facility' vs 'Dilley detention center'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1247688:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "disneyland_traveler_2026",
+          "event_type": "notable_case",
+          "pred_title": "Second measles case in a traveler who visited Disneyland and California Adventure",
+          "diffs": [
+            "site: 'Disneyland' vs 'Disneyland, California Adventure'"
+          ]
+        }
+      ],
+      "optional_omitted": [
+        {
+          "identity": "disneyland_california_adventure",
+          "event_type": "notable_case"
+        }
+      ]
+    },
+    {
+      "doc_id": "8599466:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Government paid Hannah Poling\u2019s family"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "hannah_poling",
+          "event_type": "vaccine_injury",
+          "pred_title": "Hannah Poling developed autism after receiving multiple vaccines",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "4403786:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action",
+          "pred_title": "Andrew Wakefield struck off the UK medical register",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1597143:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "samoa_measles",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Samoa",
+          "diffs": [
+            "date_precision: 'year' vs 'unknown'",
+            "stated_start: '2019-01-01' vs None"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1631378:0",
+      "gold_n": 4,
+      "pred_n": 4,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "snohomish_exposure_serene",
+          "event_type": "notable_case",
+          "pred_title": "Potential measles exposure at Serene Lake Elementary School",
+          "diffs": []
+        },
+        {
+          "identity": "snohomish_exposure_pathfinder",
+          "event_type": "notable_case",
+          "pred_title": "Potential measles exposure at Pathfinder Kindergarten Center",
+          "diffs": []
+        },
+        {
+          "identity": "snohomish_exposure_swedish",
+          "event_type": "notable_case",
+          "pred_title": "Potential measles exposure at Swedish Mill Creek Campus",
+          "diffs": [
+            "site: 'Swedish Mill Creek Campus' vs 'Swedish Mill Creek Campus medical facility'"
+          ]
+        },
+        {
+          "identity": "snohomish_exposure_stellar",
+          "event_type": "notable_case",
+          "pred_title": "Potential measles exposure at Stellar Kids Dentistry Everett",
+          "diffs": [
+            "site: 'Stellar Kids Dentistry' vs 'Stellar Kids Dentistry Everett'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "326752:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles spreads nationwide in the United States"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1188626:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "notable_case",
+          "title": "Child dies of measles in the United Kingdom"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1611342:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Last major measles outbreak in the United States"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1625866:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "canada_elimination",
+          "event_type": "institutional_action",
+          "pred_title": "Canada loses its measles-free status",
+          "diffs": []
+        },
+        {
+          "identity": "canada_2025_wave",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Canada",
+          "diffs": [
+            "date_precision: 'year' vs 'unknown'",
+            "stated_start: '2025-01-01' vs None"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1489995:0",
+      "gold_n": 1,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Latin American governments step up measles vaccination efforts"
+        },
+        {
+          "event_type": "institutional_action",
+          "title": "Robert F Kennedy Jr leads a reversal of US vaccine policy"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "us_worst_outbreak",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in the United States",
+          "diffs": [
+            "place_scope: 'countrywide' vs 'at_named_place'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9768455:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "oklahoma_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles cases in Oklahoma",
+          "diffs": [
+            "date_precision: 'day' vs 'unknown'",
+            "stated_start: '2025-03-19' vs None"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1669436:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "wakefield_publication",
+          "event_type": "study_publication"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "8545540:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "samoa_measles",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "gavi_defund",
+          "event_type": "institutional_action",
+          "pred_title": "RFK Jr. defunded Gavi",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9914208:2",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "astrazeneca_claims_2024",
+          "event_type": "institutional_action",
+          "pred_title": "AstraZeneca COVID-19 vaccine compensation claims issued in the High Court",
+          "diffs": [
+            "place_scope: 'at_named_place' vs 'countrywide'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    }
+  ]
+}

@@ -133,16 +133,27 @@ def mint_event_key(
     *,
     existing: Iterable[str],
     start_date: str | None = None,
+    date_precision: str | None = None,
 ) -> str:
-    """Derive a unique, readable event_key from a title (+ year when known)."""
+    """Derive a unique key from title plus year or year-month when known."""
     taken = set(existing)
     base = slugify(title)
     if not base:
         base = "event"
 
-    year = (start_date or "")[:4]
-    if year.isdigit() and year not in base.split("-"):
-        base = f"{base}-{year}"
+    start = str(start_date or "")
+    year = start[:4]
+    month = start[5:7] if len(start) >= 7 else ""
+    tokens = set(base.split("-"))
+    precision = str(date_precision or "")
+    if year.isdigit() and year not in tokens:
+        if month.isdigit() and precision in ("day", "month", "range"):
+            base = f"{base}-{year}-{month}"
+        else:
+            base = f"{base}-{year}"
+    elif year.isdigit() and month.isdigit() and precision in ("day", "month", "range"):
+        if f"{year}-{month}" not in base:
+            base = f"{base}-{month}"
 
     if base not in taken:
         return base

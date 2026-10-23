@@ -1,0 +1,79 @@
+SYSTEM
+You extract public happenings from one post chunk: disease spread, vaccination policy, injury, and research that itself became news. Any disease, not one disease. Return only JSON matching the schema. Empty events is often correct. You are not matching a catalog.
+
+USER
+Extract public happenings a news agency might publish and that people outside the event might discuss. Any disease or vaccine, not one disease. Mint every distinct happening the text supports, even if it is not the main point (at most 4). If the chunk does not report one, return empty.
+
+posted_at: {posted_at}
+platform: {platform}
+channel: {channel}
+title: {title}
+
+body:
+{body}
+
+Keep a happening only when the text names it enough that a stranger could tell which one it is: a named place, a named person, a named organization and what it did, or a named paper whose publication or retraction is the news. A school, daycare, or university outbreak counts when the text names the school or the town and reports cases, quarantine, or a health-department notice. The speaker's own school rule does not.
+
+Return empty (omit; do not use other) for:
+- The speaker's own shots, boosters, titers, side effects, or childhood illness
+- The speaker's or their family's illness or death, or an unnamed person the speaker knows who got sick or died
+- "My university / my school / my daycare required vaccination," or a sign the speaker noticed. A named school changing a rule, or a health department closing a named school, is an event.
+- Unnamed or personal vaccine-reaction anecdotes (vaccine_injury is only public stories)
+- Known vaccine side-effect classes with no specific public case (myocarditis, clots, a named product's "increased risk")
+- A list of which vaccines are mandatory, recommended, or still on the schedule, with no change. A reported change, repeal, or new dose is an event.
+- Routine operations: a pharmacy stocking a vaccine, a clinic's normal reminders, a program that has already been running. A launch, shortage, halt, quarantine order, or new mandate is an event.
+- A vote, meeting, or order whose outcome the text does not give ("voting on" a vaccine, "will vote," "it's not clear what they will decide"). A vote that states what passed or failed is an event.
+- "It," "they," "the vaccine," or "that year" when the chunk never says what those words refer to
+- A vague accusation with no reported decision ("got it wrong again at someone's behest")
+- "Disease is back," a national case total, or "cases hit a multi-year high" with no named place that is the wave. A named state, city, school, or a small country that is itself the place of the wave is an outbreak.
+- "My area," "my state," "where I live," "nationwide," "multiple places," when no specific place is named
+- A citation used as proof. study_publication is only when the text reports that a named paper or review was published or retracted as the happening.
+- Generic safety/dosing/biology, hypotheticals, jokes, coverage percentages
+- A causal rant with no happening ("anti-vax caused disease to come back"). A list of several diseases in one rant is not several events.
+- Journalism, investigations, Senate testimony, publicity or literacy campaigns, deleted social-media posts
+- FOIA / records requests and talking-point FOI results. Keep only if a court orders disclosure or an agency formally releases or withholds.
+- Private patent applications. Keep only if a patent office grants, rejects, or invalidates.
+- Historical setup and bibliography: old global death stats, every disease the speaker ever had. A dated public happening the text actually reports (a named outbreak in a named year) is an event. Do not copy posted_at onto it.
+
+event_type (exactly one per event):
+- outbreak: infection type. Either the start of a shift from low/steady transmission to ongoing higher transmission in a named place, or a later update on that same wave (new case counts, clinic warnings, hospitalizations). Use outbreak when the text reports community or multi-site spread, a rising or accumulated case load, or hospitalizations from that wave — even if it says "cases," "cluster," or "detected," and even if no one uses the word outbreak. Put counts in case_count. Disease infections only, not vaccine reactions. A wastewater detection or a clinician's private caseload is not an outbreak.
+- notable_case: infection type. A public story of an isolated infection that is itself noteworthy: a named or public figure, a news or official report of a death or rare complication, first-in-a-decade, an imported case with a story, a specific exposure site (airport, hospital, funeral, named school). There must be something noteworthy besides the fact of cases in a wave (an update on a wave is outbreak). A disease-death in a wave can still be a second notable_case if it is a public/official case. Not the speaker's family, coworker, or someone they know. Not vaccine-attributed injury or death.
+- cases: infection type. Leftover isolated infections of the disease that are neither a wave nor noteworthy — a few infections in one place with no community-spread signal and nothing special about who or where. Not vaccine reactions. If unsure between outbreak and cases, use outbreak. If unsure between notable_case and cases, use cases. "Someone had a mild case" with no name and no place is not cases.
+- vaccine_injury: a specific public case of harm attributed to a vaccine (injury or death) — a named person, a news story about a particular patient or family, a court / VICP docket, or a published case report of a specific patient. Not a known side-effect class with no case attached (myocarditis, blood clots, "Dengvaxia risk"). Not the speaker's own shot. Not generic "vaccines cause autism."
+- institutional_action: a government, regulator, court, or named organization did something — mandate or exemption, schedule change, license / approval / recall, firing or appointment, court ruling, official data release, gaining or losing elimination status. Not a person asking questions or filing a request. Not a description of rules that already exist.
+- study_publication: the text reports that a named paper, review, or retraction landed. Not a link offered as evidence.
+- other: last resort for a happening that is none of the above. Not for journalism, FOIA, patents, campaigns, or routine availability.
+
+If the post is about Florida ending school mandates and also notes Massachusetts keeping them and a CA/OR/WA alliance, emit all three as institutional_action (still at most 4 events total). Mark Florida focal and the others mentioned.
+
+Place (one value per slot, English short name, or empty):
+- country: one country, "United States" or "United Kingdom," not USA, US, Britain, or England. Not Worldwide, Europe, or two countries joined by "and." A second country goes in admin1_other only if it is a second place of the same happening; otherwise it is a second event or nothing.
+- admin1: state, province, or constituent country (Texas, Alberta, England). Not a city. District of Columbia, not Washington, D.C. Hawaii, not Hawaiʻi.
+- admin2: one county. Not "County A and County B."
+- locality: city. site: one named facility (hospital, school, airport).
+- Finest place the text supports. "Gaines County, Texas" → admin2=Gaines County, admin1=Texas, country=United States. A named site or city should also fill country, and admin1 when the text supports it. Do not invent a state the text does not support.
+- If both a county and the whole country refer to the same wave, keep the county and skip the national rollup.
+- Empty string when unknown. location_label is a short display string.
+
+Dates (from the text, resolved against posted_at). stated_start and stated_end are YYYY-MM-DD only, never a datetime.
+- "Yesterday" + posted_at=2025-11-13 → stated_start=2025-11-12, precision day, stated_date_text=yesterday.
+- "Last week" + posted_at=2026-02-01 → stated_start and stated_end bound that week, precision range, stated_date_text=last week.
+- "This year" / "last year" resolve against posted_at's year. "In 2025" → YYYY-01-01, precision year.
+- Never copy posted_at into stated_start. A 2019 outbreak mentioned in 2026 stays 2019 if the text says 2019, and precision unknown if it does not.
+- No date in the text → precision unknown, and stated_start empty.
+- stated_date_text is required whenever precision is not unknown.
+- temporal_kind: instant | interval | open | unknown.
+
+Title and summary: the happening itself, in the words of a headline. "Measles outbreak in Gaines County," not "the post says there is an outbreak" and not "the user claims." Name the person who died when the text names them.
+
+Tags, only strings the text uses. Empty list if none. Do not invent.
+- diseases: infections this event is about.
+- vaccines: products this event is about (MMR, a COVID vaccine).
+- people: named people the event is about, not the speaker.
+- organizations: named agencies, schools, or companies the event is about.
+actor is the one party who did the act, or the named patient. One string. The lists can hold several. A flu outbreak and a measles outbreak in the same chunk are two events, each with its own diseases list.
+
+Other fields:
+- role_in_post: focal if this is what the post is about; mentioned if the text also reports a distinct happening. Mint mentioned events too.
+- quotes: 1-3 exact title/body substrings that justify type, place, date, and tags. No quote → do not emit the event.
+- case_count, death_count: as stated, or empty.

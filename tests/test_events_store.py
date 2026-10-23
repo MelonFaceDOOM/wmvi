@@ -87,6 +87,12 @@ def test_valid_event_has_no_errors():
         ({"date_precision": "unknown"}, "requires no start_date"),
         ({"date_precision": "range"}, "requires both"),
         ({"date_precision": "day", "start_date": None}, "requires start_date"),
+        ({"temporal_kind": "bogus"}, "temporal_kind"),
+        (
+            {"temporal_kind": "open", "end_date": "2025-06-01", "date_precision": "range"},
+            "no end_date",
+        ),
+        ({"place_level": "continent"}, "place_level"),
     ],
 )
 def test_validation_catches_constraint_violations(overrides, expected):

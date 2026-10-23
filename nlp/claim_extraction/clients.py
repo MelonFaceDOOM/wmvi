@@ -251,6 +251,7 @@ def build_openai_claims_client(
     base_url: str | None = None,
     response_schema: dict[str, Any] | None = None,
     output_parser: Callable[[str], dict[str, Any]] | None = None,
+    service_tier: str | None = None,
 ) -> Any:
     from nlp.claim_extraction.api_requester import OpenAIClaimsClient
 
@@ -275,6 +276,7 @@ def build_openai_claims_client(
         user_prompt_builder=user_prompt_builder,
         response_schema=schema,
         output_parser=parser,
+        service_tier=service_tier,
     )
 
 

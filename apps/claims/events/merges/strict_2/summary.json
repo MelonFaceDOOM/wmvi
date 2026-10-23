@@ -1,0 +1,48 @@
+{
+  "n_mentions": 20928,
+  "n_merged_groups": 853,
+  "n_merged_mentions": 4317,
+  "n_alone": 6383,
+  "n_ambiguous": 10228,
+  "rules": [
+    {
+      "types": "outbreak, cases",
+      "joins_on": "type + disease + country + place grain + stated year",
+      "place": "finest filled level; a county does not join its state",
+      "date": "a single stated year, from the text only",
+      "held_out": "missing disease, missing place, no stated year, a year span, unplaced, or global"
+    },
+    {
+      "types": "notable_case, vaccine_injury",
+      "joins_on": "type + country + a normalized person name",
+      "place": "country only",
+      "date": "not required",
+      "held_out": "no named person, or only a role word or a generic agency"
+    },
+    {
+      "types": "study_publication",
+      "joins_on": "study_action + a named anchor (Wakefield, or a specific actor)",
+      "place": "not required",
+      "date": "not required",
+      "held_out": "no study_action, or no named anchor"
+    },
+    {
+      "types": "institutional_action, other",
+      "joins_on": "exact title + country + scope + stated year or blank",
+      "place": "country and scope",
+      "date": "joins only the same stated year, or other undated copies",
+      "held_out": "a different wording of the same act stays unmerged"
+    }
+  ],
+  "ambiguous_reasons": {
+    "missing_disease": 121,
+    "missing_anchor": 123,
+    "missing_year": 6184,
+    "year_span": 204,
+    "unplaced": 790,
+    "generic_actor": 235,
+    "global": 245,
+    "missing_place": 18,
+    "missing_actor": 2308
+  }
+}

@@ -1,0 +1,439 @@
+{
+  "summary": {
+    "n_docs": 79,
+    "emptiness_hits": 76,
+    "fp_docs": 1,
+    "fn_docs": 2,
+    "gold_events": 69,
+    "pred_events": 66,
+    "matched": 60,
+    "optional_matched": 1,
+    "optional_omitted": 3,
+    "precision": 0.9242,
+    "recall": 0.8696,
+    "f1": 0.8961,
+    "place_acc": 0.9808,
+    "date_acc": 0.9344,
+    "start_acc": 0.8696,
+    "scope_acc": 0.9016,
+    "study_acc": 1.0,
+    "composite_core": 0.9381,
+    "composite": 0.9396
+  },
+  "docs": [
+    {
+      "doc_id": "1609747:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "west_texas_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Gaines County",
+          "diffs": [
+            "locality: 'Seminole' vs ''"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "8741601:1",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "samoa_vaccine_halt",
+          "event_type": "institutional_action",
+          "pred_title": "Samoa pulled its measles vaccine",
+          "diffs": [
+            "place_scope: 'countrywide' vs 'at_named_place'"
+          ]
+        },
+        {
+          "identity": "samoa_mixed_vaccine",
+          "event_type": "vaccine_injury",
+          "pred_title": "Two babies died after receiving incorrectly mixed vaccines in Samoa",
+          "diffs": []
+        },
+        {
+          "identity": "samoa_measles",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Samoa",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "272798:0",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "acip_covid",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP rejects a prescription requirement for COVID-19 vaccination and endorses shared decision-making language",
+          "diffs": [
+            "place_scope: 'unplaced' vs 'countrywide'"
+          ]
+        },
+        {
+          "identity": "acip_mmrv_separate",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP recommends MMRV only after age 4 and removes VFC coverage at age 1",
+          "diffs": [
+            "place_scope: 'unplaced' vs 'countrywide'"
+          ]
+        },
+        {
+          "identity": "acip_hepb_novote",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP keeps current hepatitis B vaccine recommendations",
+          "diffs": [
+            "place_scope: 'unplaced' vs 'countrywide'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "4403786:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication",
+          "pred_title": "The Lancet retracts Andrew Wakefield\u2019s MMR study",
+          "diffs": []
+        },
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action",
+          "pred_title": "General Medical Council strikes Andrew Wakefield off the UK medical register",
+          "diffs": [
+            "place_scope: 'countrywide' vs 'at_named_place'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9811853:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Miami County Health Department urges residents to be up to date on measles vaccinations"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "miami_county_kroger",
+          "event_type": "notable_case",
+          "pred_title": "Measles case confirmed with possible exposure at Englewood Kroger",
+          "diffs": [
+            "admin2: 'Miami County' vs ''"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1631378:0",
+      "gold_n": 4,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "snohomish_exposure_stellar",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_pathfinder",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_serene",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_swedish",
+          "event_type": "notable_case"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "312371:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Hawai\u02bbi epidemiologist urges residents to ensure two-dose MMR vaccination"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "hawaii_mumps",
+          "event_type": "notable_case",
+          "pred_title": "Mumps case confirmed in Hawai\u02bbi County",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1624674:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "dane_cases",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "waukesha_cases",
+          "event_type": "outbreak",
+          "pred_title": "Confirmed measles cases in Waukesha County",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1625193:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Global measles cases surge"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "uk_elimination",
+          "event_type": "institutional_action",
+          "pred_title": "United Kingdom loses measles-free status",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "3123367:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "fda_new_studies",
+          "event_type": "institutional_action"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": [
+        {
+          "identity": "hepb_birth_language",
+          "event_type": "institutional_action"
+        }
+      ]
+    },
+    {
+      "doc_id": "1625866:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "canada_2025_wave",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "canada_elimination",
+          "event_type": "institutional_action",
+          "pred_title": "Canada loses measles-free status",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "168542:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak in Canada"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1670254:0",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "rawlins_steakhouse",
+          "event_type": "notable_case",
+          "pred_title": "Measles exposure warning for Michael\u2019s Big City Steak House",
+          "diffs": [
+            "date_precision: 'day' vs 'unknown'",
+            "stated_start: '2025-07-29' vs None"
+          ]
+        },
+        {
+          "identity": "rawlins_walmart",
+          "event_type": "notable_case",
+          "pred_title": "Measles exposure warning for Rawlins Walmart",
+          "diffs": [
+            "date_precision: 'day' vs 'unknown'",
+            "stated_start: '2025-07-29' vs None"
+          ]
+        },
+        {
+          "identity": "carbon_county_2025",
+          "event_type": "outbreak",
+          "pred_title": "Four new measles cases in Carbon County",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "213665:0",
+      "gold_n": 3,
+      "pred_n": 2,
+      "missed": [
+        {
+          "identity": "wakefield_publication",
+          "event_type": "study_publication"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication",
+          "pred_title": "Andrew Wakefield study retracted",
+          "diffs": []
+        },
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action",
+          "pred_title": "Andrew Wakefield loses his medical license",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "8545540:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "samoa_measles",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "gavi_defund",
+          "event_type": "institutional_action",
+          "pred_title": "RFK Jr defunds Gavi",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "7532555:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "uk_separate_vaccines",
+          "event_type": "institutional_action",
+          "pred_title": "UK government withdrew licences for individual vaccines",
+          "diffs": [
+            "place_scope: 'countrywide' vs 'at_named_place'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9914208:2",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "astrazeneca_claims_2024",
+          "event_type": "institutional_action",
+          "pred_title": "AstraZeneca faces UK COVID jab compensation claims",
+          "diffs": [
+            "date_precision: 'day' vs 'year'",
+            "stated_start: '2024-01-20' vs '2024-01-01'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1677634:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak in Canada"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "chihuahua_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak centered in Chihuahua, Mexico",
+          "diffs": [
+            "date_precision: 'unknown' vs 'day'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    }
+  ]
+}

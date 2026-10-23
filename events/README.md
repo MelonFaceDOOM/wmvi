@@ -55,7 +55,7 @@ events/
 This package is stdlib-only and knows nothing about where events came from.
 Provenance-specific drivers live with their source:
 
-- `apps/claims/events/` — claim→event resolution (stage 1)
+- `apps/claims/events/` — first extraction experiment (post-chunk mentions, extract-only LLM, no catalog writes). See [`apps/claims/events/README.md`](../apps/claims/events/README.md).
 - news / web ingest — stage 2
 - `services/events/` — routine extraction (stage 4)
 
@@ -76,7 +76,14 @@ corpus/file-mode I/O.
   "start_date": "2025-01-01",
   "end_date": null,
   "date_precision": "month",
-  "location": {"country": "US", "admin1": "TX", "label": "Gaines County"},
+  "temporal_kind": "open",
+  "location": {
+    "country": "US",
+    "admin1": "TX",
+    "admin2": "Gaines County",
+    "label": "Gaines County, Texas"
+  },
+  "place_level": "admin2",
   "attributes": {"case_count": 700},
   "subjects": [{"slug": "measles", "relationship": "primary", "assigned_by": "llm"}],
   "status": "active",
@@ -94,6 +101,9 @@ corpus/file-mode I/O.
       "post_id": 4919,
       "platform": "reddit_submission",
       "post_created_at": "2025-02-14T23:24:23+00:00",
+      "stated_start": "2025-01-01",
+      "stated_precision": "month",
+      "date_relation": "started_by",
       "confidence": 0.86,
       "recorded_at": "2026-09-14T14:00:00Z"
     }
@@ -156,13 +166,28 @@ articles arrive with publication timestamps.
 The SQL vocabulary also permits `exact`; file mode omits it as redundant with
 `day`, keeping the file vocabulary a strict subset.
 
+`temporal_kind` is independent of that grain: `instant` (one moment or day),
+`interval` (bounded span), `open` (started, no clean end), `unknown`.
+`instant` and `open` records must not carry a distinct `end_date`.
+
+Each provenance row may also store the observation that produced the dates:
+`stated_start` / `stated_end` / `stated_precision` from the source text, plus
+`date_relation` (`started_by`, `happened_by`, `mentioned_at`, `ended_by`)
+relative to `post_created_at`. Canonical `start_date` / `end_date` on the
+event are the current best estimate and can be edited later.
+
+Place is a nested object with finest-first slots `site`, `locality`, `admin2`,
+`admin1`, `country`, plus optional `label`. `place_level` is the finest slot
+that is filled.
+
 ### Vocabularies
 
 `event_type` is a fixed set (`schema.EVENT_TYPES`): `outbreak`,
-`policy_change`, `regulatory_action`, `approval`, `recall`, `safety_signal`,
-`study_publication`, `legal_action`, `public_statement`, `personnel_change`,
-`funding_change`, `other`. Prefer `other` plus a note over inventing a type;
-extending the tuple means revisiting the DB CHECK too.
+`exposure`, `death`, `policy_change`, `regulatory_action`,
+`study_publication`, `legal_action`, `personnel_change`, `other`. Prefer
+`other` plus a note over inventing a type; extending the tuple means
+revisiting the DB CHECK too. Extract-time aliases (`approval`, `recall`)
+coerce to `regulatory_action`.
 
 `status`, `date_precision`, `subjects[].relationship`, `provenance[].role`, and
 `provenance[].source_type` all mirror their SQL CHECK arrays. `review` is
@@ -198,7 +223,7 @@ from apps.claims import annotations
 annotations.write_annotation(
     corpus_root, "event_key", links,
     scope="group", value_type="string",
-    producer="apps.claims.events.resolve", producer_kind="pipeline",
+    producer="apps.claims.events.extract", producer_kind="pipeline",
     source_hash=groups_hash,
 )
 ```
@@ -216,32 +241,64 @@ Keep the filterable annotation **scalar**. If a claim maps to several events,
 write a separate list-valued `event_keys` annotation for joins rather than
 making `event_key` a list — the filter and threshold machinery assumes scalars.
 
-### Resolution runs at cluster-leaf level
+### Resolution runs on place-anchored cluster leaves
 
 Per-claim LLM resolution against a mutating catalog is O(n) prompts over tens of
-thousands of claims, order-dependent, and unparallelizable. A merged cluster
-leaf ("there is a measles outbreak in Texas") already *is* an event-mention
-group, so resolve leaves instead — hundreds of prompts for `measles2`.
+thousands of claims, order-dependent, and unparallelizable. Merged cluster
+leaves are a better unit, but they are not few: the `measles2` split+merge output
+has **11,030 leaves over 93,871 grouped claims**, so leaves alone are not a
+budget.
 
-1. **Gate with a labeler, not an LLM.** "Is this claim about a specific
-   real-world event?" is a per-claim scalar judgment, which is what the labeler
-   subsystem does: an `is_event_claim` intent, agentic labels plus human gold,
-   ridge train, `labeler apply`. Scores the whole corpus at near-zero marginal
-   cost.
-2. **Retrieve candidates by embedding.** Embed each event's `title + summary`
-   with the corpus's model tag; top-k events above a cosine threshold become the
-   prompt's candidate list.
-3. **One prompt per event-bearing leaf**, ordered by descending occurrence count
-   so the largest events mint first and smaller ones match rather than
-   duplicate. Returns match / create / not-an-event, appended to a JSONL resume
-   log — the `clustering/refine.py` + `merge_log.jsonl` pattern, which solves the
-   same problem.
-4. **Dedupe pass** over near-duplicate minted events, reusing the union-find
+Two things measured on `measles2` shape the gate:
+
+- **Leaf size does not predict event content.** The largest leaves are generic
+  propositions — "MMR does not cause autism" (158 claims), "measles is airborne"
+  (123), "first MMR dose at 12 months" (124). Ranking by size spends the budget
+  on timeless claims.
+- **Events are place-anchored.** Only 14.5% of claims carry a `GPE`/`LOC`
+  entity, and those concentrate hard into the event-bearing leaves: South
+  Carolina outbreak, Lubbock County, Utah's 10 confirmed cases, the
+  Disneyland/LAX exposure, the Florida university outbreak. Do **not** gate on
+  `DATE` — in vaccine text it fires overwhelmingly on infant ages ("6 months of
+  age"), which is why geography alone outperforms geography-or-date here.
+
+So the pipeline is:
+
+1. **Gate on a place-name annotation, not a labeler.** spaCy `en_core_web_lg`
+   NER over grouped claim texts (~2.5 min for 94k with `en_core_web_sm`), written
+   as an `event_geo` annotation with `producer_kind="pipeline"`. Free,
+   re-runnable, and directly inspectable. This is candidate *retrieval*, not
+   training data, so it does not conflict with the heuristic-labeling ban in
+   `apps/claims/AGENTS.md`; the heuristic NLI scorer in `apps/claims/nli/` is the
+   same shape.
+2. **Rank leaves by place density, not size.** Leaves with ≥70% place-bearing
+   members and ≥3 members: **829 leaves covering 7,348 claim keys** on
+   `measles2`. That is the first-pass budget.
+3. **Retrieve candidate events by embedding.** Embed each event's
+   `title + summary` with the corpus's model tag; top-k above a cosine threshold
+   becomes the prompt's candidate list.
+4. **One prompt per leaf**, appended to a JSONL resume log — the
+   `clustering/refine.py` + `merge_log.jsonl` pattern, which solves the same
+   problem. The response must allow **several events per leaf**: leaf 3143
+   collapses Sydney and Pima County exposure notices into one leaf because they
+   share a proposition template, so a leaf is an event *candidate set*, not an
+   event.
+5. **Dedupe pass** over near-duplicate minted events, reusing the union-find
    merge, writing `status: merged` / `merged_into`.
+
+An `is_event_claim` labeler intent is still worth training later, to recover
+events with no place name and to score claims the gate drops. It is not the
+first step: `measles2` has no annotations yet, so that route means building an
+intent, gold, and a trained model before seeing a single event.
 
 Event embeddings are reproducible, so they stay in ignored territory
 (`apps/claims/data/events/embeddings/<tag>/`). Note `_events` would fail the
 corpus-slug regex, so don't model this as a corpus.
+
+Because a leaf can hold several events and one event spans several leaves, the
+claim→event link is built from event `provenance` (via `store.claim_key_links`)
+rather than from the leaf labels. The leaf is scaffolding for the prompt; the
+catalog is the record.
 
 ---
 

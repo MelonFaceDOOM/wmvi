@@ -1,0 +1,21 @@
+{
+  "corpus": "measles2",
+  "from": "apps/claims/data/experiments/clustering/measles2/qwen3-emb-8b/cluster_5cb45e9814_split_merge",
+  "embed_run_dir": "/home/melon/wmvi/apps/claims/data/runs/measles2/qwen3-emb-8b",
+  "labels_path": "apps/claims/data/experiments/clustering/measles2/qwen3-emb-8b/cluster_5cb45e9814_split_merge/labels_5cb45e9814.npy",
+  "phases": [
+    "ner",
+    "gate",
+    "resolve",
+    "report"
+  ],
+  "limit": 50,
+  "min_geo": 0.7,
+  "min_n": 3,
+  "member_snippets": 3,
+  "spacy_model": "en_core_web_sm",
+  "llm_provider": "openai",
+  "model": "gpt-5.6-luna",
+  "pool_cap": 80,
+  "estimate_only": false
+}

@@ -23,21 +23,27 @@ MAX_KEY_LEN = 96
 
 EVENT_TYPES = (
     "outbreak",
+    "exposure",
+    "death",
     "policy_change",
     "regulatory_action",
-    "approval",
-    "recall",
-    "safety_signal",
     "study_publication",
     "legal_action",
-    "public_statement",
     "personnel_change",
-    "funding_change",
     "other",
 )
 
 # Subset of the SQL vocabulary. 'exact' is omitted as redundant with 'day'.
 DATE_PRECISIONS = ("day", "month", "year", "range", "unknown")
+
+# How time works for this happening. Independent of date_precision (grain).
+TEMPORAL_KINDS = ("instant", "interval", "open", "unknown")
+
+# Finest-first place slots on location.
+PLACE_LEVELS = ("site", "locality", "admin2", "admin1", "country")
+
+# How a source's timestamp relates to the event.
+DATE_RELATIONS = ("started_by", "happened_by", "mentioned_at", "ended_by")
 
 EVENT_STATUSES = ("active", "resolved", "superseded", "merged", "disputed")
 
@@ -84,6 +90,10 @@ _SOURCE_OPTIONAL = (
     "provider",
     "external_id",
     "published_at",
+    "stated_start",
+    "stated_end",
+    "stated_precision",
+    "date_relation",
 )
 
 
@@ -106,6 +116,33 @@ def _is_iso_date(value: str) -> bool:
     except (TypeError, ValueError):
         return False
     return True
+
+
+def normalize_location(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep known place slots; drop blanks."""
+    src = dict(raw or {})
+    out: dict[str, Any] = {}
+    for key in (*PLACE_LEVELS, "label"):
+        val = str(src.get(key) or "").strip()
+        if val:
+            out[key] = val
+    return out
+
+
+def finest_place_level(location: dict[str, Any] | None) -> str | None:
+    loc = location or {}
+    for level in PLACE_LEVELS:
+        if str(loc.get(level) or "").strip():
+            return level
+    return None
+
+
+def location_label(location: dict[str, Any] | None) -> str:
+    loc = location or {}
+    if loc.get("label"):
+        return str(loc["label"])
+    parts = [str(loc[k]) for k in PLACE_LEVELS if loc.get(k)]
+    return ", ".join(reversed(parts))
 
 
 @dataclass
@@ -174,6 +211,11 @@ class EventSource:
     external_id: str | None = None
     published_at: str | None = None
 
+    stated_start: str | None = None
+    stated_end: str | None = None
+    stated_precision: str | None = None
+    date_relation: str | None = None
+
     recorded_at: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -235,6 +277,14 @@ class EventSource:
                 out.append(f"source_type {self.source_type!r} requires {name}")
         if self.confidence is not None and not 0.0 <= float(self.confidence) <= 1.0:
             out.append(f"source confidence {self.confidence!r} outside [0, 1]")
+        if self.date_relation and self.date_relation not in DATE_RELATIONS:
+            out.append(f"date_relation {self.date_relation!r} not in {DATE_RELATIONS}")
+        if self.stated_precision and self.stated_precision not in DATE_PRECISIONS:
+            out.append(f"stated_precision {self.stated_precision!r} not in {DATE_PRECISIONS}")
+        for name in ("stated_start", "stated_end"):
+            val = getattr(self, name)
+            if val is not None and val != "" and not _is_iso_date(val):
+                out.append(f"{name} {val!r} is not an ISO date (YYYY-MM-DD)")
         return out
 
 
@@ -286,7 +336,9 @@ class EventRecord:
     start_date: str | None = None
     end_date: str | None = None
     date_precision: str = "unknown"
+    temporal_kind: str = "unknown"
     location: dict[str, Any] = field(default_factory=dict)
+    place_level: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
 
     subjects: list[EventSubject] = field(default_factory=list)
@@ -342,7 +394,9 @@ class EventRecord:
             "start_date": self.start_date,
             "end_date": self.end_date,
             "date_precision": self.date_precision,
-            "location": self.location,
+            "temporal_kind": self.temporal_kind,
+            "location": normalize_location(self.location),
+            "place_level": self.place_level,
             "attributes": self.attributes,
             "subjects": [s.to_dict() for s in self.subjects],
             "status": self.status,
@@ -363,7 +417,9 @@ class EventRecord:
             start_date=data.get("start_date"),
             end_date=data.get("end_date"),
             date_precision=str(data.get("date_precision") or "unknown"),
-            location=dict(data.get("location") or {}),
+            temporal_kind=str(data.get("temporal_kind") or "unknown"),
+            location=normalize_location(data.get("location") or {}),
+            place_level=(str(data["place_level"]) if data.get("place_level") else None),
             attributes=dict(data.get("attributes") or {}),
             subjects=[
                 EventSubject.from_dict(s) for s in (data.get("subjects") or []) if isinstance(s, dict)
@@ -398,6 +454,8 @@ def validate_event(record: EventRecord) -> list[str]:
         out.append("title must not be blank")
     if record.date_precision not in DATE_PRECISIONS:
         out.append(f"date_precision {record.date_precision!r} not in {DATE_PRECISIONS}")
+    if record.temporal_kind not in TEMPORAL_KINDS:
+        out.append(f"temporal_kind {record.temporal_kind!r} not in {TEMPORAL_KINDS}")
     if record.status not in EVENT_STATUSES:
         out.append(f"status {record.status!r} not in {EVENT_STATUSES}")
 
@@ -432,9 +490,20 @@ def validate_event(record: EventRecord) -> list[str]:
         out.append("date_precision 'range' requires both start_date and end_date")
     if record.date_precision in ("day", "month", "year") and not record.start_date:
         out.append(f"date_precision {record.date_precision!r} requires start_date")
+    if record.temporal_kind == "instant" and record.end_date and record.end_date != record.start_date:
+        out.append("temporal_kind 'instant' requires no distinct end_date")
+    if record.temporal_kind == "open" and record.end_date:
+        out.append("temporal_kind 'open' requires no end_date")
 
-    if not isinstance(record.location, dict):
+    loc = record.location if isinstance(record.location, dict) else None
+    if loc is None:
         out.append("location must be an object")
+    else:
+        unknown_place = set(loc) - set(PLACE_LEVELS) - {"label"}
+        if unknown_place:
+            out.append(f"location has unknown keys {sorted(unknown_place)}")
+    if record.place_level is not None and record.place_level not in PLACE_LEVELS:
+        out.append(f"place_level {record.place_level!r} not in {PLACE_LEVELS}")
     if not isinstance(record.attributes, dict):
         out.append("attributes must be an object")
 

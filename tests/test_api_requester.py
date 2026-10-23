@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from nlp.claim_extraction.api_requester import (
+    AzureClaimsClient,
     ConcurrentApiRequester,
+    OpenAIClaimsClient,
     RequestStatus,
     RequestTask,
     RetryPolicy,
@@ -165,3 +167,159 @@ def test_retryable_failure_exhaustion_returns_retryable_status() -> None:
     assert result.status == RequestStatus.FAILED_RETRYABLE
     assert result.attempts == 2
     assert any(s >= 1.0 for s in clock.sleeps)
+
+
+class _FakeResponse:
+    def __init__(self, headers: dict[str, str] | None = None) -> None:
+        self.headers = headers or {}
+
+
+class FakeHttpError(Exception):
+    def __init__(
+        self,
+        *,
+        status_code: int = 429,
+        headers: dict[str, str] | None = None,
+        message: str = "rate limited",
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response = _FakeResponse(headers)
+
+
+class OnceRateLimitedClient:
+    def __init__(self, *, headers: dict[str, str] | None = None, status_code: int = 429) -> None:
+        self._headers = headers
+        self._status_code = status_code
+        self.calls = 0
+
+    def perform(self, payload: dict) -> tuple[dict, dict]:
+        self.calls += 1
+        if self.calls == 1:
+            raise FakeHttpError(status_code=self._status_code, headers=self._headers)
+        return {"ok": True}, {}
+
+
+def _rate_limit_requester(
+    client: OnceRateLimitedClient,
+    clock: FakeClock,
+    *,
+    rpm: int = 10_000,
+    cooldown_s: float = 20.0,
+) -> ConcurrentApiRequester:
+    return ConcurrentApiRequester(
+        client=client,
+        max_workers=1,
+        retry_policy=RetryPolicy(max_retries=3, min_backoff_s=1.0, max_backoff_s=2.0, jitter_s=0.0),
+        throttle_policy=ThrottlePolicy(
+            target_requests_per_minute=rpm,
+            global_429_cooldown_s=cooldown_s,
+        ),
+        now_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+        random_fn=lambda: 0.0,
+    )
+
+
+def test_retry_after_ms_wins_over_policy_cooldown() -> None:
+    clock = FakeClock()
+    client = OnceRateLimitedClient(headers={"retry-after-ms": "2000"})
+    requester = _rate_limit_requester(client, clock, cooldown_s=20.0)
+    results = list(requester.run([_task("a")]))
+    assert results[0].status == RequestStatus.SUCCESS
+    assert results[0].attempts == 2
+    assert 2.0 in clock.sleeps
+    assert 20.0 not in clock.sleeps
+
+
+def test_retry_after_seconds_wins_over_policy_cooldown() -> None:
+    clock = FakeClock()
+    client = OnceRateLimitedClient(headers={"Retry-After": "1"})
+    requester = _rate_limit_requester(client, clock, cooldown_s=20.0)
+    results = list(requester.run([_task("a")]))
+    assert results[0].status == RequestStatus.SUCCESS
+    assert 1.0 in clock.sleeps
+    assert 20.0 not in clock.sleeps
+
+
+def test_429_without_retry_header_uses_policy_cooldown() -> None:
+    clock = FakeClock()
+    client = OnceRateLimitedClient(headers={})
+    requester = _rate_limit_requester(client, clock, cooldown_s=20.0)
+    results = list(requester.run([_task("a")]))
+    assert results[0].status == RequestStatus.SUCCESS
+    assert 20.0 in clock.sleeps
+
+
+def test_http_429_status_triggers_global_pause_not_backoff() -> None:
+    clock = FakeClock()
+    client = OnceRateLimitedClient(headers={})
+    requester = _rate_limit_requester(client, clock, cooldown_s=20.0)
+    results = list(requester.run([_task("a")]))
+    assert results[0].status == RequestStatus.SUCCESS
+    assert 20.0 in clock.sleeps
+    assert 1.0 not in clock.sleeps
+
+
+def test_zero_rpm_does_not_pre_pace() -> None:
+    clock = FakeClock()
+    client = DummyApiClient(
+        limits=DummyRateLimits(requests_per_minute=1000, tokens_per_minute=1_000_000),
+        behavior=DummyBehavior(base_latency_s=0.01),
+        now_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    )
+    requester = ConcurrentApiRequester(
+        client=client,
+        max_workers=1,
+        retry_policy=RetryPolicy(max_retries=1),
+        throttle_policy=ThrottlePolicy(target_requests_per_minute=0, global_429_cooldown_s=1.0),
+        now_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+        random_fn=lambda: 0.0,
+    )
+    results = list(requester.run([_task(f"t{i}", estimated_tokens=10) for i in range(3)]))
+    assert len(results) == 3
+    assert all(r.status == RequestStatus.SUCCESS for r in results)
+    assert clock.now < 1.0
+    assert all(s < 1.0 for s in clock.sleeps)
+
+
+def test_openai_client_disables_sdk_retries(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_openai(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("nlp.claim_extraction.api_requester.OpenAI", fake_openai)
+    OpenAIClaimsClient(
+        api_key="k",
+        model="m",
+        system_prompt_builder=lambda _p: "",
+        user_prompt_builder=lambda _p: "",
+        response_schema={},
+        output_parser=lambda _s: {},
+    )
+    assert captured["max_retries"] == 0
+
+
+def test_azure_client_disables_sdk_retries(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_azure(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("nlp.claim_extraction.api_requester.AzureOpenAI", fake_azure)
+    AzureClaimsClient(
+        api_key="k",
+        azure_endpoint="https://example.openai.azure.com",
+        api_version="2024-08-01-preview",
+        model="m",
+        system_prompt_builder=lambda _p: "",
+        user_prompt_builder=lambda _p: "",
+        response_schema={},
+        output_parser=lambda _s: {},
+    )
+    assert captured["max_retries"] == 0

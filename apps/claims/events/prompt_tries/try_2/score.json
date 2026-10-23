@@ -1,0 +1,329 @@
+{
+  "summary": {
+    "n_docs": 57,
+    "emptiness_hits": 54,
+    "fp_docs": 1,
+    "fn_docs": 2,
+    "gold_events": 45,
+    "pred_events": 41,
+    "matched": 38,
+    "precision": 0.9268,
+    "recall": 0.8444,
+    "f1": 0.8837,
+    "place_acc": 0.807,
+    "date_acc": 0.9211,
+    "start_acc": 0.75,
+    "composite": 0.9084
+  },
+  "docs": [
+    {
+      "doc_id": "1609747:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "South Plains Health District sets up an MMR vaccine clinic in Gaines County"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "west_texas_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Gaines County",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "doc_id": "1248675:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at ICE\u2019s Dilley family detention facility",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1248680:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at ICE\u2019s Dilley family detention facility",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1592419:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at Dilley detention center",
+          "diffs": [
+            "site: 'Dilley detention facility' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1246892:0",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "disneyland_traveler_2026",
+          "event_type": "notable_case",
+          "pred_title": "Measles case reported after travel through LAX and Disneyland",
+          "diffs": [
+            "country: 'United States' vs ''",
+            "date_precision: 'range' vs 'unknown'",
+            "stated_start: '2026-01-25' vs None"
+          ]
+        },
+        {
+          "identity": "oc_imported_2026",
+          "event_type": "notable_case",
+          "pred_title": "Imported measles case reported in Orange County",
+          "diffs": [
+            "country: 'United States' vs ''",
+            "date_precision: 'range' vs 'unknown'",
+            "stated_start: '2026-01-25' vs None"
+          ]
+        },
+        {
+          "identity": "socal_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak begins in Southern California",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1247688:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "disneyland_traveler_2026",
+          "event_type": "notable_case",
+          "pred_title": "Second measles case confirmed in Orange County traveler who visited Disneyland and California Adventure",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "3614434:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "kayley_feher",
+          "event_type": "notable_case",
+          "pred_title": "Measles death of Kayley Feher",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        },
+        {
+          "identity": "daisy_hildebrand",
+          "event_type": "notable_case",
+          "pred_title": "Measles death of Daisy Hildebrand",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "272798:0",
+      "gold_n": 3,
+      "pred_n": 2,
+      "missed": [
+        {
+          "identity": "acip_hepb_novote",
+          "event_type": "institutional_action"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "acip_covid",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP rejects prescription requirement for COVID-19 vaccinations and endorses shared decision-making language",
+          "diffs": []
+        },
+        {
+          "identity": "acip_mmrv_separate",
+          "event_type": "institutional_action",
+          "pred_title": "ACIP recommends MMRV only after age 4 and removes VFC coverage at age 1",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "doc_id": "1597143:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "samoa_measles",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Samoa",
+          "diffs": [
+            "date_precision: 'year' vs 'unknown'",
+            "stated_start: '2019-01-01' vs None"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1631378:0",
+      "gold_n": 4,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "snohomish_exposure_stellar",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_pathfinder",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_serene",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_swedish",
+          "event_type": "notable_case"
+        }
+      ],
+      "extra": [],
+      "matched": []
+    },
+    {
+      "doc_id": "1684294:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "march_for_life_exposure",
+          "event_type": "notable_case",
+          "pred_title": "March for Life attendees may have been exposed to measles",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "312371:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "hawaii_mumps",
+          "event_type": "notable_case",
+          "pred_title": "Mumps case confirmed in Hawaii",
+          "diffs": [
+            "country: 'United States' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1624674:0",
+      "gold_n": 2,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "waukesha_cases",
+          "event_type": "outbreak"
+        },
+        {
+          "identity": "dane_cases",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": []
+    },
+    {
+      "doc_id": "3123367:0",
+      "gold_n": 2,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "FDA requires new studies that could delay approval"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "hepb_birth_language",
+          "event_type": "institutional_action",
+          "pred_title": "Officials add language on hepatitis B vaccination at birth",
+          "diffs": []
+        },
+        {
+          "identity": "fda_new_studies",
+          "event_type": "institutional_action",
+          "pred_title": "FDA and CDC strengthen recommendation to give MMR and varicella vaccines separately",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "doc_id": "6649994:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "TB cases increase in the Czech Republic"
+        }
+      ],
+      "matched": []
+    }
+  ]
+}

@@ -1,0 +1,311 @@
+{
+  "summary": {
+    "n_docs": 79,
+    "emptiness_hits": 75,
+    "fp_docs": 2,
+    "fn_docs": 2,
+    "gold_events": 69,
+    "pred_events": 70,
+    "matched": 63,
+    "optional_matched": 3,
+    "optional_omitted": 1,
+    "precision": 0.9429,
+    "recall": 0.913,
+    "f1": 0.9277,
+    "place_acc": 0.9717,
+    "date_acc": 0.9697,
+    "start_acc": 0.9259,
+    "scope_acc": 0.9394,
+    "study_acc": 1.0,
+    "composite_core": 0.9461,
+    "composite": 0.9486
+  },
+  "docs": [
+    {
+      "doc_id": "1609747:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "west_texas_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Gaines County",
+          "diffs": [
+            "locality: 'Seminole' vs ''"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1248675:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at ICE\u2019s Dilley family detention facility",
+          "diffs": [
+            "site: 'Dilley family detention facility' vs 'ICE\u2019s Dilley family detention facility'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "4403786:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication",
+          "pred_title": "The Lancet retracts Andrew Wakefield\u2019s MMR study",
+          "diffs": [
+            "country: 'United Kingdom' vs ''",
+            "place_scope: 'at_named_place' vs 'unplaced'"
+          ]
+        },
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action",
+          "pred_title": "Andrew Wakefield struck off the UK medical register",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1631378:0",
+      "gold_n": 4,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "snohomish_exposure_stellar",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_pathfinder",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_serene",
+          "event_type": "notable_case"
+        },
+        {
+          "identity": "snohomish_exposure_swedish",
+          "event_type": "notable_case"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1624674:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "dane_cases",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "waukesha_cases",
+          "event_type": "outbreak",
+          "pred_title": "Measles cases in Waukesha County",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1188626:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "notable_case",
+          "title": "Child dies of measles in the UK"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "195845:0",
+      "gold_n": 0,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak"
+        }
+      ],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "3123367:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "fda_new_studies",
+          "event_type": "institutional_action",
+          "pred_title": "FDA and CDC add language about hepatitis B vaccination at birth",
+          "diffs": [
+            "place_scope: 'unplaced' vs 'countrywide'"
+          ]
+        },
+        {
+          "identity": "hepb_birth_language",
+          "event_type": "institutional_action",
+          "pred_title": "FDA requires new studies that could delay approvals",
+          "diffs": [
+            "place_scope: 'unplaced' vs 'countrywide'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1489995:0",
+      "gold_n": 1,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Robert F Kennedy Jr led a reversal of US vaccine policy"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "us_worst_outbreak",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in the United States",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1596009:0",
+      "gold_n": 2,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "singapore_rise",
+          "event_type": "outbreak",
+          "pred_title": "Measles infections rise in Singapore",
+          "diffs": []
+        },
+        {
+          "identity": "singapore_isolation",
+          "event_type": "institutional_action",
+          "pred_title": "Singapore imposes mandatory isolation and contact tracing for measles cases",
+          "diffs": [
+            "place_scope: 'at_named_place' vs 'countrywide'"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9768455:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "oklahoma_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles cases in Oklahoma",
+          "diffs": [
+            "date_precision: 'day' vs 'unknown'",
+            "stated_start: '2025-03-19' vs None"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "1669436:0",
+      "gold_n": 1,
+      "pred_n": 0,
+      "missed": [
+        {
+          "identity": "wakefield_publication",
+          "event_type": "study_publication"
+        }
+      ],
+      "extra": [],
+      "matched": [],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "7509061:0",
+      "gold_n": 1,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "institutional_action",
+          "title": "Measles vaccine introduced"
+        }
+      ],
+      "matched": [
+        {
+          "identity": "mmr_second_dose_1989",
+          "event_type": "institutional_action",
+          "pred_title": "Second measles vaccine dose added",
+          "diffs": []
+        },
+        {
+          "identity": "mmr_introduced_1971",
+          "event_type": "institutional_action",
+          "pred_title": "Combined MMR vaccine introduced",
+          "diffs": []
+        }
+      ],
+      "optional_omitted": []
+    },
+    {
+      "doc_id": "9914208:2",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "astrazeneca_claims_2024",
+          "event_type": "institutional_action",
+          "pred_title": "AstraZeneca faces COVID jab compensation claims",
+          "diffs": [
+            "date_precision: 'day' vs 'unknown'",
+            "stated_start: '2024-01-20' vs None"
+          ]
+        }
+      ],
+      "optional_omitted": []
+    }
+  ]
+}

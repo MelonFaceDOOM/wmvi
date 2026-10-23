@@ -1,0 +1,47 @@
+{
+  "n_docs": 57,
+  "n_docs_logged": 57,
+  "n_empty_docs": 25,
+  "empty_event_rate": 0.4386,
+  "n_mentions": 46,
+  "mentions_per_logged_doc": 0.807,
+  "n_raw_llm_events": 46,
+  "n_quote_dropped": 0,
+  "quote_drop_rate": 0.0,
+  "n_capped_events": 0,
+  "share_fine_place": 0.3043,
+  "share_stated_dates": 0.3478,
+  "type_histogram": {
+    "outbreak": 13,
+    "notable_case": 10,
+    "institutional_action": 18,
+    "vaccine_injury": 3,
+    "study_publication": 1,
+    "cases": 1
+  },
+  "role_histogram": {
+    "focal": 28,
+    "mentioned": 18
+  },
+  "precision_histogram": {
+    "unknown": 30,
+    "day": 3,
+    "year": 2,
+    "range": 11
+  },
+  "date_relation_histogram": {
+    "mentioned_at": 30,
+    "happened_by": 3,
+    "started_by": 13
+  },
+  "platform_histogram": {
+    "reddit_submission": 20,
+    "podcast_episode": 2,
+    "reddit_comment": 20,
+    "youtube_comment": 7,
+    "telegram_post": 4,
+    "youtube_video": 4
+  },
+  "browse_path": "apps/claims/events/prompt_tries/try_3/browse.json",
+  "mentions_path": "apps/claims/events/prompt_tries/try_3/mentions.jsonl"
+}

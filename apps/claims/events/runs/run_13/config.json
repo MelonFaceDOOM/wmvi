@@ -1,0 +1,18 @@
+{
+  "corpus": "measles2",
+  "phases": [
+    "sample",
+    "extract",
+    "report"
+  ],
+  "n": 10000,
+  "sample_seed": 17,
+  "platform_floor": 50,
+  "max_body_chars": 12000,
+  "llm_provider": "openai",
+  "model": "gpt-6-luna",
+  "service_tier": "flex",
+  "source_run": "run_12",
+  "max_workers": 24,
+  "estimate_only": false
+}

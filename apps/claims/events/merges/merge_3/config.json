@@ -1,0 +1,21 @@
+{
+  "input": "apps/claims/events/runs/run_11/mentions.jsonl",
+  "strategy": "high_precision_v3",
+  "key": {
+    "outbreak_cases": [
+      "event_type",
+      "country",
+      "admin1_or_finest_place"
+    ],
+    "named_types": [
+      "event_type",
+      "country",
+      "admin1",
+      "actor_or_title_slug"
+    ]
+  },
+  "keep": "subnational waves (or small-country waves); notable_case with place or actor; vaccine_injury and study_publication; institutional with admin1 or mandate/elimination/court/VICP/etc. in the title",
+  "date": "not a key; posted_at_proxy year on news-like placed unknown-time mentions",
+  "notes": "high-precision timeline candidates for MMR-related events. Excluded buckets: vague_unplaced_wave, vague_place_title, national_status, national_institution, leftover_other, unanchored_case",
+  "n_mentions_in": 11210
+}

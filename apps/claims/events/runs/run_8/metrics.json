@@ -1,0 +1,47 @@
+{
+  "n_docs": 500,
+  "n_docs_logged": 500,
+  "n_empty_docs": 360,
+  "empty_event_rate": 0.72,
+  "n_mentions": 201,
+  "mentions_per_logged_doc": 0.402,
+  "n_raw_llm_events": 204,
+  "n_quote_dropped": 3,
+  "quote_drop_rate": 0.0147,
+  "n_capped_events": 0,
+  "share_fine_place": 0.3184,
+  "share_stated_dates": 0.1841,
+  "type_histogram": {
+    "outbreak": 86,
+    "institutional_action": 65,
+    "notable_case": 26,
+    "study_publication": 11,
+    "other": 4,
+    "cases": 9
+  },
+  "role_histogram": {
+    "mentioned": 81,
+    "focal": 120
+  },
+  "precision_histogram": {
+    "unknown": 164,
+    "day": 11,
+    "month": 4,
+    "year": 22
+  },
+  "date_relation_histogram": {
+    "mentioned_at": 164,
+    "happened_by": 15,
+    "started_by": 22
+  },
+  "platform_histogram": {
+    "podcast_episode": 51,
+    "reddit_comment": 185,
+    "reddit_submission": 77,
+    "telegram_post": 51,
+    "youtube_comment": 74,
+    "youtube_video": 62
+  },
+  "browse_path": "/home/melon/wmvi/apps/claims/events/runs/run_8/browse.json",
+  "mentions_path": "/home/melon/wmvi/apps/claims/events/runs/run_8/mentions.jsonl"
+}

@@ -1,0 +1,201 @@
+{
+  "summary": {
+    "n_docs": 57,
+    "emptiness_hits": 56,
+    "fp_docs": 1,
+    "fn_docs": 0,
+    "gold_events": 45,
+    "pred_events": 45,
+    "matched": 43,
+    "precision": 0.9556,
+    "recall": 0.9556,
+    "f1": 0.9556,
+    "place_acc": 0.8904,
+    "date_acc": 1.0,
+    "start_acc": 0.8235,
+    "composite": 0.9656
+  },
+  "docs": [
+    {
+      "doc_id": "1609747:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "west_texas_2025",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Gaines County",
+          "diffs": [
+            "locality: 'Seminole' vs ''"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1592419:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "dilley_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak at Dilley family detention facility",
+          "diffs": [
+            "site: 'Dilley detention facility' vs 'family detention facility'"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1246892:0",
+      "gold_n": 3,
+      "pred_n": 3,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "disneyland_traveler_2026",
+          "event_type": "notable_case",
+          "pred_title": "Measles case linked to travel through LAX and time at Disneyland",
+          "diffs": [
+            "admin1: 'California' vs ''",
+            "stated_start: '2026-01-25' vs '2026-01-26'"
+          ]
+        },
+        {
+          "identity": "oc_imported_2026",
+          "event_type": "notable_case",
+          "pred_title": "Imported measles case reported in Orange County",
+          "diffs": [
+            "admin1: 'California' vs ''",
+            "stated_start: '2026-01-25' vs '2026-01-26'"
+          ]
+        },
+        {
+          "identity": "socal_2026",
+          "event_type": "outbreak",
+          "pred_title": "Measles outbreak in Southern California",
+          "diffs": [
+            "admin1: 'California' vs ''",
+            "stated_start: '2026-01-25' vs '2026-01-26'"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1247688:0",
+      "gold_n": 1,
+      "pred_n": 1,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "disneyland_traveler_2026",
+          "event_type": "notable_case",
+          "pred_title": "Orange County confirms second measles case in traveler who visited Disneyland, California Adventure",
+          "diffs": [
+            "site: 'Disneyland' vs 'Disneyland, California Adventure'"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "4403786:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "wakefield_retraction",
+          "event_type": "study_publication"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "wakefield_struck_off",
+          "event_type": "institutional_action",
+          "pred_title": "Andrew Wakefield struck off the UK medical register",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "doc_id": "1631378:0",
+      "gold_n": 4,
+      "pred_n": 4,
+      "missed": [],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "snohomish_exposure_serene",
+          "event_type": "notable_case",
+          "pred_title": "Public measles exposure at Serene Lake Elementary School",
+          "diffs": []
+        },
+        {
+          "identity": "snohomish_exposure_pathfinder",
+          "event_type": "notable_case",
+          "pred_title": "Public measles exposure at Pathfinder Kindergarten Center",
+          "diffs": []
+        },
+        {
+          "identity": "snohomish_exposure_swedish",
+          "event_type": "notable_case",
+          "pred_title": "Public measles exposure at Swedish Mill Creek Campus",
+          "diffs": [
+            "site: 'Swedish Mill Creek Campus' vs 'Swedish Mill Creek Campus medical facility'"
+          ]
+        },
+        {
+          "identity": "snohomish_exposure_stellar",
+          "event_type": "notable_case",
+          "pred_title": "Public measles exposure at Stellar Kids Dentistry Everett",
+          "diffs": [
+            "site: 'Stellar Kids Dentistry' vs 'Stellar Kids Dentistry Everett'"
+          ]
+        }
+      ]
+    },
+    {
+      "doc_id": "1624674:0",
+      "gold_n": 2,
+      "pred_n": 1,
+      "missed": [
+        {
+          "identity": "dane_cases",
+          "event_type": "outbreak"
+        }
+      ],
+      "extra": [],
+      "matched": [
+        {
+          "identity": "waukesha_cases",
+          "event_type": "outbreak",
+          "pred_title": "Measles cases in Waukesha County",
+          "diffs": []
+        }
+      ]
+    },
+    {
+      "doc_id": "326752:0",
+      "gold_n": 0,
+      "pred_n": 2,
+      "missed": [],
+      "extra": [
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak in South Carolina"
+        },
+        {
+          "event_type": "outbreak",
+          "title": "Measles outbreak in Minnesota"
+        }
+      ],
+      "matched": []
+    }
+  ]
+}

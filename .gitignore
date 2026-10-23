@@ -50,5 +50,33 @@ nlp/experiments/runs/*/browse_coref_edits.html
 # Telegram probe experiment output
 services/telegram_monitor/probe_results/
 
+# Event-extraction experiment products (keep config.json / metrics.json / assessment.md)
+apps/claims/events/runs/*/entities.jsonl
+apps/claims/events/runs/*/leaves.jsonl
+apps/claims/events/runs/*/resolve_log.jsonl
+apps/claims/events/runs/*/extract_log.jsonl
+apps/claims/events/runs/*/events_proposed.jsonl
+apps/claims/events/runs/*/leaf_links.jsonl
+apps/claims/events/runs/*/claim_event_links.jsonl
+apps/claims/events/runs/*/documents.jsonl
+apps/claims/events/runs/*/mentions.jsonl
+apps/claims/events/runs/*/browse.json
+apps/claims/events/merges/*/clusters.jsonl
+apps/claims/events/merges/*/members.jsonl
+apps/claims/events/merges/*/qa.json
+apps/claims/events/merges/*/dropped.jsonl
+apps/claims/events/merges/*/browse.json
+apps/claims/events/merges/*/browse.html
+apps/claims/events/prompt_tries/*/documents.jsonl
+apps/claims/events/prompt_tries/*/mentions.jsonl
+apps/claims/events/prompt_tries/*/extract_log.jsonl
+apps/claims/events/prompt_tries/*/browse.json
+apps/claims/events/merges/*/events.jsonl
+apps/claims/events/merges/*/held.jsonl
+apps/claims/events/merges/*/links.jsonl
+
 measles2_cluster_bundle.zip
 services/podcast/discovery/results/
+
+# Coworker share packages
+share/

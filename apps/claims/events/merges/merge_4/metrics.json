@@ -1,0 +1,469 @@
+{
+  "strategy": "place_year_v4",
+  "n_mentions_in": 7277,
+  "n_dropped": 82,
+  "drop_reason_histogram": {
+    "vague_unplaced_wave": 81,
+    "vague_place_title": 1
+  },
+  "n_grouped": 7195,
+  "n_imputed_proxy": 1983,
+  "n_clusters": 3323,
+  "size_histogram": {
+    "1": 2714,
+    "2-5": 485,
+    "6-20": 87,
+    "21-100": 30,
+    "100+": 7
+  },
+  "type_histogram": {
+    "outbreak": 603,
+    "institutional_action": 1573,
+    "study_publication": 113,
+    "notable_case": 863,
+    "cases": 57,
+    "other": 75,
+    "vaccine_injury": 39
+  },
+  "n_unplaced_clusters": 962,
+  "n_unplaced_mentions": 1306,
+  "n_mixed_year": 38,
+  "n_singleton": 2714,
+  "n_overmerge_suspects": 60,
+  "n_undermerge_suspect_groups": 307,
+  "top_clusters": [
+    {
+      "cluster_id": "outbreak-united-states-texas-unknown-measles-dea20825badf",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Texas",
+      "unplaced": false,
+      "n_mentions": 325,
+      "n_posts": 322,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 325
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 110,
+        "unknown": 215
+      },
+      "example_titles": [
+        "Measles outbreak in Lubbock County, Texas",
+        "Measles outbreak in Texas",
+        "Measles cases explode in Texas",
+        "Measles outbreak in West Texas",
+        "West Texas measles outbreak",
+        "Measles outbreak in Dilley, Texas",
+        "Measles outbreak at ICE’s Dilley family detention facility in San Antonio",
+        "Measles outbreak at a children’s facility in Dilley, Texas"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-south-carolina-unknown-measles-b9a985419ca2",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "South Carolina",
+      "unplaced": false,
+      "n_mentions": 233,
+      "n_posts": 230,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 233
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 102,
+        "unknown": 131
+      },
+      "example_titles": [
+        "Measles outbreak in South Carolina",
+        "Measles outbreak accelerates in South Carolina",
+        "South Carolina measles outbreak",
+        "Measles outbreak in South Carolina nearing 800 cases",
+        "Measles outbreak in South Carolina reaches 789 cases",
+        "Record measles outbreak hits 23 South Carolina schools",
+        "Measles spread in South Carolina",
+        "Measles outbreak in South Carolina becomes the largest in the United States"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-samoa-unknown-measles-c22216368a92",
+      "event_type": "outbreak",
+      "country": "Samoa",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 149,
+      "n_posts": 147,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 149
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 11,
+        "unknown": 138
+      },
+      "example_titles": [
+        "Measles outbreak in Samoa",
+        "Measles outbreak deaths in Samoa",
+        "Measles epidemic in Samoa killed 25 people",
+        "Measles outbreak in Samoa killed 83 people",
+        "Samoa measles outbreak",
+        "Measles outbreak in Samoa killed 89 people",
+        "Measles deaths in Samoa",
+        "Measles wave in Samoa kills 80 children"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-canada-alberta-unknown-measles-69bb9fe1dcb4",
+      "event_type": "outbreak",
+      "country": "Canada",
+      "admin1": "Alberta",
+      "unplaced": false,
+      "n_mentions": 136,
+      "n_posts": 132,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 136
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 6,
+        "unknown": 130
+      },
+      "example_titles": [
+        "Measles outbreak in Alberta",
+        "Measles outbreak at the University of Alberta",
+        "Measles outbreaks in Alberta",
+        "Measles outbreak in southern Alberta",
+        "Measles cases reported in Alberta",
+        "Measles in Alberta",
+        "Measles cases in Alberta",
+        "Measles spread to Alberta"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-samoa-2019-measles-3cc2ed839712",
+      "event_type": "outbreak",
+      "country": "Samoa",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 136,
+      "n_posts": 132,
+      "title_slug": "",
+      "year_histogram": {
+        "2019": 136
+      },
+      "date_source_histogram": {
+        "stated": 136
+      },
+      "example_titles": [
+        "Measles epidemic in Samoa",
+        "2019 measles outbreak in Samoa",
+        "Measles outbreak in Samoa",
+        "Deadly 2019 measles outbreak in Samoa",
+        "Measles outbreak in Samoa kills 76 children",
+        "Measles outbreak spread from New Zealand to Samoa in 2019",
+        "Samoa measles outbreak",
+        "2019 measles epidemic in Samoa"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-florida-unknown-measles-8a16f91c9f5c",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Florida",
+      "unplaced": false,
+      "n_mentions": 133,
+      "n_posts": 117,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 133
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 106,
+        "unknown": 27
+      },
+      "example_titles": [
+        "Measles cases reported in Ave Maria",
+        "Measles outbreak grows in Florida",
+        "Measles in Florida",
+        "Measles outbreak on University of Florida campus in Alachua County",
+        "Measles outbreak in Florida",
+        "Measles outbreak at Ave Maria University in Florida",
+        "Measles outbreak at a Florida university",
+        "Measles outbreak at a university in Florida"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-kingdom-england-unknown-measles-74eae12a5b8c",
+      "event_type": "outbreak",
+      "country": "United Kingdom",
+      "admin1": "England",
+      "unplaced": false,
+      "n_mentions": 111,
+      "n_posts": 93,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 111
+      },
+      "date_source_histogram": {
+        "unknown": 15,
+        "posted_at_proxy": 96
+      },
+      "example_titles": [
+        "Measles rising in London",
+        "Liverpool measles surge",
+        "Measles outbreak in north London",
+        "Measles outbreak in London",
+        "Fast-spreading measles outbreak in several London schools",
+        "Measles outbreak in several London schools",
+        "Measles outbreak in London schools",
+        "Measles outbreak in several schools in London"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-utah-unknown-measles-b1f948a4a247",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Utah",
+      "unplaced": false,
+      "n_mentions": 96,
+      "n_posts": 96,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 96
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 52,
+        "unknown": 44
+      },
+      "example_titles": [
+        "Measles outbreak in Utah",
+        "Measles outbreak continues in Utah",
+        "Measles cases continue growing in Utah",
+        "Measles outbreak in Short Creek",
+        "Measles outbreak in Utah reaches 42 cases",
+        "Measles spread to St. George, Utah",
+        "Measles cases in Utah",
+        "Measles outbreak in southern Utah"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-bangladesh-unknown-measles-c4109612263f",
+      "event_type": "outbreak",
+      "country": "Bangladesh",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 86,
+      "n_posts": 85,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 86
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 73,
+        "unknown": 13
+      },
+      "example_titles": [
+        "Measles outbreak kills 46 children in Bangladesh",
+        "Measles epidemic in Bangladesh",
+        "Measles outbreak in Bangladesh kills at least 15",
+        "Suspected measles outbreak in Bangladesh",
+        "Measles outbreak spreads in Bangladesh",
+        "Suspected measles deaths among children in Bangladesh",
+        "Deadly measles spike in Bangladesh",
+        "Measles outbreak in Bangladesh"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-texas-2025-measles-e1972dc67e72",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Texas",
+      "unplaced": false,
+      "n_mentions": 77,
+      "n_posts": 77,
+      "title_slug": "",
+      "year_histogram": {
+        "2025": 77
+      },
+      "date_source_histogram": {
+        "stated": 77
+      },
+      "example_titles": [
+        "Measles outbreak in Texas",
+        "Texas measles outbreak",
+        "Measles outbreak in western Texas spreading into southeast New Mexico",
+        "Measles outbreak in West Texas spreads across the Southwest",
+        "Measles outbreak centered on West Texas",
+        "2025 measles outbreak in West Texas sickened 762 people and killed two girls",
+        "Measles outbreak in West Texas",
+        "Measles outbreaks in Texas"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-canada-ontario-unknown-measles-662da292a254",
+      "event_type": "outbreak",
+      "country": "Canada",
+      "admin1": "Ontario",
+      "unplaced": false,
+      "n_mentions": 67,
+      "n_posts": 66,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 67
+      },
+      "date_source_histogram": {
+        "unknown": 58,
+        "posted_at_proxy": 9
+      },
+      "example_titles": [
+        "Measles cases in Ontario",
+        "Measles outbreak in southwestern Ontario",
+        "Measles outbreak in Ontario",
+        "Measles spread in Ontario reaches 17 per 100,000",
+        "Measles outbreaks in Ontario",
+        "Measles outbreak spreads to Ontario",
+        "Measles spread into Ontario",
+        "Measles cases rising in Ontario"
+      ]
+    },
+    {
+      "cluster_id": "institutional-action-canada-canada-0498c39e2a6d",
+      "event_type": "institutional_action",
+      "country": "Canada",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 47,
+      "n_posts": 43,
+      "title_slug": "canada",
+      "year_histogram": {
+        "unknown": 26,
+        "2025": 4,
+        "1998": 11,
+        "1970": 2,
+        "1996": 1,
+        "1972": 1,
+        "1963": 1,
+        "1994": 1
+      },
+      "date_source_histogram": {
+        "unknown": 22,
+        "stated": 21,
+        "posted_at_proxy": 4
+      },
+      "example_titles": [
+        "Canada loses measles-free designation",
+        "Canada loses measles elimination status",
+        "Canada stopped giving the second MMR booster",
+        "Canada loses measles-free status",
+        "Canada claimed measles elimination",
+        "Canada declared measles eliminated",
+        "Measles elimination certified in Canada",
+        "Canada eradicated measles in 1998"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-california-unknown-measles-7852febee699",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "California",
+      "unplaced": false,
+      "n_mentions": 46,
+      "n_posts": 44,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 46
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 32,
+        "unknown": 14
+      },
+      "example_titles": [
+        "Measles cases in Orange County, California",
+        "Measles outbreak in Orange County, California",
+        "Measles surge in California",
+        "Measles outbreak in Shasta County",
+        "Measles surge in Shasta County",
+        "Measles outbreaks at Disney",
+        "Measles outbreak in California",
+        "Measles outbreak in Sacramento County"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-pennsylvania-unknown-measles-f33f994f3d58",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Pennsylvania",
+      "unplaced": false,
+      "n_mentions": 39,
+      "n_posts": 34,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 39
+      },
+      "date_source_histogram": {
+        "unknown": 5,
+        "posted_at_proxy": 34
+      },
+      "example_titles": [
+        "Measles outbreaks in Pennsylvania",
+        "Measles outbreak reaches Pennsylvania",
+        "Measles spread in Pennsylvania",
+        "Rising measles cases in Pennsylvania",
+        "Measles outbreak in Pennsylvania",
+        "Measles outbreak in Lancaster County",
+        "Measles cases in Lebanon County",
+        "Measles outbreak in Lebanon County"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-arizona-unknown-measles-d2e791134b96",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Arizona",
+      "unplaced": false,
+      "n_mentions": 36,
+      "n_posts": 36,
+      "title_slug": "",
+      "year_histogram": {
+        "unknown": 36
+      },
+      "date_source_histogram": {
+        "posted_at_proxy": 23,
+        "unknown": 13
+      },
+      "example_titles": [
+        "Measles outbreak among federal detainees in Pinal County",
+        "Third confirmed measles case reported in Pima County",
+        "Measles spreading in Chandler/Gilbert, Arizona",
+        "Measles cases confirmed among ICE detainees in Arizona and Texas",
+        "Measles outbreak in an ICE detention facility in Arizona",
+        "Measles cases continue growing in Arizona",
+        "Measles cases in Arizona ICE facilities",
+        "Measles outbreak in Arizona"
+      ]
+    }
+  ],
+  "config": {
+    "input": "apps/claims/events/runs/run_12/mentions.jsonl",
+    "strategy": "place_year_v4",
+    "key": {
+      "outbreak_cases": [
+        "event_type",
+        "country",
+        "admin1_or_finest_place",
+        "stated_year",
+        "disease"
+      ],
+      "named_types": [
+        "event_type",
+        "country",
+        "admin1_or_finest_place",
+        "title_slug_if_generic_actor_else_actor"
+      ]
+    },
+    "date": "stated year splits outbreak and cases; unknown year stays in its own cluster",
+    "notes": "no new drop list. City or site is the place key when admin1 is empty. Generic national actors (CDC, Trump, …) do not join institutional acts. Disease tag splits waves.",
+    "n_mentions_in": 7277
+  }
+}

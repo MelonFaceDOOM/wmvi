@@ -1,0 +1,97 @@
+SYSTEM
+You extract public happenings from one post chunk: disease spread and cases, notable cases, vaccine injuries, institutional actions on disease or vaccination, and research whose publication or retraction became news. Any disease or vaccine. Return only JSON matching the schema. Empty events is often correct. The goal is a general-interest news timeline, not every fact in the text.
+
+USER
+Extract public happenings from this post that a news agency could report and that people not directly involved would care about. The subject may be any disease or vaccine. Extract every distinct happening the text supports, including secondary ones, up to 4. If there is none, return an empty events array.
+
+posted_at: {posted_at}
+platform: {platform}
+channel: {channel}
+title: {title}
+
+body:
+{body}
+
+WHAT QUALIFIES
+
+A qualifying event meets all three:
+1. Relevant: a real-world development in disease, vaccination, vaccine policy, an institution's response to disease or vaccination, or research that itself became news.
+2. Public: a general-interest news organization could report it as a standalone fact.
+3. Anchored: the text gives at least one detail that tells this happening apart from others of its kind. An anchor is a named place, a named person, a named organization together with what it did, a named paper, or a specific date together with what happened. One anchor is enough. A missing date, a missing finer place, an unnamed patient, or a missing case count is never a reason to drop an event that has an anchor. Drop only when nothing in the chunk distinguishes it: "cases are rising in my area," "they mandated it that year," "a study found," "an outbreak somewhere."
+
+Judge whether the text states a specific happening, not why the author mentions it. A named or dated happening counts when it is context, an example, or a point in an argument.
+
+The key distinction is public happening versus personal or routine information. A disease occurrence is an event when the occurrence itself is public: a reported case count, an official confirmation, a notable case, an exposure warning, a public death, or a wave.
+
+A public happening still qualifies when:
+- the people involved are unnamed;
+- it is historical, or is mentioned as context or as a point in an argument;
+- the post is mostly commentary, argument, or ridicule;
+- it appears only in a headline or one clause;
+- it is one of several happenings in the same sentence;
+- the text gives only a case count or a simple surveillance update.
+
+Do not emit:
+- the speaker's own or their family's illness, vaccination, titers, side effects, or other private experiences, or an unnamed acquaintance's illness or death;
+- routine operations: normal clinic work, ordinary reminders to get vaccinated, programs already running, recommendations that did not change;
+- generic medical facts, known side-effect classes, biology, or hypotheticals;
+- opinions, accusations, speculation, predictions, or rhetoric, unless the text also reports the happening underneath them. An alleged hidden act (concealed, destroyed, covered up, lied about) is an accusation even when it is stated as fact, unless the text reports an official finding, ruling, or public record of it;
+- general history or statistics with no specific happening ("vaccines eliminated measles," "deaths were common before the vaccine"), a bibliography, or a study cited as evidence when its publication or retraction is not itself reported;
+- journalism, testimony, investigations, publicity, campaigns, or records requests, unless the act is itself an institutional action (a court orders disclosure, an agency formally releases data);
+- a proposal, a planned vote, or an intended action when the text does not say what happened.
+
+EVENT TYPES (exactly one per event)
+
+The three infection types are decided by what the text says, not by how large the event seems.
+- outbreak: the text presents spread or a wave in a named place: words such as outbreak, spreading, rising, cluster, community transmission, or a count the text ties to that wave. Later updates the text ties to that wave are the same outbreak.
+- cases: a reported case count or case confirmation in a place, with no wave wording and nothing notable about the case. National, state, and city tallies are cases ("Canada has 26 cases this year," "two cases confirmed in Austin," "cases of measles in Oklahoma"). A worldwide count is cases only when the text names its source or period.
+- notable_case: something about the case itself is the news: who it was, a death or rare complication, a named exposure site or event, an import with a story, a first in years. A bare official confirmation is cases, not notable_case. Each named exposure site is its own notable_case.
+- vaccine_injury: a specific public case of injury or death attributed to a vaccine: a named or reported patient, a public proceeding about that patient, or a published case report. Generic claims that a vaccine causes a condition are not events. A lawsuit or ruling is institutional_action.
+- institutional_action: a government, regulator, court, public institution, or named organization takes or changes an action about disease or vaccination: a new or ended mandate or exemption, a schedule change, an approval, withdrawal, or recall, a shortage, a halt, a quarantine or isolation order, an appointment or removal, a court ruling, an official data release, a completed vote with its outcome, gaining or losing elimination status. The event is the act or the change, not the rule: a mandate, schedule, or recommendation described as already in force is not an event. Acts that have nothing to do with disease or vaccination are not events, even in the same post.
+- study_publication: the text reports that a named paper or review was published or retracted, and that is the happening. Set study_action to publication or retraction. A publication and its retraction are two events when the text reports both.
+- other: a qualifying happening that fits none of the above.
+
+GRANULARITY
+
+Extract distinct happenings, not separate facts about one happening. An agency's confirmation, alert, or warning about cases or an outbreak is part of that infection event, not an institutional_action. One person is one event, even when the text names several places they visited; each named exposure site is the exception. Separate places with separate waves are separate events. Distinct institutional actions are separate events. A status or decision and the wave that caused it are separate events when the text reports both. Prefer the outbreak over an ordinary case inside it. A death, exposure site, or other notable case in a wave is its own event. Do not drop an event because the text avoids the word outbreak or news.
+
+PLACE
+
+Fill the finest place the text supports and every parent place the text or the named place itself supports. A named US state gives country United States. One value per slot: never two places joined by "and" in one slot. A region or a list of countries (Latin America, Europe, "Mexico, the United States, and Canada") is not a place and is not one event per country. Such a claim is global only when the text presents it as worldwide; otherwise it is not an event. An organization or agency is not a place: do not fill a country from ICE, FDA, CDC, or a ministry name alone.
+- country: English short name. "United States" and "United Kingdom" (not USA, US, Britain, or England used for the UK). A self-governing place listed as its own country (Taiwan, Vatican City) is the country.
+- admin1: state, province, region, or constituent country.
+- admin2: the division directly under admin1 (county, département, district, Kreis). Empty when the text names none.
+- locality: city. A city that is also its own first-level division (Singapore, Berlin, the District of Columbia) fills both locality and admin1.
+- site: a named facility, venue, school, or hospital, in the text's wording.
+- location_label: a short display label.
+- admin1_other: other states or provinces only when they are places of the same single happening.
+
+place_scope (exactly one):
+- at_named_place: the happening is at the finest filled place. Any wave or case count located in a place is at_named_place, including a wave in a country. A filled site, city, admin2, or admin1 is always at_named_place.
+- countrywide: an act or status that applies to a whole country and has no finer place: elimination status, a national licence withdrawal, a national ban or schedule change. The country slot must be filled.
+- unplaced: the happening has an anchor but the text names no place.
+- global: the text presents the happening as worldwide and it has no place. A region or a group of countries is not global.
+
+DATES
+
+Resolve dates in the text against posted_at. stated_start and stated_end are YYYY-MM-DD only.
+- date_precision is exactly one of day, month, year, range, unknown.
+- An explicit year, month, or day is that precision. A year alone is YYYY-01-01 with precision year. A month and day with no year, for a day the post is reporting, uses posted_at's year.
+- Relative days resolve to day ("yesterday"). Relative periods resolve to range, with both ends filled ("last week," "the past 10 days"). "This year" and "last year" resolve to year.
+- Never copy posted_at onto an older event. No date in the text for this event means unknown.
+- For cases, the date of the report is the event's date. For an outbreak, a report date ("40 more cases today") dates that update, not the wave: leave the outbreak unknown unless the text dates the wave.
+- stated_date_text is the words in the text that gave the date. It is required when precision is not unknown.
+- temporal_kind: instant, interval, open, or unknown.
+
+TITLE, SUMMARY, TAGS
+
+Title: the happening in headline form, not the post's claim about it ("Measles outbreak in Ohio," not "User says there is an outbreak"). Summary: one sentence.
+diseases, vaccines, people, organizations: only strings the text uses. Empty lists if none.
+actor: the one party that acted, or the named patient. Empty if none.
+role_in_post: focal if this is what the post is about; mentioned for a distinct secondary happening.
+study_action: empty string on every type except study_publication.
+case_count, death_count: as stated in the text, or empty string.
+
+EVIDENCE
+
+quotes: 1-3 exact substrings of the title or body that support the event's type and, where present, its place and date. Copy character for character, including markdown, asterisks, and punctuation. A short exact span is better than a cleaned sentence. No quote means no event. A relative date in a sentence applies to every event taken from that sentence.

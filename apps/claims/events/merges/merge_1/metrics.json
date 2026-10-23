@@ -1,0 +1,289 @@
+{
+  "strategy": "exact_key_v1",
+  "n_mentions": 11210,
+  "n_clusters": 8636,
+  "size_histogram": {
+    "1": 7863,
+    "2-5": 679,
+    "6-20": 77,
+    "21-100": 16,
+    "100+": 1
+  },
+  "n_unplaced_clusters": 2911,
+  "n_unplaced_mentions": 3765,
+  "n_mixed_year": 27,
+  "n_singleton": 7863,
+  "n_overmerge_suspects": 22,
+  "n_undermerge_suspect_groups": 1040,
+  "top_clusters": [
+    {
+      "cluster_id": "outbreak-measles-outbreak-980661867c90",
+      "event_type": "outbreak",
+      "country": "",
+      "admin1": "",
+      "unplaced": true,
+      "n_mentions": 186,
+      "n_posts": 186,
+      "title_slug": "measles-outbreak",
+      "year_histogram": {
+        "unknown": 179,
+        "2026": 3,
+        "2025": 4
+      },
+      "example_titles": [
+        "Measles outbreak"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-texas-measles-outbreak-in-texas-3ddfbd135d4d",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Texas",
+      "unplaced": false,
+      "n_mentions": 87,
+      "n_posts": 87,
+      "title_slug": "measles-outbreak-in-texas",
+      "year_histogram": {
+        "unknown": 73,
+        "2025": 13,
+        "2024": 1
+      },
+      "example_titles": [
+        "Measles outbreak in Texas"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-measles-outbreak-in-the-united-states-bfe2e9b90f77",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 84,
+      "n_posts": 84,
+      "title_slug": "measles-outbreak-in-the-united-states",
+      "year_histogram": {
+        "unknown": 81,
+        "2025": 3
+      },
+      "example_titles": [
+        "Measles outbreak in the United States"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-samoa-measles-outbreak-in-samoa-2dadb53da6cc",
+      "event_type": "outbreak",
+      "country": "Samoa",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 74,
+      "n_posts": 74,
+      "title_slug": "measles-outbreak-in-samoa",
+      "year_histogram": {
+        "unknown": 66,
+        "2019": 8
+      },
+      "example_titles": [
+        "Measles outbreak in Samoa"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-south-carolina-measles-outbreak-in-so-56d949785458",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "South Carolina",
+      "unplaced": false,
+      "n_mentions": 58,
+      "n_posts": 58,
+      "title_slug": "measles-outbreak-in-south-carolina",
+      "year_histogram": {
+        "unknown": 52,
+        "2026": 3,
+        "2025": 3
+      },
+      "example_titles": [
+        "Measles outbreak in South Carolina"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-samoa-2019-measles-outbreak-in-samoa-5e0f63e8d671",
+      "event_type": "outbreak",
+      "country": "Samoa",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 54,
+      "n_posts": 51,
+      "title_slug": "2019-measles-outbreak-in-samoa",
+      "year_histogram": {
+        "2019": 50,
+        "unknown": 4
+      },
+      "example_titles": [
+        "2019 measles outbreak in Samoa"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-measles-resurgence-68dbf37a9bcd",
+      "event_type": "outbreak",
+      "country": "",
+      "admin1": "",
+      "unplaced": true,
+      "n_mentions": 42,
+      "n_posts": 42,
+      "title_slug": "measles-resurgence",
+      "year_histogram": {
+        "unknown": 42
+      },
+      "example_titles": [
+        "Measles resurgence"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-canada-alberta-measles-outbreak-in-alberta-59adc3fad114",
+      "event_type": "outbreak",
+      "country": "Canada",
+      "admin1": "Alberta",
+      "unplaced": false,
+      "n_mentions": 37,
+      "n_posts": 37,
+      "title_slug": "measles-outbreak-in-alberta",
+      "year_histogram": {
+        "unknown": 35,
+        "2024": 2
+      },
+      "example_titles": [
+        "Measles outbreak in Alberta"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-measles-outbreak-reported-8419ad67ac1c",
+      "event_type": "outbreak",
+      "country": "",
+      "admin1": "",
+      "unplaced": true,
+      "n_mentions": 31,
+      "n_posts": 31,
+      "title_slug": "measles-outbreak-reported",
+      "year_histogram": {
+        "unknown": 31
+      },
+      "example_titles": [
+        "Measles outbreak reported"
+      ]
+    },
+    {
+      "cluster_id": "institutional-action-united-kingdom-uk-loses-measles-elimina-593a5c2e7d21",
+      "event_type": "institutional_action",
+      "country": "United Kingdom",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 30,
+      "n_posts": 30,
+      "title_slug": "uk-loses-measles-elimination-status",
+      "year_histogram": {
+        "unknown": 30
+      },
+      "example_titles": [
+        "UK loses measles elimination status"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-measles-resurgence-in-the-united-stat-3b15bff0ae0d",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 28,
+      "n_posts": 28,
+      "title_slug": "measles-resurgence-in-the-united-states",
+      "year_histogram": {
+        "unknown": 26,
+        "2026": 1,
+        "2024": 1
+      },
+      "example_titles": [
+        "Measles resurgence in the United States"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-pennsylvania-measles-outbreak-in-phil-e996331a5bf2",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Pennsylvania",
+      "unplaced": false,
+      "n_mentions": 28,
+      "n_posts": 20,
+      "title_slug": "measles-outbreak-in-philadelphia",
+      "year_histogram": {
+        "unknown": 25,
+        "2024": 1,
+        "2023": 2
+      },
+      "example_titles": [
+        "Measles outbreak in Philadelphia"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-florida-measles-outbreak-in-florida-0514da404096",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "Florida",
+      "unplaced": false,
+      "n_mentions": 26,
+      "n_posts": 25,
+      "title_slug": "measles-outbreak-in-florida",
+      "year_histogram": {
+        "unknown": 22,
+        "2024": 4
+      },
+      "example_titles": [
+        "Measles outbreak in Florida"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-united-states-measles-outbreaks-in-the-united-state-bd9bcf5c213c",
+      "event_type": "outbreak",
+      "country": "United States",
+      "admin1": "",
+      "unplaced": false,
+      "n_mentions": 24,
+      "n_posts": 24,
+      "title_slug": "measles-outbreaks-in-the-united-states",
+      "year_histogram": {
+        "2025": 2,
+        "unknown": 22
+      },
+      "example_titles": [
+        "Measles outbreaks in the United States"
+      ]
+    },
+    {
+      "cluster_id": "outbreak-current-measles-outbreak-fd0ee33fcf14",
+      "event_type": "outbreak",
+      "country": "",
+      "admin1": "",
+      "unplaced": true,
+      "n_mentions": 22,
+      "n_posts": 22,
+      "title_slug": "current-measles-outbreak",
+      "year_histogram": {
+        "unknown": 22
+      },
+      "example_titles": [
+        "Current measles outbreak"
+      ]
+    }
+  ],
+  "config": {
+    "input": "apps/claims/events/runs/run_11/mentions.jsonl",
+    "strategy": "exact_key_v1",
+    "key": [
+      "event_type",
+      "country",
+      "admin1",
+      "title_slug"
+    ],
+    "unplaced": "type + title_slug (empty country and admin1)",
+    "date": "not a key; attach as cluster attribute",
+    "notes": "first pass; expect Texas 2025+2026 over-merge and named-injury under-merge"
+  }
+}

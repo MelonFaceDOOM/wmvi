@@ -1,0 +1,11 @@
+{
+  "n_events": 34,
+  "n_leaves": 50,
+  "n_leaves_logged": 50,
+  "n_claim_links": 1735,
+  "n_match": 23,
+  "n_create": 34,
+  "n_empty_leaves": 6,
+  "browse_path": "/home/melon/wmvi/apps/claims/events/runs/run_1/browse.json",
+  "events_path": "/home/melon/wmvi/apps/claims/events/runs/run_1/events_proposed.jsonl"
+}

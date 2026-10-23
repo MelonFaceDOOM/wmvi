@@ -1,0 +1,21 @@
+{
+  "input": "apps/claims/events/runs/run_11/mentions.jsonl",
+  "strategy": "filter_place_key_v2",
+  "key": {
+    "outbreak_cases": [
+      "event_type",
+      "country",
+      "admin1_or_finest_place"
+    ],
+    "named_types": [
+      "event_type",
+      "country",
+      "admin1",
+      "actor_or_title_slug"
+    ]
+  },
+  "unplaced": "dropped if outbreak/cases with no place hook or vague-place title",
+  "date": "not a key; posted_at_proxy year on news-like placed unknown-time mentions",
+  "notes": "filter + aliases + titles off for waves; do not split mixed stated years",
+  "n_mentions_in": 11210
+}

@@ -1,0 +1,22 @@
+{
+  "input": "apps/claims/events/runs/run_12/mentions.jsonl",
+  "strategy": "place_year_v4",
+  "key": {
+    "outbreak_cases": [
+      "event_type",
+      "country",
+      "admin1_or_finest_place",
+      "stated_year",
+      "disease"
+    ],
+    "named_types": [
+      "event_type",
+      "country",
+      "admin1_or_finest_place",
+      "title_slug_if_generic_actor_else_actor"
+    ]
+  },
+  "date": "stated year splits outbreak and cases; unknown year stays in its own cluster",
+  "notes": "no new drop list. City or site is the place key when admin1 is empty. Generic national actors (CDC, Trump, …) do not join institutional acts. Disease tag splits waves.",
+  "n_mentions_in": 7277
+}

@@ -1,0 +1,18 @@
+{
+  "n_events": 7100,
+  "n_waves": 115,
+  "n_series": 61,
+  "n_inner": 794,
+  "n_identity": 6130,
+  "n_links": 273,
+  "n_members": 7851,
+  "n_held": 1201,
+  "held_reasons": {
+    "unplaced": 470,
+    "missing_disease": 2,
+    "ambiguous_year": 296,
+    "missing_year": 189,
+    "missing_anchor": 238,
+    "missing_study_action": 6
+  }
+}

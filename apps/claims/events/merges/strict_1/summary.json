@@ -1,0 +1,37 @@
+{
+  "n_mentions": 7277,
+  "n_merged_groups": 323,
+  "n_merged_mentions": 1551,
+  "n_alone": 2372,
+  "n_ambiguous": 3354,
+  "rules": [
+    {
+      "types": "outbreak, cases",
+      "joins_on": "disease + place + stated year",
+      "place": "state, or city/county/site when the state is missing",
+      "date": "required",
+      "held_out": "missing disease, missing place, or no stated year"
+    },
+    {
+      "types": "notable_case, vaccine_injury",
+      "joins_on": "a specific person in actor",
+      "place": "not required",
+      "date": "not required",
+      "held_out": "no actor, or a role word (child, patient) or a generic agency"
+    },
+    {
+      "types": "study_publication",
+      "joins_on": "publication vs retraction + a named anchor (Wakefield, or a specific actor)",
+      "place": "not required",
+      "date": "not required",
+      "held_out": "no named anchor"
+    },
+    {
+      "types": "institutional_action, other",
+      "joins_on": "exact title slug + country",
+      "place": "country only, and only if both mentions have it",
+      "date": "not required",
+      "held_out": "a different wording of the same act stays unmerged"
+    }
+  ]
+}

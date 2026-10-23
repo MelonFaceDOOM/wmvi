@@ -1,0 +1,13 @@
+{
+  "input": "apps/claims/events/runs/run_11/mentions.jsonl",
+  "strategy": "exact_key_v1",
+  "key": [
+    "event_type",
+    "country",
+    "admin1",
+    "title_slug"
+  ],
+  "unplaced": "type + title_slug (empty country and admin1)",
+  "date": "not a key; attach as cluster attribute",
+  "notes": "first pass; expect Texas 2025+2026 over-merge and named-injury under-merge"
+}

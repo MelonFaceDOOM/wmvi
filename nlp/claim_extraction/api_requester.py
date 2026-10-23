@@ -45,6 +45,13 @@ class RetryPolicy:
 
 @dataclass(frozen=True)
 class ThrottlePolicy:
+    """Pacing for ConcurrentApiRequester.
+
+    ``target_requests_per_minute`` <= 0 disables pre-pacing (send as fast as
+    ``max_workers`` allow; 429s still apply a global cooldown). Positive values
+    remain a hard send-rate cap.
+    """
+
     target_requests_per_minute: int = 90
     global_429_cooldown_s: float = 15.0
     min_request_spacing_s: float = 0.0
@@ -63,6 +70,30 @@ class RequestClient(Protocol):
 _DEFAULT_STRUCTURED_MAX_COMPLETION_TOKENS = 4096
 
 
+def _usage_field(obj: Any, name: str) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(name)
+    return getattr(obj, name, None)
+
+
+def _usage_counts(usage: Any) -> dict[str, int]:
+    """Token counts needed to price a call. Empty when the API omits usage."""
+    if usage is None:
+        return {}
+    prompt_details = _usage_field(usage, "prompt_tokens_details")
+    completion_details = _usage_field(usage, "completion_tokens_details")
+    raw = {
+        "prompt_tokens": _usage_field(usage, "prompt_tokens"),
+        "completion_tokens": _usage_field(usage, "completion_tokens"),
+        "total_tokens": _usage_field(usage, "total_tokens"),
+        "cached_tokens": _usage_field(prompt_details, "cached_tokens"),
+        "reasoning_tokens": _usage_field(completion_details, "reasoning_tokens"),
+    }
+    return {key: int(val) for key, val in raw.items() if isinstance(val, int)}
+
+
 def _create_structured_chat_completion(
     client: Any,
     *,
@@ -70,11 +101,14 @@ def _create_structured_chat_completion(
     messages: list[dict[str, str]],
     response_schema: dict[str, Any],
     max_completion_tokens: int = _DEFAULT_STRUCTURED_MAX_COMPLETION_TOKENS,
+    service_tier: str | None = None,
 ) -> Any:
     """Chat completion with JSON schema; handles reasoning-model API quirks."""
     fmt = {"type": "json_schema", "json_schema": response_schema}
 
     def _call(**kwargs: Any) -> Any:
+        if service_tier:
+            kwargs["service_tier"] = service_tier
         return client.chat.completions.create(model=model, messages=messages, response_format=fmt, **kwargs)
 
     try:
@@ -106,14 +140,9 @@ def _parse_chat_completion_response(
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Model response content is empty.")
 
-    usage = getattr(resp, "usage", None)
     meta = {
         "model": getattr(resp, "model", None),
-        "usage": {
-            "prompt_tokens": getattr(usage, "prompt_tokens", None) if usage is not None else None,
-            "completion_tokens": getattr(usage, "completion_tokens", None) if usage is not None else None,
-            "total_tokens": getattr(usage, "total_tokens", None) if usage is not None else None,
-        },
+        "usage": _usage_counts(getattr(resp, "usage", None)),
     }
     return output_parser(content), meta
 
@@ -135,6 +164,7 @@ class AzureClaimsClient:
             api_key=api_key,
             azure_endpoint=azure_endpoint,
             api_version=api_version,
+            max_retries=0,
         )
         self._model = model
         self._system_prompt_builder = system_prompt_builder
@@ -168,8 +198,9 @@ class OpenAIClaimsClient:
         response_schema: dict[str, Any],
         output_parser: Callable[[str], dict[str, Any]],
         base_url: str | None = None,
+        service_tier: str | None = None,
     ) -> None:
-        kwargs: dict[str, Any] = {"api_key": api_key}
+        kwargs: dict[str, Any] = {"api_key": api_key, "max_retries": 0}
         if base_url:
             kwargs["base_url"] = base_url
         self._client = OpenAI(**kwargs)
@@ -178,6 +209,7 @@ class OpenAIClaimsClient:
         self._user_prompt_builder = user_prompt_builder
         self._response_schema = response_schema
         self._output_parser = output_parser
+        self._service_tier = service_tier
 
     def perform(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         system_prompt = self._system_prompt_builder(payload)
@@ -190,6 +222,7 @@ class OpenAIClaimsClient:
                 {"role": "user", "content": user_prompt},
             ],
             response_schema=self._response_schema,
+            service_tier=self._service_tier,
         )
         return _parse_chat_completion_response(resp, output_parser=self._output_parser)
 
@@ -232,12 +265,64 @@ def _format_exception_details(exc: BaseException) -> str:
     return " | ".join(parts)
 
 
+_RETRY_AFTER_CAP_S = 60.0
+
+
+def _status_code(exc: BaseException) -> Optional[int]:
+    raw = getattr(exc, "status_code", None)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_rate_limit(exc: BaseException) -> bool:
+    if isinstance(exc, RateLimitError):
+        return True
+    return _status_code(exc) == 429
+
+
+def _header_get(headers: Any, name: str) -> Optional[str]:
+    if headers is None:
+        return None
+    getter = getattr(headers, "get", None)
+    if callable(getter):
+        for key in (name, name.lower(), name.upper()):
+            try:
+                raw = getter(key)
+            except Exception:
+                raw = None
+            if raw is not None and str(raw).strip():
+                return str(raw).strip()
+    try:
+        items = headers.items()
+    except Exception:
+        return None
+    target = name.lower()
+    for key, raw in items:
+        if str(key).lower() == target and raw is not None and str(raw).strip():
+            return str(raw).strip()
+    return None
+
+
+def _parse_non_negative_float(raw: str) -> Optional[float]:
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value < 0:
+        return None
+    return value
+
+
 def _default_is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, (RateLimitError, APITimeoutError, APIConnectionError)):
+    if _is_rate_limit(exc) or isinstance(exc, (APITimeoutError, APIConnectionError)):
         return True
     if isinstance(exc, APIStatusError):
-        status = getattr(exc, "status_code", None)
-        return status is not None and 500 <= int(status) <= 599
+        status = _status_code(exc)
+        return status is not None and 500 <= status <= 599
     # parsing/validation issues can be retried once by policy guard
     if isinstance(exc, (ValueError, TypeError)):
         return True
@@ -273,20 +358,28 @@ class _GlobalThrottle:
         self._next_send_at = 0.0
 
     def before_send(self) -> None:
-        rpm = max(1, int(self._policy.target_requests_per_minute))
-        base_spacing = max(60.0 / rpm, float(self._policy.min_request_spacing_s))
+        rpm = int(self._policy.target_requests_per_minute)
+        min_spacing = max(0.0, float(self._policy.min_request_spacing_s))
+        if rpm <= 0:
+            base_spacing = min_spacing
+        else:
+            base_spacing = max(60.0 / rpm, min_spacing)
         while True:
             with self._lock:
                 now = self._now()
                 ready_at = max(self._cooldown_until, self._next_send_at)
                 wait_s = ready_at - now
                 if wait_s <= 0:
-                    self._next_send_at = max(self._next_send_at, now) + base_spacing
+                    if base_spacing > 0:
+                        self._next_send_at = max(self._next_send_at, now) + base_spacing
                     return
             self._sleep(wait_s)
 
     def on_rate_limit(self, retry_after_s: Optional[float]) -> float:
-        cooldown = max(float(self._policy.global_429_cooldown_s), retry_after_s or 0.0)
+        if retry_after_s is not None:
+            cooldown = min(max(0.0, float(retry_after_s)), _RETRY_AFTER_CAP_S)
+        else:
+            cooldown = max(0.0, float(self._policy.global_429_cooldown_s))
         with self._lock:
             until = self._now() + cooldown
             if until > self._cooldown_until:
@@ -332,15 +425,15 @@ class ConcurrentApiRequester:
     def _extract_retry_after(self, exc: BaseException) -> Optional[float]:
         resp = getattr(exc, "response", None)
         headers = getattr(resp, "headers", None)
-        if headers is None:
+        ms_raw = _header_get(headers, "retry-after-ms")
+        if ms_raw is not None:
+            ms = _parse_non_negative_float(ms_raw)
+            if ms is not None:
+                return ms / 1000.0
+        raw = _header_get(headers, "Retry-After")
+        if raw is None:
             return None
-        raw = headers.get("Retry-After") or headers.get("retry-after")
-        if not raw:
-            return None
-        try:
-            return float(raw)
-        except Exception:
-            return None
+        return _parse_non_negative_float(raw)
 
     def _run_one(self, task: RequestTask) -> RequestResult:
         parse_failures = 0
@@ -379,13 +472,12 @@ class ConcurrentApiRequester:
                     )
 
                 retry_after = self._extract_retry_after(exc)
-                if isinstance(exc, RateLimitError):
+                if _is_rate_limit(exc):
                     cooldown = self._throttle.on_rate_limit(retry_after)
                     self._log(
                         f"[rate_limit] task_id={task.task_id} attempt={attempts}: "
                         f"cooldown={cooldown:.2f}s error={detail}"
                     )
-                    self._sleep(cooldown)
                 else:
                     sleep_s = self._compute_backoff(attempt_idx)
                     self._log(
